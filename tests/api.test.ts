@@ -78,6 +78,7 @@ test("syntax errors are ParseErrors with svelte's code and position", () => {
     code: "element_invalid_closing_tag",
     message:
       "`</div>` attempted to close an element that was not open\nhttps://svelte.dev/e/element_invalid_closing_tag",
+    reason: "`</div>` attempted to close an element that was not open",
     position: [16, 16],
     start: { line: 3, column: 0, character: 16 },
     end: { line: 3, column: 0, character: 16 },
@@ -96,6 +97,40 @@ test.each([
   ["{a +}", "js_parse_error"],
 ])("rejects %j with %s", (source, code) => {
   expect(() => parse(source)).toThrow(expect.objectContaining({ code }));
+});
+
+test("a ParseError's message is its reason, a line break, then its link", () => {
+  const errors: unknown[] = [];
+  for (const run of [
+    () => parse("{a +}"),
+    () => parse("<div>\n  {#if x}\n</div>"),
+    () => parseModule("let a = ;"),
+  ]) {
+    try {
+      run();
+    } catch (thrown) {
+      errors.push(thrown);
+    }
+  }
+  expect(errors).toEqual([
+    expect.objectContaining({
+      code: "js_parse_error",
+      reason: "Unexpected token",
+      message: "Unexpected token\nhttps://svelte.dev/e/js_parse_error",
+    }),
+    expect.objectContaining({ code: "element_invalid_closing_tag" }),
+    expect.objectContaining({
+      code: "js_parse_error",
+      reason: "Unexpected token",
+      message: "Unexpected token\nhttps://svelte.dev/e/js_parse_error",
+    }),
+  ]);
+  for (const error of errors) {
+    if (!(error instanceof ParseError)) throw error;
+    expect(error.message).toBe(
+      `${error.reason}\nhttps://svelte.dev/e/${error.code}`,
+    );
+  }
 });
 
 test("drops a byte order mark, as svelte does", () => {

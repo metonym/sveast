@@ -79,9 +79,14 @@ for (const [, name, params = "", code, message] of source.matchAll(FUNCTION)) {
     .split(", ")
     .filter(Boolean)
     .map((param) => `${param}: string`);
-  const literal = message.includes("${")
-    ? message
-    : JSON.stringify(Function(`return ${message}`)());
+  const link = `\\nhttps://svelte.dev/e/${code}\``;
+  if (!message.endsWith(link)) {
+    throw new Error(`${code}'s message doesn't end with its link`);
+  }
+  const reason = `${message.slice(0, -link.length)}\``;
+  const literal = reason.includes("${")
+    ? reason
+    : JSON.stringify(Function(`return ${reason}`)());
   found.set(
     code,
     `export function ${code}(${["node: NodeLike", ...args].join(", ")}): never {\n  throw new ParseError(node, "${code}", ${literal});\n}`,

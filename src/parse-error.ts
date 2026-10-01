@@ -13,6 +13,12 @@ export class ParseError extends Error {
   override name = "ParseError";
   /** svelte's error code, e.g. `"expected_token"` or `"block_unclosed"`. */
   code: string;
+  /**
+   * The message without svelte's link to the error's docs, e.g.
+   * `"Unexpected token"`. `message` is always `reason`, a line break, then
+   * the link, `https://svelte.dev/e/${code}`.
+   */
+  reason: string;
   /** `[start, end]` offsets into the source. */
   position?: [number, number];
   start?: Location;
@@ -20,9 +26,10 @@ export class ParseError extends Error {
   /** A few lines of source around the error, with a `^` under it. */
   frame?: string;
 
-  constructor(node: NodeLike, code: string, message: string) {
-    super(message);
+  constructor(node: NodeLike, code: string, reason: string) {
+    super(`${reason}\nhttps://svelte.dev/e/${code}`);
     this.code = code;
+    this.reason = reason;
     const start = typeof node === "number" ? node : node?.start;
     const end = typeof node === "number" ? node : node?.end;
     if (start !== undefined) {
