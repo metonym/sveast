@@ -1,6 +1,10 @@
 import { fieldsOf, isNode } from "./nodes";
 import type { AST } from "./types/svelte-ast";
 
+export type * from "./types/estree";
+export type { AST } from "./types/svelte-ast";
+export type * from "./types/typescript";
+
 // The parser removes ParenthesizedExpression, which `./nodes` declares.
 type NodeType = Exclude<AST.SvelteNode["type"], "ParenthesizedExpression">;
 type ChildKey<T extends NodeType> = keyof Extract<AST.SvelteNode, { type: T }> &

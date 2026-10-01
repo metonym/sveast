@@ -67,7 +67,7 @@ try {
     }
   }
 
-  for (const entry of ["index", "core", "typescript", "entities"]) {
+  for (const entry of ["index", "core", "typescript", "entities", "walk"]) {
     const types = readFileSync(
       join(root, `dist/${entry}.d.ts`),
       "utf8",
@@ -171,6 +171,12 @@ assert.equal(js.parse("<p>&copy; &amp;</p>").fragment.nodes[0].fragment.nodes[0]
 assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
 assert.equal(js.parseImportsExports('import a from "a";')[0].type, "ImportDeclaration");
 assert.throws(() => js.parseImportsExports('import type A from "a";', { typescript: true }), (error) => !(error instanceof core.ParseError));
+
+const walker = await import("sveast/walk");
+assert.equal(walker.walk, walk);
+assert.equal(walker.STOP, STOP);
+assert.equal(walker.SKIP, SKIP);
+assert.deepEqual(walker.visitorKeys.IfBlock, ["test", "consequent", "alternate"]);
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -207,6 +213,14 @@ import {
 } from "sveast/core";
 import { entities } from "sveast/entities";
 import { typescript } from "sveast/typescript";
+import {
+  type AST as WalkAST,
+  type Node as WalkNode,
+  STOP as WALK_STOP,
+  type Visitor as WalkVisitor,
+  visitorKeys as walkVisitorKeys,
+  walk as walkOnly,
+} from "sveast/walk";
 
 type CoreRoot = CoreAST.Root;
 
@@ -292,6 +306,19 @@ void coreProgram;
 void fromSveast;
 // @ts-expect-error: typescript comes from sveast/typescript
 createParser({ typescript: true });
+
+const walkRoot: WalkAST.Root = ast;
+const walkVisitor: WalkVisitor = visitor;
+const identifiers: WalkNode[] = [];
+walkOnly(walkRoot, {
+  enter(node) {
+    if (node.type === "Identifier") identifiers.push(node);
+    if (identifiers.length > 1) return WALK_STOP;
+  },
+});
+const eachKeys: readonly string[] = walkVisitorKeys.EachBlock;
+void walkVisitor;
+void eachKeys;
 `,
   );
   const tsc = join(root, "node_modules/.bin/tsc");
