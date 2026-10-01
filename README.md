@@ -78,11 +78,18 @@ import { parse } from "sveast";
 
 function componentsUsed(source: string): string[] {
   const names = new Set<string>();
-  const visit = (node: unknown): void => {
-    if (!node || typeof node !== "object") return;
-    const { type, name } = node as { type?: string; name?: string };
-    if (type === "Component" && name) names.add(name);
-    for (const child of Object.values(node)) visit(child);
+  const visit = (node: object): void => {
+    if (
+      "type" in node &&
+      node.type === "Component" &&
+      "name" in node &&
+      typeof node.name === "string"
+    ) {
+      names.add(node.name);
+    }
+    for (const child of Object.values(node)) {
+      if (typeof child === "object" && child !== null) visit(child);
+    }
   };
   visit(parse(source, { css: false }).fragment);
   return [...names]; // ["Button", "Modal.Root"]

@@ -42,7 +42,7 @@ function mulberry32(seed: number) {
   return () => {
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
@@ -93,7 +93,7 @@ function mutateBracketImbalance(rng: Rng, seeds: Seed[]): Mutation | null {
   const matches = [...seed.source.matchAll(BRACKET_CHAR_REGEX)];
   if (matches.length === 0) return null;
   const match = pick(rng, matches);
-  const idx = match.index as number;
+  const idx = match.index;
   const option = pick(rng, ["delete", "duplicate"] as const);
   const mutated =
     option === "delete"
@@ -116,7 +116,7 @@ function mutateDirectiveMangle(rng: Rng, seeds: Seed[]): Mutation | null {
   const matches = [...seed.source.matchAll(DIRECTIVE_REGEX)];
   if (matches.length === 0) return null;
   const match = pick(rng, matches);
-  const start = match.index as number;
+  const start = match.index;
   const end = start + match[0].length;
   const option = pick(rng, [
     "empty-name",
@@ -145,10 +145,8 @@ function insertIntoTemplate(source: string, block: string): string | null {
   const matches = [
     ...source.matchAll(new RegExp(TEMPLATE_INSERT_POINT_REGEX, "g")),
   ];
-  const insertAt =
-    matches.length > 0
-      ? (matches[matches.length - 1].index as number) + "</script>".length
-      : 0;
+  const last = matches.at(-1);
+  const insertAt = last ? last.index + "</script>".length : 0;
   return `${source.slice(0, insertAt)}\n${block}\n${source.slice(insertAt)}`;
 }
 
@@ -269,7 +267,7 @@ function mutateWhitespace(rng: Rng, seeds: Seed[]): Mutation | null {
       const words = [...seed.source.matchAll(/[A-Za-z]{4,}/g)];
       if (words.length === 0) return null;
       const w = pick(rng, words);
-      const idx = w.index as number;
+      const idx = w.index;
       mutated = `${seed.source.slice(0, idx)}а${seed.source.slice(idx + 1)}`;
       break;
     }

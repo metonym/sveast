@@ -1,4 +1,4 @@
-import { type AnyNode, mapChildren, parseExpressionAt } from "./acorn-bridge";
+import { parseExpressionAt } from "./acorn-bridge";
 import { matchBracket } from "./bracket";
 import { readPattern } from "./context";
 import {
@@ -11,9 +11,10 @@ import {
   expected_token,
 } from "./errors";
 import { readExpression } from "./expression";
-import type { ParseError } from "./parse-error";
+import { assertType, mapChildren, type TSAsExpression } from "./nodes";
+import { ParseError } from "./parse-error";
 import type { TemplateParserState } from "./state";
-import type { Expression, Pattern } from "./types/estree";
+import type { Expression, Node, Pattern } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
 const REGEX_WHITESPACE_THEN_CLOSING_BRACE = /\s*}/y;
@@ -105,6 +106,40 @@ function readAwaitBinding(state: TemplateParserState): Pattern | null {
   return pattern;
 }
 
+/**
+ * Without `as`, acorn reads `{#each items as item}` as `items as item`, a
+ * type assertion. Unwraps the one ending where the expression does, and
+ * returns it so the caller can rewind to its `as`.
+ */
+function stripAssertion(root: Expression): {
+  expression: Expression;
+  assertion: TSAsExpression | null;
+} {
+  const found: { assertion: TSAsExpression | null } = { assertion: null };
+  let end = root.end;
+
+  const unwrap = (node: Node): Node => {
+    if (node.type === "TSAsExpression" && node.end === root.end) {
+      found.assertion = node;
+      end = node.expression.end;
+      return node.expression;
+    }
+    mapChildren(node, unwrap);
+    return node;
+  };
+
+  let expression = root;
+  if (root.type === "TSAsExpression") {
+    found.assertion = root;
+    expression = root.expression;
+    end = expression.end;
+  } else {
+    mapChildren(root, unwrap);
+  }
+  expression.end = end;
+  return { expression, assertion: found.assertion };
+}
+
 function openEach(state: TemplateParserState, start: number): void {
   state.requireWhitespace();
 
@@ -114,7 +149,8 @@ function openEach(state: TemplateParserState, start: number): void {
     try {
       expression = readExpression(state);
     } catch (error) {
-      let end = ((error as ParseError).position?.[0] ?? start) - 2;
+      const position = error instanceof ParseError ? error.position : undefined;
+      let end = (position?.[0] ?? start) - 2;
       while (end > start && state.source.slice(end, end + 2) !== "as") end -= 1;
       if (end <= start) {
         state.source = source;
@@ -132,26 +168,11 @@ function openEach(state: TemplateParserState, start: number): void {
       expression = expression.expressions[0];
     }
 
-    const root = expression as unknown as AnyNode;
-    let assertion: AnyNode | null = null;
-    let end = root.end;
+    const stripped = stripAssertion(expression);
+    expression = stripped.expression;
 
-    const unwrap = (node: AnyNode): AnyNode => {
-      if (node.type === "TSAsExpression" && node.end === root.end) {
-        assertion = node;
-        end = (node.expression as AnyNode).end;
-        return node.expression as AnyNode;
-      }
-      mapChildren(node, unwrap);
-      return node;
-    };
-
-    const unwrapped = unwrap(root);
-    unwrapped.end = end;
-    expression = unwrapped as unknown as Expression;
-
-    if (assertion) {
-      let rewind = ((assertion as AnyNode).typeAnnotation as AnyNode).start - 2;
+    if (stripped.assertion) {
+      let rewind = stripped.assertion.typeAnnotation.start - 2;
       while (state.source.slice(rewind, rewind + 2) !== "as") rewind -= 1;
       state.index = rewind;
     }
@@ -165,7 +186,7 @@ function openEach(state: TemplateParserState, start: number): void {
     state.requireWhitespace();
     context = readPattern(state);
   } else {
-    state.index = (expression as unknown as AnyNode).end;
+    state.index = expression.end;
   }
 
   state.allowWhitespace();
@@ -198,7 +219,7 @@ function openEach(state: TemplateParserState, start: number): void {
       context,
       index,
       key,
-    } as AST.EachBlock,
+    },
     body,
   );
 }
@@ -238,7 +259,8 @@ function openSnippet(state: TemplateParserState, start: number): void {
     paramsStart,
     true,
   );
-  const parameters = (node as unknown as { params: Pattern[] }).params;
+  assertType(node, "ArrowFunctionExpression");
+  const { params: parameters } = node;
 
   state.eatClosingBrace();
 
@@ -248,11 +270,11 @@ function openSnippet(state: TemplateParserState, start: number): void {
       type: "SnippetBlock",
       start,
       end: -1,
-      expression: id as unknown as AST.SnippetBlock["expression"],
+      expression: id,
       typeParams,
       parameters,
       body,
-    } as AST.SnippetBlock,
+    },
     body,
   );
 }
@@ -298,11 +320,10 @@ export function nextBlockClause(
     block.fallback = fragment();
     state.setFragment(block.fallback);
   } else if (block.type === "AwaitBlock") {
-    const clause = state.eat("then")
-      ? "then"
-      : state.eat("catch")
-        ? "catch"
-        : expected_token(start, "{:then ...} or {:catch ...}");
+    let clause: "then" | "catch";
+    if (state.eat("then")) clause = "then";
+    else if (state.eat("catch")) clause = "catch";
+    else expected_token(start, "{:then ...} or {:catch ...}");
     if (block[clause]) block_duplicate_clause(start, `{:${clause}}`);
     if (!state.eat("}")) {
       state.requireWhitespace();

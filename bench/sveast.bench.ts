@@ -9,6 +9,7 @@ import {
   kb,
   LARGEST,
   REJECTED,
+  scriptTexts,
   TYPESCRIPT,
 } from "./corpus";
 import { CONSTRUCTS, flat, SVELTE_OPTIONS_COMPONENTS } from "./workloads";
@@ -16,13 +17,15 @@ import { CONSTRUCTS, flat, SVELTE_OPTIONS_COMPONENTS } from "./workloads";
 function mustParse(
   name: string,
   sources: string[],
-  run: (source: string) => unknown,
+  run: (source: string) => object,
 ): void {
   for (const source of sources) {
     try {
       run(source);
     } catch (error) {
-      throw new Error(`"${name}" must parse, but threw: ${error}`);
+      throw new Error(`"${name}" must parse, but threw: ${error}`, {
+        cause: error,
+      });
     }
   }
 }
@@ -35,6 +38,7 @@ function mustThrow(name: string, sources: string[]): void {
       if (error instanceof ParseError) continue;
       throw new Error(
         `"${name}" threw something other than a ParseError: ${error}`,
+        { cause: error },
       );
     }
     throw new Error(`"${name}" must throw a ParseError, but parsed`);
@@ -47,13 +51,17 @@ function errorCodes(sources: string[]): string[] {
     try {
       parse(source);
     } catch (error) {
-      codes.push((error as ParseError).code);
+      if (!(error instanceof ParseError)) throw error;
+      codes.push(error.code);
     }
   }
   return codes;
 }
 
-function lean<T>(run: () => T, digest: (result: T) => number): () => unknown {
+function lean<T>(
+  run: () => T,
+  digest: (result: T) => number,
+): () => T | number {
   let first = true;
   return () => {
     const result = run();
@@ -134,17 +142,9 @@ group("parseModule", () => {
     kb(CARBON_TS),
   );
 
-  const scripts = TYPESCRIPT.flatMap(({ source }) => {
-    const { instance, module } = parse(source);
-    return [instance, module].flatMap((script) => {
-      if (!script) return [];
-      const { start, end } = script.content as unknown as Record<
-        string,
-        number
-      >;
-      return [flat(source.slice(start, end))];
-    });
-  });
+  const scripts = TYPESCRIPT.flatMap(({ source }) =>
+    scriptTexts(source).map(flat),
+  );
   moduleTask(
     'corpus lang="ts" scripts',
     scripts,

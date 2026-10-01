@@ -263,15 +263,23 @@ function readSelector(
     } else if (code === OPEN_BRACKET) {
       state.index++;
       selectors.push(readAttributeSelector(state, start));
-    } else if (insidePseudoClass && state.matchRegex(REGEX_NTH_OF)) {
-      const value = state.read(REGEX_NTH_OF) as string;
-      selectors.push({ type: "Nth", value, start, end: state.index });
-    } else if (isDigit(code) && state.matchRegex(REGEX_PERCENTAGE)) {
-      const value = state.read(REGEX_PERCENTAGE) as string;
-      selectors.push({ type: "Percentage", value, start, end: state.index });
-    } else if (combinatorLength(source, start) === 0) {
-      const name = readIdentifier(state);
-      selectors.push(readTypeSelectorRest(state, start, name));
+    } else {
+      const nth = insidePseudoClass ? state.read(REGEX_NTH_OF) : null;
+      const percentage =
+        !nth && isDigit(code) ? state.read(REGEX_PERCENTAGE) : null;
+      if (nth) {
+        selectors.push({ type: "Nth", value: nth, start, end: state.index });
+      } else if (percentage) {
+        selectors.push({
+          type: "Percentage",
+          value: percentage,
+          start,
+          end: state.index,
+        });
+      } else if (combinatorLength(source, start) === 0) {
+        const name = readIdentifier(state);
+        selectors.push(readTypeSelectorRest(state, start, name));
+      }
     }
 
     const index = state.index;
@@ -387,7 +395,7 @@ function readAttributeSelector(
   };
 }
 
-function combinatorLength(source: string, index: number): number {
+function combinatorLength(source: string, index: number): 0 | 1 | 2 {
   const code = source.charCodeAt(index);
   if (code === PLUS || code === TILDE || code === GREATER_THAN) return 1;
   if (code === PIPE && source.charCodeAt(index + 1) === PIPE) return 2;
@@ -533,7 +541,7 @@ function readValue(state: TemplateParserState, capture: boolean): string {
         for (const comment of valueComments) {
           comment.position = Math.max(
             0,
-            (comment.position as number) - leadingWhitespace,
+            (comment.position ?? 0) - leadingWhitespace,
           );
         }
       }
@@ -578,16 +586,14 @@ function endsWithUrl(
       source.charCodeAt(end - 1) === 108
     );
   }
-  return (value + source.slice(segmentStart, end)).slice(-3) === "url";
+  return (value + source.slice(segmentStart, end)).endsWith("url");
 }
 
 function readAttributeValue(state: TemplateParserState): string {
   const source = state.source;
-  const quoteMark = state.eat('"')
-    ? DOUBLE_QUOTE
-    : state.eat("'")
-      ? SINGLE_QUOTE
-      : NONE;
+  let quoteMark = NONE;
+  if (state.eat('"')) quoteMark = DOUBLE_QUOTE;
+  else if (state.eat("'")) quoteMark = SINGLE_QUOTE;
   const start = state.index;
   let escaped = false;
   let i = start;

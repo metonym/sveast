@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { tsPlugin as acornTypeScript } from "@sveltejs/acorn-typescript";
-import { Parser } from "acorn";
+import { type Comment, Parser } from "acorn";
 import { tsPlugin } from "../src/ts-plugin";
-import { collectFiles } from "./shared";
+import { collectFiles, errorMessage } from "./shared";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -15,25 +15,21 @@ const { values, positionals } = parseArgs({
 
 const EXTENSIONS = /\.(?:[cm]?ts|[cm]?js)$/;
 const Ours = Parser.extend(tsPlugin);
-// biome-ignore lint/suspicious/noExplicitAny: acorn-typescript's plugin type doesn't line up with acorn's extend()
-const Theirs = Parser.extend(acornTypeScript() as any);
+const Theirs = Parser.extend(acornTypeScript());
 
 function parse(ParserClass: typeof Parser, source: string): string {
-  const comments: unknown[] = [];
+  const comments: Comment[] = [];
   const locations = ParserClass === Theirs || !values["no-loc"];
   const ast = ParserClass.parse(source, {
     sourceType: "module",
     ecmaVersion: "latest",
     locations,
-    onComment: comments as never,
+    onComment: comments,
   });
-  return JSON.stringify({ ast, comments }, (key, value) =>
-    typeof value === "bigint"
-      ? `${value}n`
-      : key === "loc" && values["no-loc"]
-        ? undefined
-        : value,
-  );
+  return JSON.stringify({ ast, comments }, (key, value) => {
+    if (typeof value === "bigint") return `${value}n`;
+    return key === "loc" && values["no-loc"] ? undefined : value;
+  });
 }
 
 const files = collectFiles(positionals, EXTENSIONS);
@@ -51,14 +47,14 @@ for (const file of files) {
   try {
     expected = parse(Theirs, source);
   } catch (error) {
-    expectedError = (error as Error).message;
+    expectedError = errorMessage(error);
   }
   let actual: string;
   try {
     actual = parse(Ours, source);
   } catch (error) {
     if (expectedError) bothReject++;
-    else rejects.push(`${file}: ${(error as Error).message}`);
+    else rejects.push(`${file}: ${errorMessage(error)}`);
     continue;
   }
   if (expected === undefined) {
@@ -70,7 +66,7 @@ for (const file of files) {
     continue;
   }
   let at = 0;
-  while (actual[at] === expected[at]) at++;
+  while (actual.charCodeAt(at) === expected.charCodeAt(at)) at++;
   mismatches.push(
     `${file}\n  sveast: ...${actual.slice(Math.max(0, at - 80), at + 80)}\n  theirs: ...${expected.slice(Math.max(0, at - 80), at + 80)}`,
   );

@@ -1,4 +1,4 @@
-import { type AnyNode, parseExpressionAt } from "./acorn-bridge";
+import { parseExpressionAt } from "./acorn-bridge";
 import { position } from "./locator";
 import {
   RESERVED_WORDS,
@@ -6,20 +6,25 @@ import {
   skipWhitespace,
   type TemplateParserState,
 } from "./state";
-import type { Expression } from "./types/estree";
+import type {
+  Expression,
+  Identifier,
+  Node,
+  SimpleLiteral,
+} from "./types/estree";
 
-const OPERATORS = ["===", "!==", "==", "!=", "&&", "||", "??"];
+const OPERATORS = ["===", "!==", "==", "!=", "&&", "||", "??"] as const;
 
 function literal(
   source: string,
   start: number,
   end: number,
-  value: unknown,
-): AnyNode {
+  value: SimpleLiteral["value"],
+): SimpleLiteral {
   return { type: "Literal", start, end, value, raw: source.slice(start, end) };
 }
 
-function scanLiteral(source: string, from: number): AnyNode | null {
+function scanLiteral(source: string, from: number): SimpleLiteral | null {
   const first = source.charCodeAt(from);
   if (first === 34 || first === 39) {
     for (let end = from + 1; end < source.length; end++) {
@@ -40,7 +45,7 @@ function scanLiteral(source: string, from: number): AnyNode | null {
   return literal(source, from, end, Number(source.slice(from, end)));
 }
 
-function scanAtom(source: string, from: number): AnyNode | null {
+function scanAtom(source: string, from: number): Expression | null {
   const identifierEnd = scanIdentifier(source, from);
   if (identifierEnd === from) return scanLiteral(source, from);
 
@@ -55,7 +60,7 @@ function scanAtom(source: string, from: number): AnyNode | null {
   }
   if (RESERVED_WORDS.has(name)) return null;
 
-  let node: AnyNode = {
+  let node: Expression = {
     type: "Identifier",
     start: from,
     end: identifierEnd,
@@ -64,7 +69,7 @@ function scanAtom(source: string, from: number): AnyNode | null {
 
   for (let index = identifierEnd; ; ) {
     const next = source.charCodeAt(index);
-    let property: AnyNode | null;
+    let property: Identifier | SimpleLiteral | null;
     let end: number;
     if (next === 46) {
       end = scanIdentifier(source, index + 1);
@@ -95,7 +100,7 @@ function scanAtom(source: string, from: number): AnyNode | null {
   }
 }
 
-function scanOperand(source: string, from: number): AnyNode | null {
+function scanOperand(source: string, from: number): Expression | null {
   if (source.charCodeAt(from) !== 33 || source.charCodeAt(from + 1) === 61) {
     return scanAtom(source, from);
   }
@@ -118,7 +123,10 @@ function atTerminator(source: string, from: number): boolean {
   return code === 125 || code === 41;
 }
 
-function scanTrivialExpression(source: string, from: number): AnyNode | null {
+function scanTrivialExpression(
+  source: string,
+  from: number,
+): Expression | null {
   const left = scanOperand(source, from);
   if (!left || atTerminator(source, left.end)) return left;
 
@@ -132,24 +140,40 @@ function scanTrivialExpression(source: string, from: number): AnyNode | null {
   );
   if (!right || !atTerminator(source, right.end)) return null;
 
+  const { end } = right;
+  if (operator === "&&" || operator === "||" || operator === "??") {
+    return {
+      type: "LogicalExpression",
+      start: left.start,
+      end,
+      left,
+      operator,
+      right,
+    };
+  }
   return {
-    type:
-      operator === "&&" || operator === "||" || operator === "??"
-        ? "LogicalExpression"
-        : "BinaryExpression",
+    type: "BinaryExpression",
     start: left.start,
-    end: right.end,
+    end,
     left,
     operator,
     right,
   };
 }
 
-function addLocations(node: AnyNode): void {
+function addLocations(node: Node): void {
   node.loc = { start: position(node.start), end: position(node.end) };
-  for (const key of ["object", "property", "argument", "left", "right"]) {
-    const child = node[key] as AnyNode | undefined;
-    if (child) addLocations(child);
+  if (node.type === "MemberExpression") {
+    addLocations(node.object);
+    addLocations(node.property);
+  } else if (node.type === "UnaryExpression") {
+    addLocations(node.argument);
+  } else if (
+    node.type === "BinaryExpression" ||
+    node.type === "LogicalExpression"
+  ) {
+    addLocations(node.left);
+    addLocations(node.right);
   }
 }
 
@@ -161,10 +185,10 @@ export function readExpression(state: TemplateParserState): Expression {
   if (trivial) {
     state.index = trivial.end;
     if (state.loc) addLocations(trivial);
-    return trivial as unknown as Expression;
+    return trivial;
   }
 
   const { node, end } = parseExpressionAt(state, state.source, state.index);
   state.index = end;
-  return node as unknown as Expression;
+  return node;
 }

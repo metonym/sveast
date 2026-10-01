@@ -1,7 +1,15 @@
-// biome-ignore-all lint/suspicious/noExplicitAny: acorn's internals (token state, scope stack, parse methods) aren't in its published types
-import type { Parser } from "acorn";
-// @ts-expect-error acorn's published types don't declare these. reader.ts imports them the same way.
-import { isIdentifierChar, isIdentifierStart, keywordTypes } from "acorn";
+import type { Position } from "acorn";
+import {
+  type ClassStatement,
+  type DestructuringErrors,
+  definePlugin,
+  type ExportedNames,
+  type ForInit,
+  type Node,
+  type ParserOptions,
+  type Scope,
+  type TokenType,
+} from "./acorn-internals";
 
 const SKIP_WHITESPACE = /(?:\s|\/\/.*|\/\*[\s\S]*?\*\/)*/g;
 
@@ -75,29 +83,31 @@ const CHAR_HASH = 35;
 const CHAR_DQUOTE = 34;
 const CHAR_SQUOTE = 39;
 
-type Node = any;
-
 const SPECULATION_FAILED = new SyntaxError("speculative parse failed");
 
-export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
-  const Base = BaseParser as any;
-  const tt = Base.acorn.tokTypes;
+export const tsPlugin = definePlugin((Base) => {
+  const {
+    tokTypes: tt,
+    keywordTypes,
+    isIdentifierChar,
+    isIdentifierStart,
+  } = Base.acorn;
   const atType = new Base.acorn.TokenType("@");
 
   class TSParser extends Base {
     inType = false;
     tsNoConditional = false;
     tsAmbient = false;
-    tsArrowReturn: Node = null;
-    tsMethodTypeParams: Node = null;
+    tsArrowReturn: Node | null = null;
+    tsMethodTypeParams: Node | null = null;
     tsConstructorParams = false;
     tsAsyncArguments = false;
-    tsDeferredFunction: Node = null;
+    tsDeferredFunction: Node | null = null;
     tsDecoratorStack: Node[][] = [[]];
     tsSpeculating = 0;
     tsCommentEnd = 0;
 
-    constructor(options: any, input: string, startPos?: number) {
+    constructor(options: ParserOptions, input: string, startPos?: number) {
       super(options, input, startPos);
       const onComment = this.options.onComment;
       if (typeof onComment === "function") {
@@ -106,8 +116,8 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
           text: string,
           start: number,
           end: number,
-          startLoc?: unknown,
-          endLoc?: unknown,
+          startLoc?: Position,
+          endLoc?: Position,
         ) => {
           if (start < this.tsCommentEnd) return;
           this.tsCommentEnd = end;
@@ -284,7 +294,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       try {
         super.raise(pos, message);
       } catch (error) {
-        (error as { tsFatal?: boolean }).tsFatal = true;
+        if (error instanceof SyntaxError) error.tsFatal = true;
         throw error;
       }
       throw new Error("unreachable");
@@ -298,10 +308,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
         if (lookahead || result === undefined) this.tsRestore(state);
         return result;
       } catch (error) {
-        if (
-          !(error instanceof SyntaxError) ||
-          (!lookahead && (error as { tsFatal?: boolean }).tsFatal)
-        )
+        if (!(error instanceof SyntaxError) || (!lookahead && error.tsFatal))
           throw error;
         this.tsRestore(state);
         return undefined;
@@ -449,7 +456,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return this.finishNode(node, type);
     }
 
-    tsFillSignature(node: Node, returnToken: any) {
+    tsFillSignature(node: Node, returnToken: TokenType) {
       if (this.tsIsLt()) node.typeParameters = this.tsParseTypeParameters();
       this.expect(tt.parenL);
       node.parameters = this.parseBindingList(tt.parenR, false, true);
@@ -484,12 +491,12 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
 
     tsParseUnionOrIntersection(
       type: string,
-      operator: any,
+      operator: TokenType,
       parseConstituent: () => Node,
     ) {
       const node = this.startNode();
       const hasLeadingOperator = this.eat(operator);
-      const types = [];
+      const types: Node[] = [];
       do types.push(parseConstituent());
       while (this.eat(operator));
       if (types.length === 1 && !hasLeadingOperator) return types[0];
@@ -524,10 +531,10 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     tsParseInferConstraint() {
-      if (!this.eat(tt._extends)) return undefined;
+      if (!this.eat(tt._extends)) return;
       const constraint = this.tsWithConditional(true, () => this.tsParseType());
       if (this.tsNoConditional || this.type !== tt.question) return constraint;
-      return undefined;
+      return;
     }
 
     tsParseTypeParameterName() {
@@ -753,7 +760,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
 
     tsParseObjectTypeMembers() {
       this.expect(tt.braceL);
-      const members = [];
+      const members: Node[] = [];
       while (!this.eat(tt.braceR)) members.push(this.tsParseTypeMember());
       return members;
     }
@@ -927,7 +934,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     tsParseHeritage() {
-      const list = [];
+      const list: Node[] = [];
       do {
         const node = this.startNode();
         node.expression = this.tsParseEntityName();
@@ -937,7 +944,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return list;
     }
 
-    tsTryParseDeclaration(exported = false): Node {
+    tsTryParseDeclaration(exported = false): Node | undefined {
       if (this.type !== tt.name || this.containsEsc) {
         if (this.type === tt._const && this.tsPeekWord() === "enum")
           return this.tsParseEnum(this.startNode());
@@ -1022,7 +1029,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return declaration;
     }
 
-    tsParseAbstractClass(node: Node, isStatement: boolean | "nullableID") {
+    tsParseAbstractClass(node: Node, isStatement: ClassStatement) {
       this.next();
       node.abstract = true;
       return this.parseClass(node, isStatement);
@@ -1142,7 +1149,11 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return after !== CHAR_EQ && after !== 62;
     }
 
-    parseStatement(context: any, topLevel?: any, exports?: any) {
+    parseStatement(
+      context: string | null,
+      topLevel?: boolean,
+      exports?: ExportedNames,
+    ) {
       if (this.type === atType) this.tsParseDecorators(true);
       const declaration = this.tsTryParseDeclaration();
       if (declaration) return declaration;
@@ -1229,7 +1240,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       );
     }
 
-    parseExportSpecifier(exports: any) {
+    parseExportSpecifier(exports?: ExportedNames) {
       return this.tsParseSpecifier("exportKind", () =>
         super.parseExportSpecifier(exports),
       );
@@ -1254,7 +1265,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return node;
     }
 
-    parseExport(node: Node, exports: any) {
+    parseExport(node: Node, exports?: ExportedNames) {
       this.next();
       if (this.eat(tt._import)) {
         node.importKind = "value";
@@ -1355,7 +1366,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       statement: number,
       allowExpressionBody: boolean,
       isAsync: boolean,
-      forInit?: any,
+      forInit?: ForInit,
     ) {
       const isDeclaration = statement & FUNC_STATEMENT;
       if (isDeclaration) this.tsDeferredFunction = node;
@@ -1380,14 +1391,11 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
           }
           this.checkLValSimple(node.id, BIND_NONE);
         } else if (!(statement & FUNC_HANGING_STATEMENT)) {
-          this.checkLValSimple(
-            node.id,
-            this.strict || node.generator || node.async
-              ? this.treatFunctionsAsVar
-                ? BIND_VAR
-                : BIND_LEXICAL
-              : BIND_FUNCTION,
-          );
+          let bindingType = BIND_FUNCTION;
+          if (this.strict || node.generator || node.async) {
+            bindingType = this.treatFunctionsAsVar ? BIND_VAR : BIND_LEXICAL;
+          }
+          this.checkLValSimple(node.id, bindingType);
         }
       }
       return node;
@@ -1404,7 +1412,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       node: Node,
       isArrowFunction: boolean,
       isMethod: boolean,
-      forInit: any,
+      forInit?: ForInit,
     ) {
       if (isMethod && this.type === tt.colon)
         node.returnType = this.tsParseTypeAnnotation(true);
@@ -1430,12 +1438,12 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     parseBindingList(
-      close: any,
+      close: TokenType,
       allowEmpty: boolean,
       allowTrailingComma: boolean,
       allowModifiers?: boolean,
     ) {
-      const modifiers = allowModifiers || this.tsConstructorParams;
+      const modifiers = allowModifiers === true || this.tsConstructorParams;
       this.tsConstructorParams = false;
       return super.parseBindingList(
         close,
@@ -1515,27 +1523,34 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return param;
     }
 
-    checkLValSimple(expr: Node, bindingType?: number, checkClashes?: any): any {
+    checkLValSimple(
+      expr: Node,
+      bindingType?: number,
+      checkClashes?: ExportedNames,
+    ): void {
       if (this.tsDeferredFunction && expr === this.tsDeferredFunction.id) {
         this.tsDeferredFunction = null;
         return;
       }
-      if (!bindingType && TS_EXPRESSION_WRAPPERS.has(expr.type))
-        return this.checkLValSimple(expr.expression, bindingType, checkClashes);
+      if (!bindingType && TS_EXPRESSION_WRAPPERS.has(expr.type)) {
+        this.checkLValSimple(expr.expression, bindingType, checkClashes);
+        return;
+      }
       switch (expr.type) {
         case "TSParameterProperty":
-          return this.checkLValInnerPattern(
-            expr.parameter,
-            bindingType,
-            checkClashes,
-          );
+          this.checkLValInnerPattern(expr.parameter, bindingType, checkClashes);
+          return;
         case "Identifier":
           if (expr.name === "this") return;
       }
-      return super.checkLValSimple(expr, bindingType, checkClashes);
+      super.checkLValSimple(expr, bindingType, checkClashes);
     }
 
-    toAssignable(node: Node, isBinding: boolean, refDestructuringErrors: any) {
+    toAssignable(
+      node: Node,
+      isBinding: boolean,
+      refDestructuringErrors?: DestructuringErrors | null,
+    ) {
       if (node && !isBinding && TS_EXPRESSION_WRAPPERS.has(node.type))
         return node;
       return super.toAssignable(node, isBinding, refDestructuringErrors);
@@ -1568,7 +1583,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       super.declareName(name, bindingType, pos);
     }
 
-    tsExportDefined(scope: Node, name: string) {
+    tsExportDefined(scope: Scope, name: string) {
       if (this.inModule && scope.flags & SCOPE_TOP) {
         delete this.undefinedExports[name];
       }
@@ -1587,7 +1602,9 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       super.checkLocalExport(id);
     }
 
-    checkExport() {}
+    checkExport() {
+      // skips acorn's duplicate export check, which TypeScript's overloads and merged declarations would fail
+    }
 
     raiseRecoverable(pos: number, message: string) {
       if (message === "Duplicate constructor in the same class") return;
@@ -1595,7 +1612,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     tsParseDecoratorList() {
-      const decorators = [];
+      const decorators: Node[] = [];
       while (this.type === atType) decorators.push(this.tsParseDecorator());
       return decorators;
     }
@@ -1678,15 +1695,18 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     parseExprAtom(
-      refDestructuringErrors?: any,
-      forInit?: any,
-      forNew?: any,
+      refDestructuringErrors?: DestructuringErrors | null,
+      forInit?: ForInit,
+      forNew?: boolean,
     ): Node {
       if (this.type === atType) this.tsParseDecorators(false);
       return super.parseExprAtom(refDestructuringErrors, forInit, forNew);
     }
 
-    parseProperty(isPattern: boolean, refDestructuringErrors: any): Node {
+    parseProperty(
+      isPattern: boolean,
+      refDestructuringErrors?: DestructuringErrors | null,
+    ): Node {
       if (isPattern || this.type !== atType) {
         return super.parseProperty(isPattern, refDestructuringErrors);
       }
@@ -1702,7 +1722,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return property;
     }
 
-    parseClassId(node: Node, isStatement: any) {
+    parseClassId(node: Node, isStatement: ClassStatement) {
       const index = this.tsDecoratorStack.length - 1;
       const decorators = this.tsDecoratorStack[index];
       if (decorators.length > 0) {
@@ -1724,7 +1744,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
         node.implements = this.tsInType(() => this.tsParseHeritage());
     }
 
-    parseClassElement(constructorAllowsSuper: boolean): Node {
+    parseClassElement(constructorAllowsSuper: boolean): Node | null {
       if (this.type === atType) {
         const decorators = this.tsParseDecoratorList();
         if (this.type === tt.braceR) {
@@ -1733,7 +1753,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
             "Decorators must be attached to a class element.",
           );
         }
-        const element = this.parseClassElement(constructorAllowsSuper);
+        const element = this.parseClassElement(constructorAllowsSuper) as Node;
         element.decorators = decorators;
         this.tsResetStart(element, decorators[0]);
         return element;
@@ -1837,9 +1857,13 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     parseMaybeAssign(
-      forInit?: any,
-      refDestructuringErrors?: any,
-      afterLeftParse?: any,
+      forInit?: ForInit,
+      refDestructuringErrors?: DestructuringErrors | null,
+      afterLeftParse?: (
+        node: Node,
+        startPos: number,
+        startLoc: Position,
+      ) => Node,
     ) {
       if (this.tsSplitLt()) {
         const arrow = this.tsTry(() => {
@@ -1849,7 +1873,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
             refDestructuringErrors,
             afterLeftParse,
           );
-          if (expr.type !== "ArrowFunctionExpression") return undefined;
+          if (expr.type !== "ArrowFunctionExpression") return;
           expr.typeParameters = typeParameters;
           this.tsResetStart(expr, typeParameters);
           return expr;
@@ -1864,10 +1888,10 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     parseMaybeUnary(
-      refDestructuringErrors: any,
+      refDestructuringErrors: DestructuringErrors | null | undefined,
       sawUnary: boolean,
       incDec: boolean,
-      forInit: any,
+      forInit: ForInit,
     ) {
       if (this.tsSplitLt()) {
         const node = this.startNode();
@@ -1889,7 +1913,10 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       );
     }
 
-    parseMaybeConditional(forInit: any, refDestructuringErrors: any) {
+    parseMaybeConditional(
+      forInit: ForInit,
+      refDestructuringErrors?: DestructuringErrors | null,
+    ) {
       const startPos = this.start;
       const startLoc = this.startLoc;
       const expr = this.parseExprOps(forInit, refDestructuringErrors);
@@ -1947,7 +1974,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       node: Node,
       params: Node[],
       isAsync: boolean,
-      forInit: any,
+      forInit: ForInit,
     ) {
       if (this.tsArrowReturn) {
         node.returnType = this.tsArrowReturn;
@@ -1957,10 +1984,10 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
 
     parseExprList(
-      close: any,
+      close: TokenType,
       allowTrailingComma: boolean,
       allowEmpty: boolean,
-      refDestructuringErrors?: any,
+      refDestructuringErrors?: DestructuringErrors | null,
     ) {
       if (!this.tsAsyncArguments)
         return super.parseExprList(
@@ -1970,7 +1997,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
           refDestructuringErrors,
         );
       this.tsAsyncArguments = false;
-      const elements = [];
+      const elements: Node[] = [];
       let first = true;
       while (!this.eat(close)) {
         if (first) {
@@ -2001,11 +2028,11 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     parseSubscript(
       base: Node,
       startPos: number,
-      startLoc: any,
+      startLoc: Position,
       noCalls: boolean,
       maybeAsyncArrow: boolean,
       optionalChained: boolean,
-      forInit: any,
+      forInit: ForInit,
     ) {
       if (this.tsIsBang() && !this.hasPrecedingLineBreak()) {
         const node = this.startNodeAt(startPos, startLoc);
@@ -2035,7 +2062,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
           const args = this.tsParseTypeArguments();
           if (this.type === tt.parenL && !noCalls) return args;
           if (this.type === tt.backQuote) return optional ? undefined : args;
-          if (optional) return undefined;
+          if (optional) return;
           if (
             this.tsIsGt() ||
             this.type === tt.bitShift ||
@@ -2043,7 +2070,7 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
               this.type !== tt.parenL &&
               !this.hasPrecedingLineBreak())
           ) {
-            return undefined;
+            return;
           }
           return args;
         });
@@ -2083,14 +2110,18 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       );
     }
 
-    tsParseGenericAsyncArrow(startPos: number, startLoc: any, forInit: any) {
+    tsParseGenericAsyncArrow(
+      startPos: number,
+      startLoc: Position,
+      forInit: ForInit,
+    ) {
       const node = this.startNodeAt(startPos, startLoc);
       node.typeParameters = this.tsParseTypeParameters();
       this.expect(tt.parenL);
       node.params = this.parseBindingList(tt.parenR, false, true);
       if (this.type === tt.colon)
         node.returnType = this.tsParseTypeAnnotation(true);
-      if (this.type !== tt.arrow || this.canInsertSemicolon()) return undefined;
+      if (this.type !== tt.arrow || this.canInsertSemicolon()) return;
       this.next();
       return this.parseArrowExpression(node, node.params, true, forInit);
     }
@@ -2122,9 +2153,9 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     parseExprOp(
       left: Node,
       leftStartPos: number,
-      leftStartLoc: any,
+      leftStartLoc: Position,
       minPrec: number,
-      forInit: any,
+      forInit: ForInit,
     ): Node {
       if (
         tt._in.binop > minPrec &&
@@ -2177,8 +2208,8 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       isGenerator: boolean,
       isAsync: boolean,
       startPos: number,
-      startLoc: any,
-      refDestructuringErrors: any,
+      startLoc: Position,
+      refDestructuringErrors: DestructuringErrors | null | undefined,
       containsEsc: boolean,
     ) {
       if (!isPattern && this.tsIsLt()) {
@@ -2199,5 +2230,5 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
     }
   }
 
-  return TSParser as unknown as typeof Parser;
-}
+  return TSParser;
+});

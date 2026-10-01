@@ -64,7 +64,7 @@ function emitDeclarations(
     ...result.diagnostics,
   ].filter((d) => d.category === ts.DiagnosticCategory.Error);
 
-  if (diagnostics.length || result.emitSkipped) {
+  if (diagnostics.length > 0 || result.emitSkipped) {
     const msg = diagnostics
       .map((d) => {
         const text = ts.flattenDiagnosticMessageText(d.messageText, "\n");
@@ -135,7 +135,9 @@ function rollupDts(entryDts: string, emitted: Map<string, string>): string {
         if (!isRelative(importSpec)) continue;
         try {
           visit(resolveDts(file, importSpec, emitted));
-        } catch {}
+        } catch {
+          // a spec that doesn't resolve to a declaration file has nothing to follow
+        }
       }
     }
   };
@@ -203,7 +205,7 @@ function rollupDts(entryDts: string, emitted: Map<string, string>): string {
     for (const ref of collectTypeRefs(decl.node)) queue.push(ref);
   }
 
-  while (queue.length) {
+  while (queue.length > 0) {
     const name = queue.pop();
     if (name === undefined) break;
     if (seenName.has(name)) continue;
@@ -502,7 +504,7 @@ function getLeadingComment(stmt: ts.Statement, sf: ts.SourceFile): string {
   const fullText = sf.getFullText();
   const ranges =
     ts.getLeadingCommentRanges(fullText, stmt.getFullStart()) ?? [];
-  if (!ranges.length) return "";
+  if (ranges.length === 0) return "";
   return `${ranges.map((r) => fullText.slice(r.pos, r.end)).join("\n")}\n`;
 }
 
@@ -577,9 +579,8 @@ function resolveDts(
 
 function declaredNames(stmt: ts.Statement): string[] {
   const mods = ts.canHaveModifiers(stmt) ? ts.getModifiers(stmt) : undefined;
-  const isDefault = !!mods?.some(
-    (m) => m.kind === ts.SyntaxKind.DefaultKeyword,
-  );
+  const isDefault =
+    mods?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
 
   if (
     ts.isFunctionDeclaration(stmt) ||

@@ -11,6 +11,7 @@ import {
   type Component,
   kb,
   LARGEST,
+  scriptTexts,
   TYPESCRIPT,
 } from "./corpus";
 
@@ -45,17 +46,9 @@ group(`options (${COMPONENTS.length} files)`, () => {
   );
 });
 
-const allScripts = TYPESCRIPT.flatMap(({ source }) => {
-  const { instance, module } = parse(source);
-  return [instance, module].flatMap((script) => {
-    if (!script) return [];
-    const { start, end } = script.content as unknown as Record<string, number>;
-    return [source.slice(start, end)];
-  });
-});
+const allScripts = TYPESCRIPT.flatMap(({ source }) => scriptTexts(source));
 const Ours = Parser.extend(tsPlugin);
-// biome-ignore lint/suspicious/noExplicitAny: acorn-typescript's plugin type doesn't line up with acorn's extend()
-const Theirs = Parser.extend(acornTypeScript() as any);
+const Theirs = Parser.extend(acornTypeScript());
 const OPTIONS = { sourceType: "module", ecmaVersion: "latest" } as const;
 // A standalone module parse rejects `export { x }` of a name declared
 // elsewhere, which a component script or a `.d.ts` may have.

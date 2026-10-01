@@ -1,13 +1,10 @@
-// biome-ignore format: one word per line reads worse than packed lists
 const AUTOCLOSING_CHILDREN: Record<string, string[]> = {
   li: ["li"],
   dt: ["dt", "dd"],
   dd: ["dt", "dd"],
-  p: [
-    "address", "article", "aside", "blockquote", "div", "dl", "fieldset", "footer", "form",
-    "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr", "main", "menu", "nav", "ol",
-    "p", "pre", "section", "table", "ul",
-  ],
+  p: "address article aside blockquote div dl fieldset footer form h1 h2 h3 h4 h5 h6 header hgroup hr main menu nav ol p pre section table ul".split(
+    " ",
+  ),
   rt: ["rt", "rp"],
   rp: ["rt", "rp"],
   optgroup: ["optgroup"],

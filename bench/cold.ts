@@ -35,7 +35,8 @@ if (name === undefined) {
           { encoding: "utf8" },
         );
         if (child.status !== 0) throw new Error(child.stderr);
-        return JSON.parse(child.stdout) as Record<string, number>;
+        const timings: Record<string, number> = JSON.parse(child.stdout);
+        return timings;
       }),
     );
     const median = (values: number[]) =>
@@ -52,13 +53,13 @@ if (name === undefined) {
 } else {
   const inputs = JSON.parse(readFileSync(corpusFile, "utf8"));
   const t0 = Bun.nanoseconds();
-  const parse: (source: string) => unknown =
+  const parse: (source: string) => object =
     name === "sveast"
       ? (await import("sveast")).parse
       : await import("svelte/compiler").then(
-          ({ parse }) =>
+          ({ parse: svelteParse }) =>
             (source: string) =>
-              parse(source, { modern: true }),
+              svelteParse(source, { modern: true }),
         );
   const t1 = Bun.nanoseconds();
   parse(inputs[first]);

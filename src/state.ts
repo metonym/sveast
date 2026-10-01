@@ -1,4 +1,3 @@
-// @ts-expect-error acorn's published types don't declare these. svelte's
 import { isIdentifierChar, isIdentifierStart } from "acorn";
 import {
   expected_token,
@@ -10,14 +9,11 @@ import { locate } from "./locator";
 import type { Identifier, SourceLocation } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
-// biome-ignore format: one word per line reads worse than a packed list
-export const RESERVED_WORDS = new Set([
-  "arguments", "await", "break", "case", "catch", "class", "const", "continue", "debugger",
-  "default", "delete", "do", "else", "enum", "eval", "export", "extends", "false", "finally",
-  "for", "function", "if", "implements", "import", "in", "instanceof", "interface", "let",
-  "new", "null", "package", "private", "protected", "public", "return", "static", "super",
-  "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield",
-]);
+export const RESERVED_WORDS = new Set(
+  "arguments await break case catch class const continue debugger default delete do else enum eval export extends false finally for function if implements import in instanceof interface let new null package private protected public return static super switch this throw true try typeof var void while with yield".split(
+    " ",
+  ),
+);
 
 const REGEX_LANG_ATTRIBUTE =
   /<!--[\s\S]*?-->|<script\s+(?:[^>]*|(?:[^=>'"/]+=(?:"[^"]*"|'[^']*'|[^>\s]+)\s+)*)lang=(["'])?([^"' >]+)\1[^>]*>/y;
@@ -50,10 +46,10 @@ export function scanIdentifier(source: string, from: number): number {
   const code = source.codePointAt(from);
   if (code === undefined || !isIdentifierStart(code, true)) return from;
   let end = from + (code <= 0xffff ? 1 : 2);
-  while (end < source.length) {
-    const next = source.codePointAt(end) as number;
-    if (!isIdentifierChar(next, true)) break;
+  let next = source.codePointAt(end);
+  while (next !== undefined && isIdentifierChar(next, true)) {
     end += next <= 0xffff ? 1 : 2;
+    next = source.codePointAt(end);
   }
   return end;
 }
@@ -122,7 +118,8 @@ export class TemplateParserState {
     this.lfOnly = this.loc && !REGEX_NON_LF_LINE_BREAK.test(source);
     this.isTypeScript = isTypeScript(source);
     this.css = options.css ?? true;
-    this.root = {
+    // svelte's parser leaves an empty `js` on the root; the public type omits it
+    const root: AST.Root & { js: never[] } = {
       type: "Root",
       start: 0,
       end: originalLength,
@@ -131,9 +128,10 @@ export class TemplateParserState {
       options: null,
       fragment: { type: "Fragment", nodes: [] },
       comments: [],
-    } as AST.Root;
-    this.stack = [this.root];
-    this.fragments = [this.root.fragment];
+    };
+    this.root = root;
+    this.stack = [root];
+    this.fragments = [root.fragment];
   }
 
   match(str: string): boolean {
