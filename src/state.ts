@@ -1,4 +1,3 @@
-// @ts-expect-error acorn's published types don't declare these. svelte's
 import { isIdentifierChar, isIdentifierStart } from "acorn";
 import {
   expected_token,

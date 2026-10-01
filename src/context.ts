@@ -1,8 +1,10 @@
-import { type AnyNode, parseExpressionAt } from "./acorn-bridge";
+import { parseExpressionAt } from "./acorn-bridge";
 import { matchBracket } from "./bracket";
 import { expected_pattern } from "./errors";
+import { assertType } from "./nodes";
 import type { TemplateParserState } from "./state";
 import type { Pattern } from "./types/estree";
+import type { TSTypeAnnotation } from "./types/typescript";
 
 const REGEX_OPTIONAL_PARAM_COLON = /\?\s*:/g;
 
@@ -12,7 +14,7 @@ export function readPattern(state: TemplateParserState): Pattern {
 
   if (id.name !== "") {
     const typeAnnotation = readTypeAnnotation(state);
-    return { ...id, typeAnnotation } as unknown as Pattern;
+    return { ...id, typeAnnotation };
   }
 
   const char = state.source[state.index];
@@ -25,14 +27,18 @@ export function readPattern(state: TemplateParserState): Pattern {
     `${state.source.slice(0, state.index)} = 1`,
     start,
   );
-  const pattern = node.left as AnyNode;
+  assertType(node, "AssignmentExpression");
+  const pattern = node.left;
+  assertType(pattern, "ObjectPattern", "ArrayPattern");
   const typeAnnotation = readTypeAnnotation(state);
   pattern.typeAnnotation = typeAnnotation;
   if (typeAnnotation) pattern.end = typeAnnotation.end;
-  return pattern as unknown as Pattern;
+  return pattern;
 }
 
-function readTypeAnnotation(state: TemplateParserState): AnyNode | undefined {
+function readTypeAnnotation(
+  state: TemplateParserState,
+): TSTypeAnnotation | undefined {
   const start = state.index;
   state.allowWhitespace();
 
@@ -50,13 +56,14 @@ function readTypeAnnotation(state: TemplateParserState): AnyNode | undefined {
 
   let expression = parseExpressionAt(state, synthetic, a).node;
   if (expression.type === "AssignmentExpression") {
-    let b = (expression.right as AnyNode).start;
+    let b = expression.right.start;
     while (synthetic[b] !== "=") b -= 1;
     expression = parseExpressionAt(state, synthetic.slice(0, b), a).node;
   }
   if (expression.type === "SequenceExpression") {
-    expression = (expression.expressions as AnyNode[])[0];
+    expression = expression.expressions[0];
   }
+  assertType(expression, "TSAsExpression");
 
   state.index = expression.end;
   return {
