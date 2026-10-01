@@ -31,7 +31,7 @@ await Promise.all(
   }),
 );
 
-const SUBPATHS = ["core", "typescript", "entities", "walk"];
+const SUBPATHS = ["core", "typescript", "entities", "walk", "lexer"];
 
 async function emitTypeDeclarations() {
   try {

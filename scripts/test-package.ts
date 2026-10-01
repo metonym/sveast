@@ -44,9 +44,11 @@ try {
     }
   }
   const acorn = reach("is-valid-type.js");
-  for (const file of reach("walk.js")) {
-    if (file === "parse.js" || acorn.has(file)) {
-      throw new Error(`dist/walk.js imports the parser: ${file}`);
+  for (const entry of ["walk.js", "lexer.js"]) {
+    for (const file of reach(entry)) {
+      if (file === "parse.js" || acorn.has(file)) {
+        throw new Error(`dist/${entry} imports the parser: ${file}`);
+      }
     }
   }
 
@@ -67,7 +69,14 @@ try {
     }
   }
 
-  for (const entry of ["index", "core", "typescript", "entities", "walk"]) {
+  for (const entry of [
+    "index",
+    "core",
+    "typescript",
+    "entities",
+    "walk",
+    "lexer",
+  ]) {
     const types = readFileSync(
       join(root, `dist/${entry}.d.ts`),
       "utf8",
@@ -172,6 +181,15 @@ assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
 assert.equal(js.parseImportsExports('import a from "a";')[0].type, "ImportDeclaration");
 assert.throws(() => js.parseImportsExports('import type A from "a";', { typescript: true }), (error) => !(error instanceof core.ParseError));
 
+const lexer = await import("sveast/lexer");
+assert.equal(lexer.lexImportsExports, (await import("sveast")).lexImportsExports);
+const [imported, reexported] = lexer.lexImportsExports('import a, { type B as C } from "d"; export * as e from "f";');
+assert.deepEqual(
+  imported.specifiers.map((specifier) => [specifier.kind, specifier.imported, specifier.local, specifier.typeOnly]),
+  [["default", "default", "a", false], ["named", "B", "C", true]],
+);
+assert.deepEqual([reexported.source.value, reexported.specifiers[0].exported], ["f", "e"]);
+
 const walker = await import("sveast/walk");
 assert.equal(walker.walk, walk);
 assert.equal(walker.STOP, STOP);
@@ -221,6 +239,7 @@ import {
   type Program as CoreProgram,
 } from "sveast/core";
 import { entities } from "sveast/entities";
+import { type LexedStatement, lexImportsExports } from "sveast/lexer";
 import { typescript } from "sveast/typescript";
 import {
   type AST as WalkAST,
@@ -332,6 +351,19 @@ const bindingsOf = (fn: AnyFunction): WalkNode[] => fn.params.flatMap(extractIde
 void bindingsOf;
 void walkVisitor;
 void eachKeys;
+
+const lexed: LexedStatement[] = lexImportsExports("import a from 'a';");
+for (const statement of lexed) {
+  const from: string | undefined = statement.source?.value;
+  if (statement.kind === "import") {
+    const locals: string[] = statement.specifiers.map((specifier) => specifier.local);
+    void locals;
+  } else {
+    const exported: (string | null)[] = statement.specifiers.map((specifier) => specifier.exported);
+    void exported;
+  }
+  void from;
+}
 `,
   );
   const tsc = join(root, "node_modules/.bin/tsc");

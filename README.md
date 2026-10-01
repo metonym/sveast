@@ -34,7 +34,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
-| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `parseImportsExports`, `isValidType`), walking the AST (`walk`, `visitorKeys`), and finding references and bindings (`isReference`, `extractIdentifiers`) |
+| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `parseImportsExports`, `isValidType`), reading imports without a parser (`lexImportsExports`), walking the AST (`walk`, `visitorKeys`), and finding references and bindings (`isReference`, `extractIdentifiers`) |
 | Non-ASCII identifiers | acorn's tables, Unicode 17 | The engine's own Unicode data, which is smaller to ship: the same as acorn's in Node 24 and Bun; an engine on another Unicode version differs on the letters added in between |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
 
@@ -61,7 +61,7 @@ Parses a JavaScript or TypeScript module, such as a `.ts` file a component impor
 
 A module's top-level `import` and `export` statements, without parsing the rest, e.g. to rewrite a component's imports or follow a module graph. Each node is the one `parseModule(source, { comments: false })` has for that statement, so `start`, `end`, `specifiers` (with `imported`, `local` and `importKind`) and `source` are all there: `ImportDeclaration`, `ExportNamedDeclaration`, `ExportDefaultDeclaration` and `ExportAllDeclaration`, and, in TypeScript, `TSImportEqualsDeclaration`, `TSExportAssignment` and `TSNamespaceExportDeclaration`. `import(...)` and `import.meta` are expressions, so they aren't returned. Unlike a regex, it never matches an `import` in a comment, a string, a template or a nested block such as `declare module "a" { ... }`.
 
-The rest is skipped by a tokenizer that only tracks strings, comments, templates, regular expressions and brackets, and only the statements it finds are parsed. A syntax error in one of them throws `parseModule`'s `ParseError`, including a name exported twice; errors elsewhere aren't reported.
+The rest is skipped by a tokenizer that only tracks strings, comments, templates, regular expressions and brackets, and only the statements it finds are parsed. It stops after the last `import` or `export` word that could start a statement, so the code after a component's imports is never read. A syntax error in one of them throws `parseModule`'s `ParseError`, including a name exported twice; errors elsewhere aren't reported.
 
 | Option | Description |
 |:---|:---|
@@ -79,6 +79,38 @@ function dependencies(source: string, typescript = false): string[] {
   );
 }
 ```
+
+### `lexImportsExports(source) => LexedStatement[]` from `sveast/lexer`
+
+A module's top-level `import` statements and `export … from` re-exports, read by hand instead of parsed: for a tool on a hot or eagerly loaded path, such as a preprocessor that rewrites a component's imports, that needs each statement's offsets, its source and its names, and not the AST. `dist/lexer.js` loads neither acorn nor the template parser, and minifies to 3.2 kB gzipped; a fresh Node process imports it in 1.4 ms, against 7.0 ms for `parseImportsExports`. It's also exported from `sveast`.
+
+It finds statements the way `parseImportsExports` does with `localExports: false`, skipping comments, strings, templates, `import(...)`, `import.meta` and nested blocks, and stops after the last `import` or `export` that could start one. `export let`, `export function`, `export { a }` and other exports of the module's own bindings aren't returned. On every statement `parseImportsExports` accepts, the offsets, sources and names are the same: the tests check it on the corpus, on mutated modules and on generated statements, and `scripts/compare-imports.ts` on 8,749 files from other Svelte projects. It doesn't check syntax and never throws. A statement it can't read, such as `import { a from "a"` or TypeScript's `import a = require("a")`, has `source: null` and no specifiers and ends where it stopped reading, so leave it as written. `import type` and `type` before a name are always read, as with `typescript: true`.
+
+```ts
+import { lexImportsExports } from "sveast/lexer";
+
+for (const statement of lexImportsExports(source)) {
+  statement.kind; // "import" | "export"
+  statement.start; // offset of `import` or `export`
+  statement.end; // after the `;`, or the last token without one
+  statement.source; // { value: "carbon-components-svelte", start, end } (quotes included), or null
+  statement.typeOnly; // `import type …` or `export type …`
+  statement.specifiers;
+  // import: { kind: "default" | "namespace" | "named", imported, local, typeOnly, start, end }
+  // export: { kind: "all" | "namespace" | "named", local, exported, typeOnly, start, end }
+}
+```
+
+| Specifier | `import` | `export … from` |
+|:---|:---|:---|
+| `a` in `import a` | `default`, `imported: "default"`, `local: "a"` | |
+| `* as a` | `namespace`, `imported: "*"`, `local: "a"` | `namespace`, `local: "*"`, `exported: "a"` |
+| `*` | | `all`, `local: "*"`, `exported: null` |
+| `b as c`, `"b-c" as d` | `named`, `imported: "b"`, `local: "c"` | `named`, `local: "b"`, `exported: "c"` |
+
+Names are as the module sees them: escapes decoded, and a string name's value without its quotes. A specifier's `typeOnly` is also `true` in an `import type` or `export type`. Its `start` is that of `type` before the name, if any, and `end` is after the last name; for `export *`, after the `*`.
+
+On Carbon's 327 component scripts it takes about 40% of the time `parseImportsExports` with `localExports: false` takes, and on the largest, 63 kB, about an eighth.
 
 ### `createParser(support?) => { parse, parseModule, parseImportsExports }` from `sveast/core`
 
@@ -155,7 +187,7 @@ import { STOP, walk } from "sveast/walk";
 
 ### Types
 
-`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions`, `ParseModuleOptions` and `ParseImportsExportsOptions` are exported too.
+`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions`, `ParseModuleOptions` and `ParseImportsExportsOptions` are exported too, and `lexImportsExports`'s `LexedStatement` (`LexedImport` or `LexedExport`), `LexedImportSpecifier`, `LexedExportSpecifier` and `LexedSource`.
 
 The estree node types are exported as well (`Program`, `Node`, `Statement`, `Expression`, `Identifier`, ...), so you don't need `@types/estree`. They're estree's, plus what the parser adds: `start`/`end` on every node, and the TypeScript plugin's nodes (`TSInterfaceDeclaration`, `TSTypeAnnotation`, `TSTypeReference`, ...; `TSNode` is their union) and fields (`typeAnnotation`, `typeParameters`, `typeArguments`, `returnType`, `importKind`/`exportKind`, ...). The TypeScript nodes are in the `Statement`, `Declaration` and `Expression` unions, so checking `node.type` narrows to them. Where the grammar only allows a string, such as an import's `source`, the type is `StringLiteral`, a `Literal` whose `value` is a `string`.
 

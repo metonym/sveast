@@ -5,7 +5,7 @@ import { byCodeUnit } from "../scripts/shared";
 const hasKey = (value: object, key: string): boolean =>
   JSON.stringify(value).includes(`"${key}":`);
 
-test("exports the parsers, walk and its helpers, and ParseError", async () => {
+test("exports the parsers, the lexer, walk and its helpers, and ParseError", async () => {
   expect(Object.keys(await import("sveast")).sort(byCodeUnit)).toEqual([
     "ParseError",
     "SKIP",
@@ -13,6 +13,7 @@ test("exports the parsers, walk and its helpers, and ParseError", async () => {
     "extractIdentifiers",
     "isReference",
     "isValidType",
+    "lexImportsExports",
     "parse",
     "parseImportsExports",
     "parseModule",

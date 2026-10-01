@@ -1,5 +1,14 @@
 export { isValidType } from "./is-valid-type";
 export type {
+  LexedExport,
+  LexedExportSpecifier,
+  LexedImport,
+  LexedImportSpecifier,
+  LexedSource,
+  LexedStatement,
+} from "./lexer";
+export { lexImportsExports } from "./lexer";
+export type {
   ParseImportsExportsOptions,
   ParseModuleOptions,
   ParseOptions,

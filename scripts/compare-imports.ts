@@ -1,11 +1,14 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import {
+  lexImportsExports,
+  type ModuleDeclaration,
   type Node,
   parse,
   parseImportsExports,
   parseModule,
 } from "../src/index";
+import { comparableLexed, expectedLexed } from "./lexed";
 import { collectFiles, errorMessage } from "./shared";
 
 const { values, positionals } = parseArgs({
@@ -98,6 +101,18 @@ for (const file of files) {
         } catch (error) {
           actual = `throws ${errorMessage(error)}`;
         }
+        if (actual === expected && !localExports) {
+          const lexed = json(comparableLexed(lexImportsExports(text)));
+          const parsed = json(
+            expectedLexed(JSON.parse(expected) as ModuleDeclaration[]),
+          );
+          if (lexed !== parsed) {
+            mismatches.push(
+              `${file}${body === original ? "" : " (probed)"}, lexImportsExports\n  sveast: ${lexed.slice(0, 240)}\n  parseImportsExports: ${parsed.slice(0, 240)}`,
+            );
+            continue;
+          }
+        }
         if (actual === expected) {
           matched++;
           continue;
@@ -136,7 +151,7 @@ function probedText(source: string, body: Node[]): string {
 }
 
 console.log(
-  `${files.length} files: ${matched} match, ${mismatches.length} mismatch, ${rejected} modules parseModule rejects`,
+  `${files.length} files: ${matched} match, ${mismatches.length} mismatch, ${rejected} modules parseModule rejects (localExports: false also checks lexImportsExports)`,
 );
 if (mismatches.length > 0) {
   console.log("\nMismatches:");
