@@ -5,7 +5,7 @@ export function attribute_duplicate(node: NodeLike): never {
   throw new ParseError(
     node,
     "attribute_duplicate",
-    "Attributes need to be unique\nhttps://svelte.dev/e/attribute_duplicate",
+    "Attributes need to be unique",
   );
 }
 
@@ -13,7 +13,7 @@ export function attribute_empty_shorthand(node: NodeLike): never {
   throw new ParseError(
     node,
     "attribute_empty_shorthand",
-    "Attribute shorthand cannot be empty\nhttps://svelte.dev/e/attribute_empty_shorthand",
+    "Attribute shorthand cannot be empty",
   );
 }
 
@@ -21,7 +21,7 @@ export function block_duplicate_clause(node: NodeLike, name: string): never {
   throw new ParseError(
     node,
     "block_duplicate_clause",
-    `${name} cannot appear more than once within a block\nhttps://svelte.dev/e/block_duplicate_clause`,
+    `${name} cannot appear more than once within a block`,
   );
 }
 
@@ -29,7 +29,7 @@ export function block_invalid_continuation_placement(node: NodeLike): never {
   throw new ParseError(
     node,
     "block_invalid_continuation_placement",
-    "{:...} block is invalid at this position (did you forget to close the preceding element or block?)\nhttps://svelte.dev/e/block_invalid_continuation_placement",
+    "{:...} block is invalid at this position (did you forget to close the preceding element or block?)",
   );
 }
 
@@ -37,7 +37,7 @@ export function block_invalid_elseif(node: NodeLike): never {
   throw new ParseError(
     node,
     "block_invalid_elseif",
-    "'elseif' should be 'else if'\nhttps://svelte.dev/e/block_invalid_elseif",
+    "'elseif' should be 'else if'",
   );
 }
 
@@ -49,23 +49,19 @@ export function block_invalid_placement(
   throw new ParseError(
     node,
     "block_invalid_placement",
-    `{#${name} ...} block cannot be ${location}\nhttps://svelte.dev/e/block_invalid_placement`,
+    `{#${name} ...} block cannot be ${location}`,
   );
 }
 
 export function block_unclosed(node: NodeLike): never {
-  throw new ParseError(
-    node,
-    "block_unclosed",
-    "Block was left open\nhttps://svelte.dev/e/block_unclosed",
-  );
+  throw new ParseError(node, "block_unclosed", "Block was left open");
 }
 
 export function block_unexpected_close(node: NodeLike): never {
   throw new ParseError(
     node,
     "block_unexpected_close",
-    "Unexpected block closing tag\nhttps://svelte.dev/e/block_unexpected_close",
+    "Unexpected block closing tag",
   );
 }
 
@@ -73,7 +69,7 @@ export function const_tag_invalid_expression(node: NodeLike): never {
   throw new ParseError(
     node,
     "const_tag_invalid_expression",
-    "{@const ...} must consist of a single variable declaration\nhttps://svelte.dev/e/const_tag_invalid_expression",
+    "{@const ...} must consist of a single variable declaration",
   );
 }
 
@@ -81,7 +77,7 @@ export function css_empty_declaration(node: NodeLike): never {
   throw new ParseError(
     node,
     "css_empty_declaration",
-    "Declaration cannot be empty\nhttps://svelte.dev/e/css_empty_declaration",
+    "Declaration cannot be empty",
   );
 }
 
@@ -89,23 +85,19 @@ export function css_expected_identifier(node: NodeLike): never {
   throw new ParseError(
     node,
     "css_expected_identifier",
-    "Expected a valid CSS identifier\nhttps://svelte.dev/e/css_expected_identifier",
+    "Expected a valid CSS identifier",
   );
 }
 
 export function css_selector_invalid(node: NodeLike): never {
-  throw new ParseError(
-    node,
-    "css_selector_invalid",
-    "Invalid selector\nhttps://svelte.dev/e/css_selector_invalid",
-  );
+  throw new ParseError(node, "css_selector_invalid", "Invalid selector");
 }
 
 export function debug_tag_invalid_arguments(node: NodeLike): never {
   throw new ParseError(
     node,
     "debug_tag_invalid_arguments",
-    "{@debug ...} arguments must be identifiers, not arbitrary expressions\nhttps://svelte.dev/e/debug_tag_invalid_arguments",
+    "{@debug ...} arguments must be identifiers, not arbitrary expressions",
   );
 }
 
@@ -113,7 +105,7 @@ export function declaration_tag_invalid_type(node: NodeLike): never {
   throw new ParseError(
     node,
     "declaration_tag_invalid_type",
-    "Declaration tags must be `let` or `const` declarations\nhttps://svelte.dev/e/declaration_tag_invalid_type",
+    "Declaration tags must be `let` or `const` declarations",
   );
 }
 
@@ -121,7 +113,7 @@ export function directive_invalid_value(node: NodeLike): never {
   throw new ParseError(
     node,
     "directive_invalid_value",
-    "Directive value must be a JavaScript expression enclosed in curly braces\nhttps://svelte.dev/e/directive_invalid_value",
+    "Directive value must be a JavaScript expression enclosed in curly braces",
   );
 }
 
@@ -129,7 +121,7 @@ export function directive_missing_name(node: NodeLike, type: string): never {
   throw new ParseError(
     node,
     "directive_missing_name",
-    `\`${type}\` name cannot be empty\nhttps://svelte.dev/e/directive_missing_name`,
+    `\`${type}\` name cannot be empty`,
   );
 }
 
@@ -140,7 +132,7 @@ export function element_invalid_closing_tag(
   throw new ParseError(
     node,
     "element_invalid_closing_tag",
-    `\`</${name}>\` attempted to close an element that was not open\nhttps://svelte.dev/e/element_invalid_closing_tag`,
+    `\`</${name}>\` attempted to close an element that was not open`,
   );
 }
 
@@ -152,23 +144,19 @@ export function element_invalid_closing_tag_autoclosed(
   throw new ParseError(
     node,
     "element_invalid_closing_tag_autoclosed",
-    `\`</${name}>\` attempted to close element that was already automatically closed by \`<${reason}>\` (cannot nest \`<${reason}>\` inside \`<${name}>\`)\nhttps://svelte.dev/e/element_invalid_closing_tag_autoclosed`,
+    `\`</${name}>\` attempted to close element that was already automatically closed by \`<${reason}>\` (cannot nest \`<${reason}>\` inside \`<${name}>\`)`,
   );
 }
 
 export function element_unclosed(node: NodeLike, name: string): never {
-  throw new ParseError(
-    node,
-    "element_unclosed",
-    `\`<${name}>\` was left open\nhttps://svelte.dev/e/element_unclosed`,
-  );
+  throw new ParseError(node, "element_unclosed", `\`<${name}>\` was left open`);
 }
 
 export function expected_attribute_value(node: NodeLike): never {
   throw new ParseError(
     node,
     "expected_attribute_value",
-    "Expected attribute value\nhttps://svelte.dev/e/expected_attribute_value",
+    "Expected attribute value",
   );
 }
 
@@ -176,23 +164,19 @@ export function expected_block_type(node: NodeLike): never {
   throw new ParseError(
     node,
     "expected_block_type",
-    "Expected 'if', 'each', 'await', 'key' or 'snippet'\nhttps://svelte.dev/e/expected_block_type",
+    "Expected 'if', 'each', 'await', 'key' or 'snippet'",
   );
 }
 
 export function expected_identifier(node: NodeLike): never {
-  throw new ParseError(
-    node,
-    "expected_identifier",
-    "Expected an identifier\nhttps://svelte.dev/e/expected_identifier",
-  );
+  throw new ParseError(node, "expected_identifier", "Expected an identifier");
 }
 
 export function expected_pattern(node: NodeLike): never {
   throw new ParseError(
     node,
     "expected_pattern",
-    "Expected identifier or destructure pattern\nhttps://svelte.dev/e/expected_pattern",
+    "Expected identifier or destructure pattern",
   );
 }
 
@@ -200,39 +184,27 @@ export function expected_tag(node: NodeLike): never {
   throw new ParseError(
     node,
     "expected_tag",
-    "Expected 'html', 'render', 'attach', 'const', or 'debug'\nhttps://svelte.dev/e/expected_tag",
+    "Expected 'html', 'render', 'attach', 'const', or 'debug'",
   );
 }
 
 export function expected_token(node: NodeLike, token: string): never {
-  throw new ParseError(
-    node,
-    "expected_token",
-    `Expected token ${token}\nhttps://svelte.dev/e/expected_token`,
-  );
+  throw new ParseError(node, "expected_token", `Expected token ${token}`);
 }
 
 export function expected_whitespace(node: NodeLike): never {
-  throw new ParseError(
-    node,
-    "expected_whitespace",
-    "Expected whitespace\nhttps://svelte.dev/e/expected_whitespace",
-  );
+  throw new ParseError(node, "expected_whitespace", "Expected whitespace");
 }
 
 export function js_parse_error(node: NodeLike, message: string): never {
-  throw new ParseError(
-    node,
-    "js_parse_error",
-    `${message}\nhttps://svelte.dev/e/js_parse_error`,
-  );
+  throw new ParseError(node, "js_parse_error", `${message}`);
 }
 
 export function render_tag_invalid_expression(node: NodeLike): never {
   throw new ParseError(
     node,
     "render_tag_invalid_expression",
-    "`{@render ...}` tags can only contain call expressions\nhttps://svelte.dev/e/render_tag_invalid_expression",
+    "`{@render ...}` tags can only contain call expressions",
   );
 }
 
@@ -240,7 +212,7 @@ export function script_duplicate(node: NodeLike): never {
   throw new ParseError(
     node,
     "script_duplicate",
-    "A component can have a single top-level `<script>` element and/or a single top-level `<script module>` element\nhttps://svelte.dev/e/script_duplicate",
+    "A component can have a single top-level `<script>` element and/or a single top-level `<script module>` element",
   );
 }
 
@@ -251,7 +223,7 @@ export function script_invalid_attribute_value(
   throw new ParseError(
     node,
     "script_invalid_attribute_value",
-    `If the \`${name}\` attribute is supplied, it must be a boolean attribute\nhttps://svelte.dev/e/script_invalid_attribute_value`,
+    `If the \`${name}\` attribute is supplied, it must be a boolean attribute`,
   );
 }
 
@@ -259,7 +231,7 @@ export function script_invalid_context(node: NodeLike): never {
   throw new ParseError(
     node,
     "script_invalid_context",
-    'If the context attribute is supplied, its value must be "module"\nhttps://svelte.dev/e/script_invalid_context',
+    'If the context attribute is supplied, its value must be "module"',
   );
 }
 
@@ -267,7 +239,7 @@ export function script_reserved_attribute(node: NodeLike, name: string): never {
   throw new ParseError(
     node,
     "script_reserved_attribute",
-    `The \`${name}\` attribute is reserved and cannot be used\nhttps://svelte.dev/e/script_reserved_attribute`,
+    `The \`${name}\` attribute is reserved and cannot be used`,
   );
 }
 
@@ -275,7 +247,7 @@ export function style_duplicate(node: NodeLike): never {
   throw new ParseError(
     node,
     "style_duplicate",
-    "A component can have a single top-level `<style>` element\nhttps://svelte.dev/e/style_duplicate",
+    "A component can have a single top-level `<style>` element",
   );
 }
 
@@ -283,7 +255,7 @@ export function svelte_component_invalid_this(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_component_invalid_this",
-    "Invalid component definition — must be an `{expression}`\nhttps://svelte.dev/e/svelte_component_invalid_this",
+    "Invalid component definition — must be an `{expression}`",
   );
 }
 
@@ -291,7 +263,7 @@ export function svelte_component_missing_this(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_component_missing_this",
-    "`<svelte:component>` must have a 'this' attribute\nhttps://svelte.dev/e/svelte_component_missing_this",
+    "`<svelte:component>` must have a 'this' attribute",
   );
 }
 
@@ -299,7 +271,7 @@ export function svelte_element_missing_this(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_element_missing_this",
-    "`<svelte:element>` must have a 'this' attribute with a value\nhttps://svelte.dev/e/svelte_element_missing_this",
+    "`<svelte:element>` must have a 'this' attribute with a value",
   );
 }
 
@@ -307,7 +279,7 @@ export function svelte_meta_duplicate(node: NodeLike, name: string): never {
   throw new ParseError(
     node,
     "svelte_meta_duplicate",
-    `A component can only have one \`<${name}>\` element\nhttps://svelte.dev/e/svelte_meta_duplicate`,
+    `A component can only have one \`<${name}>\` element`,
   );
 }
 
@@ -318,7 +290,7 @@ export function svelte_meta_invalid_content(
   throw new ParseError(
     node,
     "svelte_meta_invalid_content",
-    `<${name}> cannot have children\nhttps://svelte.dev/e/svelte_meta_invalid_content`,
+    `<${name}> cannot have children`,
   );
 }
 
@@ -329,7 +301,7 @@ export function svelte_meta_invalid_placement(
   throw new ParseError(
     node,
     "svelte_meta_invalid_placement",
-    `\`<${name}>\` tags cannot be inside elements or blocks\nhttps://svelte.dev/e/svelte_meta_invalid_placement`,
+    `\`<${name}>\` tags cannot be inside elements or blocks`,
   );
 }
 
@@ -337,7 +309,7 @@ export function svelte_meta_invalid_tag(node: NodeLike, list: string): never {
   throw new ParseError(
     node,
     "svelte_meta_invalid_tag",
-    `Valid \`<svelte:...>\` tag names are ${list}\nhttps://svelte.dev/e/svelte_meta_invalid_tag`,
+    `Valid \`<svelte:...>\` tag names are ${list}`,
   );
 }
 
@@ -345,7 +317,7 @@ export function svelte_options_deprecated_tag(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_options_deprecated_tag",
-    '"tag" option is deprecated — use "customElement" instead\nhttps://svelte.dev/e/svelte_options_deprecated_tag',
+    '"tag" option is deprecated — use "customElement" instead',
   );
 }
 
@@ -353,7 +325,7 @@ export function svelte_options_invalid_attribute(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_options_invalid_attribute",
-    "`<svelte:options>` can only receive static attributes\nhttps://svelte.dev/e/svelte_options_invalid_attribute",
+    "`<svelte:options>` can only receive static attributes",
   );
 }
 
@@ -364,7 +336,7 @@ export function svelte_options_invalid_attribute_value(
   throw new ParseError(
     node,
     "svelte_options_invalid_attribute_value",
-    `Value must be ${list}, if specified\nhttps://svelte.dev/e/svelte_options_invalid_attribute_value`,
+    `Value must be ${list}, if specified`,
   );
 }
 
@@ -372,7 +344,7 @@ export function svelte_options_invalid_customelement(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_options_invalid_customelement",
-    '"customElement" must be a string literal defining a valid custom element name or an object of the form { tag?: string; shadow?: "open" | "none" | `ShadowRootInit`; props?: { [key: string]: { attribute?: string; reflect?: boolean; type: .. } } }\nhttps://svelte.dev/e/svelte_options_invalid_customelement',
+    '"customElement" must be a string literal defining a valid custom element name or an object of the form { tag?: string; shadow?: "open" | "none" | `ShadowRootInit`; props?: { [key: string]: { attribute?: string; reflect?: boolean; type: .. } } }',
   );
 }
 
@@ -382,7 +354,7 @@ export function svelte_options_invalid_customelement_props(
   throw new ParseError(
     node,
     "svelte_options_invalid_customelement_props",
-    '"props" must be a statically analyzable object literal of the form "{ [key: string]: { attribute?: string; reflect?: boolean; type?: "String" | "Boolean" | "Number" | "Array" | "Object" }"\nhttps://svelte.dev/e/svelte_options_invalid_customelement_props',
+    '"props" must be a statically analyzable object literal of the form "{ [key: string]: { attribute?: string; reflect?: boolean; type?: "String" | "Boolean" | "Number" | "Array" | "Object" }"',
   );
 }
 
@@ -392,7 +364,7 @@ export function svelte_options_invalid_customelement_shadow(
   throw new ParseError(
     node,
     "svelte_options_invalid_customelement_shadow",
-    '"shadow" must be either "open", "none" or `ShadowRootInit` object.\nhttps://svelte.dev/e/svelte_options_invalid_customelement_shadow',
+    '"shadow" must be either "open", "none" or `ShadowRootInit` object.',
   );
 }
 
@@ -400,7 +372,7 @@ export function svelte_options_invalid_tagname(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_options_invalid_tagname",
-    "Tag name must be lowercase and hyphenated\nhttps://svelte.dev/e/svelte_options_invalid_tagname",
+    "Tag name must be lowercase and hyphenated",
   );
 }
 
@@ -408,7 +380,7 @@ export function svelte_options_reserved_tagname(node: NodeLike): never {
   throw new ParseError(
     node,
     "svelte_options_reserved_tagname",
-    "Tag name is reserved\nhttps://svelte.dev/e/svelte_options_reserved_tagname",
+    "Tag name is reserved",
   );
 }
 
@@ -419,7 +391,7 @@ export function svelte_options_unknown_attribute(
   throw new ParseError(
     node,
     "svelte_options_unknown_attribute",
-    `\`<svelte:options>\` unknown attribute '${name}'\nhttps://svelte.dev/e/svelte_options_unknown_attribute`,
+    `\`<svelte:options>\` unknown attribute '${name}'`,
   );
 }
 
@@ -427,7 +399,7 @@ export function tag_invalid_name(node: NodeLike): never {
   throw new ParseError(
     node,
     "tag_invalid_name",
-    "Expected a valid element or component name. Components must have a valid variable name or dot notation expression\nhttps://svelte.dev/e/tag_invalid_name",
+    "Expected a valid element or component name. Components must have a valid variable name or dot notation expression",
   );
 }
 
@@ -439,23 +411,19 @@ export function tag_invalid_placement(
   throw new ParseError(
     node,
     "tag_invalid_placement",
-    `{@${name} ...} tag cannot be ${location}\nhttps://svelte.dev/e/tag_invalid_placement`,
+    `{@${name} ...} tag cannot be ${location}`,
   );
 }
 
 export function unexpected_eof(node: NodeLike): never {
-  throw new ParseError(
-    node,
-    "unexpected_eof",
-    "Unexpected end of input\nhttps://svelte.dev/e/unexpected_eof",
-  );
+  throw new ParseError(node, "unexpected_eof", "Unexpected end of input");
 }
 
 export function unexpected_reserved_word(node: NodeLike, word: string): never {
   throw new ParseError(
     node,
     "unexpected_reserved_word",
-    `'${word}' is a reserved word in JavaScript and cannot be used here\nhttps://svelte.dev/e/unexpected_reserved_word`,
+    `'${word}' is a reserved word in JavaScript and cannot be used here`,
   );
 }
 
@@ -463,7 +431,7 @@ export function unterminated_string_constant(node: NodeLike): never {
   throw new ParseError(
     node,
     "unterminated_string_constant",
-    "Unterminated string constant\nhttps://svelte.dev/e/unterminated_string_constant",
+    "Unterminated string constant",
   );
 }
 
@@ -471,6 +439,6 @@ export function void_element_invalid_content(node: NodeLike): never {
   throw new ParseError(
     node,
     "void_element_invalid_content",
-    "Void elements cannot have children or closing tags\nhttps://svelte.dev/e/void_element_invalid_content",
+    "Void elements cannot have children or closing tags",
   );
 }

@@ -32,7 +32,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | | svelte/compiler | sveast |
 |:---|:---|:---|
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
-| Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename` |
+| Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
 | Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `isValidType`) |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
@@ -48,7 +48,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 
 With `loc: true`, the result equals svelte's. With the defaults, it's svelte's without `loc` and `name_loc`.
 
-A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed"`), `message`, `position` (`[start, end]` offsets), `start`/`end` (`{ line, column, character }`) and `frame` (the source around the error).
+A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed"`), `message`, `position` (`[start, end]` offsets), `start`/`end` (`{ line, column, character }`) and `frame` (the source around the error). `message` is always the reason, a line break, then the link to the error's docs, `https://svelte.dev/e/${code}`. `reason` has the reason on its own, e.g. `"Unexpected token"`.
 
 ### `parseModule(source, options?) => Program`
 
