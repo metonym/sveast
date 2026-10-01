@@ -1,0 +1,31 @@
+<script>
+  /**
+   * Specify the size of the pagination.
+   * @type {"xs" | "sm" | "md" | "lg"}
+   */
+  export let size = "md";
+
+  import SkeletonText from "../SkeletonText/SkeletonText.svelte";
+</script>
+
+<div
+  class:bx--pagination={true}
+  class:bx--pagination--xs={size === "xs"}
+  class:bx--pagination--sm={size === "sm"}
+  class:bx--pagination--lg={size === "lg"}
+  class:bx--skeleton={true}
+  {...$$restProps}
+  on:click
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+>
+  <div class:bx--pagination__left={true}>
+    <SkeletonText width="70px" />
+    <SkeletonText width="35px" />
+    <SkeletonText width="105px" />
+  </div>
+  <div class:bx--pagination__right={true} class:bx--pagination--inline={true}>
+    <SkeletonText width="70px" />
+  </div>
+</div>

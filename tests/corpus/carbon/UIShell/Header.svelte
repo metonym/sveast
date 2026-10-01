@@ -1,0 +1,189 @@
+<script>
+  /**
+   * @template [Icon=any]
+   */
+
+  /** Set to `false` to hide the side nav by default */
+  export let expandedByDefault = true;
+
+  /**
+   * Set to `true` to open the side nav.
+   * @bindable writable
+   */
+  export let isSideNavOpen = false;
+
+  /**
+   * Specify the ARIA label for the header.
+   * @type {string}
+   */
+  export let uiShellAriaLabel = undefined;
+
+  /**
+   * Specify the `href` attribute.
+   * @type {string}
+   */
+  export let href = undefined;
+
+  /**
+   * Specify the company name.
+   *
+   * Alternatively, use the named slot "company".
+   * @type {string}
+   * @example
+   * ```svelte
+   * <Header>
+   *   <span slot="company">IBM</span>
+   * </Header>
+   * ```
+   */
+  export let companyName = undefined;
+
+  /**
+   * Specify the platform name.
+   * Alternatively, use the named slot "platform".
+   * @example
+   * ```svelte
+   * <Header>
+   *   <span slot="platform">Platform Name</span>
+   * </Header>
+   * ```
+   */
+  export let platformName = "";
+
+  /** Set to `true` to persist the hamburger menu */
+  export let persistentHamburgerMenu = false;
+
+  /**
+   * The window width (px) at which the SideNav is expanded and the
+   * hamburger menu is hidden. Defaults to Carbon's "large" breakpoint
+   * (`breakpoints.lg` in `src/Breakpoint/breakpoints.js`).
+   */
+  export let expansionBreakpoint = EXPANSION_BREAKPOINT;
+
+  /**
+   * Obtain a reference to the HTML anchor element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /**
+   * Specify the icon to render for the closed state.
+   * @type {Icon}
+   */
+  export let iconMenu = /** @type {Icon} */ (Menu);
+
+  /**
+   * Specify the icon to render for the opened state.
+   * @type {Icon}
+   */
+  export let iconClose = /** @type {Icon} */ (Close);
+
+  /**
+   * Specify the ARIA label for the hamburger menu.
+   * Defaults to "Open menu" or "Close menu" based on `isSideNavOpen` state.
+   * @type {string}
+   */
+  export let ariaLabelMenu = undefined;
+
+  /**
+   * Set to `"classic"` for the mixed UI Shell theme (Gray 100 header).
+   * Use with `SideNav` `theme="classic"` (White side nav).
+   * Requires `carbon-components-svelte/css/all.css`.
+   * @type {"classic" | undefined}
+   */
+  export let theme = undefined;
+
+  import { onMount } from "svelte";
+  import Close from "../icons/Close.svelte";
+  import Menu from "../icons/MenuIcon.svelte";
+  import { EXPANSION_BREAKPOINT } from "./expansion-breakpoint.js";
+  import HamburgerMenu from "./HamburgerMenu.svelte";
+  import { isHeaderRendered, shouldRenderHamburgerMenu } from "./nav-store.js";
+
+  onMount(() => {
+    isHeaderRendered.set(true);
+    return () => {
+      isHeaderRendered.set(false);
+    };
+  });
+
+  /** @type {undefined | number} */
+  let winWidth = undefined;
+  let wasAboveBreakpoint = undefined;
+  let userExplicitlySet = false;
+
+  $: isAboveBreakpoint =
+    winWidth !== undefined && winWidth >= expansionBreakpoint;
+
+  // Only auto-set isSideNavOpen on initial mount or when crossing the breakpoint threshold.
+  // This prevents mobile browser scroll events (which cause minor width changes
+  // due to address bar hide/show) from unexpectedly closing the nav.
+  $: {
+    const shouldAutoExpand =
+      expandedByDefault && isAboveBreakpoint && !persistentHamburgerMenu;
+
+    if (wasAboveBreakpoint === undefined) {
+      // Initial mount: set based on current viewport
+      isSideNavOpen = shouldAutoExpand;
+    } else if (wasAboveBreakpoint !== isAboveBreakpoint) {
+      // Crossed breakpoint threshold: apply the responsive default for the
+      // new viewport. In `persistentHamburgerMenu` mode there is no responsive
+      // default (the hamburger is always shown and the nav is fully
+      // user-controlled), so preserve a state the user just toggled. In the
+      // default mode the hamburger only appears on mobile, so a mobile toggle
+      // must NOT suppress auto-expand when returning to desktop.
+      // The flag is one-shot — reset so subsequent crossings auto-expand.
+      if (!(persistentHamburgerMenu && userExplicitlySet)) {
+        isSideNavOpen = shouldAutoExpand;
+      }
+      userExplicitlySet = false;
+    }
+
+    wasAboveBreakpoint = isAboveBreakpoint;
+  }
+
+  $: ariaLabel = companyName
+    ? companyName
+    : `${uiShellAriaLabel ?? $$props["aria-label"] ?? platformName}`;
+  $: hamburgerAriaLabel =
+    ariaLabelMenu ?? (isSideNavOpen ? "Close menu" : "Open menu");
+</script>
+
+<svelte:window bind:innerWidth={winWidth} />
+
+<header
+  aria-label={ariaLabel}
+  class:bx--header={true}
+  class:bx--header--ui-shell-classic={theme === "classic"}
+>
+  <slot name="skipToContent" />
+  {#if ($shouldRenderHamburgerMenu && winWidth < expansionBreakpoint) ||
+    persistentHamburgerMenu}
+    <HamburgerMenu
+      bind:isOpen={isSideNavOpen}
+      on:click={() => {
+        userExplicitlySet = true;
+      }}
+      {iconClose}
+      {iconMenu}
+      ariaLabel={hamburgerAriaLabel}
+    />
+  {/if}
+  {#if companyName || platformName || $$slots.company || $$slots.platform}
+    <a
+      {href}
+      class:bx--header__name={true}
+      bind:this={ref}
+      {...$$restProps}
+      on:click
+    >
+      {#if companyName || $$slots.company}
+        <span class:bx--header__name--prefix={true}
+          ><slot name="company">{companyName}&nbsp;</slot></span
+        >
+      {/if}
+      <slot name="platform">{platformName}</slot>
+    </a>
+  {/if}
+  <slot />
+</header>

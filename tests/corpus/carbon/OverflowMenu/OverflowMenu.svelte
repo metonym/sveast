@@ -1,0 +1,520 @@
+<script>
+  /**
+   * @template [Icon=any]
+   */
+
+  /**
+   * @event close
+   * @type {object}
+   * @property {"escape-key" | "outside-click" | "toggle" | "item-select"} trigger
+   * @property {number} [index] only present when an item is selected
+   * @property {string} [text] only present when an item is selected
+   */
+
+  /**
+   * Specify the size of the overflow menu.
+   * @type {"xs" | "sm" | "xl"}
+   */
+  export let size = undefined;
+
+  /**
+   * Specify the direction of the overflow menu relative to the button.
+   * @type {"top" | "bottom"}
+   */
+  export let direction = "bottom";
+
+  /**
+   * Set to `true` to open the menu.
+   * @bindable writable
+   */
+  export let open = false;
+
+  /** Set to `true` to enable the light variant */
+  export let light = false;
+
+  /** Set to `true` to disable the trigger button */
+  export let disabled = false;
+
+  /** Set to `true` to flip the menu relative to the button */
+  export let flipped = false;
+
+  /**
+   * Specify the maximum height of the menu.
+   * A number is treated as pixels; a string is used as a CSS length.
+   * The menu scrolls once its items exceed the height.
+   * @type {number | string}
+   */
+  export let maxHeight = undefined;
+
+  /**
+   * Specify the menu options class.
+   * @type {string}
+   */
+  export let menuOptionsClass = undefined;
+
+  /**
+   * Specify the icon to render.
+   * @type {Icon}
+   * @bindable writable
+   */
+  export let icon = /** @type {Icon} */ (OverflowMenuVertical);
+
+  /**
+   * Specify the icon class.
+   * @type {string}
+   */
+  export let iconClass = undefined;
+
+  /** Specify the ARIA label for the icon */
+  export let iconDescription = "Open and close list of options";
+
+  /** Set an id for the button element */
+  export let id = uniqueId();
+
+  /**
+   * Obtain a reference to the trigger button element.
+   * @bindable readonly
+   */
+  export let buttonRef = null;
+
+  /**
+   * Obtain a reference to the overflow menu element.
+   * @bindable readonly
+   */
+  export let menuRef = null;
+
+  /**
+   * Set to `true` to render the menu in a portal,
+   * allowing it to escape containers with `overflow: hidden`.
+   * When inside a Modal, defaults to `true` unless explicitly set to `false`.
+   * @type {boolean | undefined}
+   */
+  export let portalMenu = undefined;
+
+  import {
+    afterUpdate,
+    createEventDispatcher,
+    getContext,
+    onMount,
+    setContext,
+  } from "svelte";
+  import { derived, writable } from "svelte/store";
+  import { MODAL_CONTEXT_KEY } from "../constants/context-keys.js";
+  import OverflowMenuHorizontal from "../icons/OverflowMenuHorizontal.svelte";
+  import OverflowMenuVertical from "../icons/OverflowMenuVertical.svelte";
+  import FloatingPortal from "../Portal/FloatingPortal.svelte";
+  import { batchStoreUpdates } from "../utils/batch-store-updates.js";
+  import { toCssLength } from "../utils/css-length.js";
+  import { dismiss } from "../utils/dismiss.js";
+  import { isOutsideClick } from "../utils/is-outside-click.js";
+  import { keyBy } from "../utils/key-by.js";
+  import { nextEnabledIndex } from "../utils/move-index.js";
+  import { rovingFocus } from "../utils/roving-focus.js";
+  import {
+    createTypeaheadBuffer,
+    isTypeaheadKey,
+    typeaheadIndex,
+  } from "../utils/typeahead.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const ctxBreadcrumbItem = getContext("carbon:BreadcrumbItem");
+  const insideModal = getContext(MODAL_CONTEXT_KEY);
+
+  // Arrow keys the menu owns while open, so the page doesn't also scroll.
+  const ARROW_KEYS = ["ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp"];
+
+  $: effectivePortalMenu =
+    portalMenu === undefined ? !!insideModal : portalMenu;
+
+  const dispatch = createEventDispatcher();
+  /**
+   * @type {import("svelte/store").Writable<ReadonlyArray<{ id: string; text: string; primaryFocus: boolean; disabled: boolean; index: number }>>}
+   */
+  const items = writable([]);
+  /**
+   * @type {import("svelte/store").Readable<Record<string, { id: string; text: string; primaryFocus: boolean; disabled: boolean; index: number }>>}
+   */
+  const itemsById = derived(items, (_) => keyBy(_));
+  const currentId = writable(undefined);
+  /**
+   * @type {import("svelte/store").Writable<string | undefined>}
+   */
+  const focusedId = writable(undefined);
+  const focusedIndex = writable(-1);
+
+  let buttonWidth = undefined;
+  let onMountAfterUpdate = true;
+
+  const typeahead = createTypeaheadBuffer();
+
+  onMount(() => {
+    return () => {
+      typeahead.clear();
+    };
+  });
+
+  /**
+   * Everything the menu's position depends on. `afterUpdate` re-measures only
+   * when this changes; it used to re-read offset dimensions on every update
+   * while open (each arrow key, hover).
+   */
+  $: positionKey = open
+    ? `${direction}|${flipped}|${size}|${effectivePortalMenu}|${menuRef ? 1 : 0}`
+    : null;
+
+  /**
+   * Key last measured against. Read and written only in `afterUpdate`.
+   * The menu's `style` uses directives rather than a `style="..."` string so
+   * a re-render (e.g. `buttonWidth` settling) never wipes the `top`/`left`
+   * written here.
+   */
+  let measuredPositionKey = null;
+
+  $: if (ctxBreadcrumbItem) {
+    icon = OverflowMenuHorizontal;
+  }
+
+  // Items mount only while open, so they re-register on every open.
+  const batchedItemsUpdate = batchStoreUpdates(items);
+
+  /**
+   * @type {(data: { id: string; text: string; primaryFocus: boolean; disabled: boolean }) => void}
+   */
+  function add({ id, text, primaryFocus, disabled }) {
+    batchedItemsUpdate((_) => {
+      if (primaryFocus) {
+        focusedIndex.set(_.length);
+      }
+
+      return [..._, { id, text, primaryFocus, disabled, index: _.length }];
+    });
+  }
+
+  /** @type {(id: string) => void} */
+  function remove(id) {
+    batchedItemsUpdate((_) => _.filter((item) => item.id !== id));
+  }
+
+  /**
+   * @type {(id: string, item: { id: string; text: string; primaryFocus: boolean; disabled: boolean; index: number }) => void}
+   */
+  function update(id, item) {
+    currentId.set(id);
+
+    const shouldContinue = dispatch(
+      "close",
+      { trigger: "item-select", index: item.index, text: item.text },
+      { cancelable: true },
+    );
+    if (shouldContinue) {
+      open = false;
+    }
+  }
+
+  function first() {
+    const index = nextEnabledIndex({
+      items: $items,
+      index: -1,
+      step: 1,
+      isDisabled: (item) => item.disabled,
+      wrap: false,
+    });
+    if (index >= 0) focusedIndex.set(index);
+  }
+
+  function last() {
+    const index = nextEnabledIndex({
+      items: $items,
+      index: -1,
+      step: -1,
+      isDisabled: (item) => item.disabled,
+      wrap: false,
+    });
+    if (index >= 0) focusedIndex.set(index);
+  }
+
+  /**
+   * WAI-ARIA APG menu first-character navigation: move focus to the next
+   * enabled item whose text starts with the buffered characters typed so far.
+   * @param {string} character
+   */
+  function typeaheadSearch(character) {
+    if ($items.length === 0) return;
+
+    const query = typeahead.push(character);
+
+    focusedIndex.set(
+      typeaheadIndex({
+        items: $items,
+        query,
+        itemToString: (item) => item.text,
+        index: $focusedIndex,
+        isDisabled: (item) => item.disabled,
+      }),
+    );
+  }
+
+  setContext("carbon:OverflowMenu", {
+    focusedId,
+    items,
+    itemsById,
+    add,
+    remove,
+    update,
+    first,
+    last,
+  });
+
+  // Roving focus over the registry (`$items`), not the DOM: the focused item
+  // is the one whose id matches `focusedId`, set reactively from `focusedIndex`.
+  const menuRovingFocus = {
+    selector: "[role='menuitem']",
+    orientation: /** @type {const} */ ("vertical"),
+    skipDisabled: true,
+    getItems: () => $items,
+    isDisabled: (item) => item.disabled,
+    getActiveIndex: () => $focusedIndex,
+    onMove: (index) => focusedIndex.set(index),
+  };
+
+  afterUpdate(() => {
+    if (open && !onMountAfterUpdate && $focusedIndex < 0) {
+      menuRef?.focus({ preventScroll: true });
+    }
+
+    if (open && positionKey !== measuredPositionKey && buttonRef) {
+      measuredPositionKey = positionKey;
+      const width = buttonRef.offsetWidth;
+      const height = buttonRef.offsetHeight;
+
+      buttonWidth = width;
+
+      if (!effectivePortalMenu) {
+        // Menu is a button sibling; position from offsetTop/offsetLeft.
+        const { offsetTop, offsetLeft } = buttonRef;
+        // Read menu geometry up front, before any writes below: reading
+        // offsetHeight/offsetWidth after menuRef.style has already been
+        // written forces a second synchronous layout recalc on top of the
+        // one triggered by the reads above.
+        const menuHeight = menuRef.offsetHeight;
+        const menuWidth = menuRef.offsetWidth;
+
+        if (direction === "top") {
+          menuRef.style.top = `${offsetTop - menuHeight}px`;
+        } else {
+          menuRef.style.top = `${offsetTop + height}px`;
+        }
+
+        if (flipped) {
+          menuRef.style.left = `${offsetLeft + width - menuWidth}px`;
+        } else {
+          menuRef.style.left = `${offsetLeft}px`;
+        }
+
+        if (ctxBreadcrumbItem) {
+          menuRef.style.top = `${offsetTop + height + 10}px`;
+          menuRef.style.left = `${offsetLeft - 11}px`;
+        }
+      } else if (flipped && menuRef) {
+        menuRef.style.marginLeft = `${width - menuRef.offsetWidth}px`;
+      }
+    }
+
+    if (!open) {
+      measuredPositionKey = null;
+      currentId.set(undefined);
+      focusedIndex.set(0);
+    }
+
+    onMountAfterUpdate = false;
+  });
+
+  $: menuId = `menu-${id}`;
+  $: ariaLabel = $$props["aria-label"] ?? "menu";
+  $: if ($items[$focusedIndex]) {
+    focusedId.set($items[$focusedIndex].id);
+  }
+  // Use CSS custom properties instead of dynamic style injection for better
+  // performance. The previous approach created individual `style` tags per
+  // instance, causing overhead when many OverflowMenu components are rendered.
+  $: overflowMenuOptionsAfterWidth = buttonWidth ? `${buttonWidth}px` : "2rem";
+  $: maxHeightStyle = toCssLength(maxHeight);
+
+  function handleOutsideClick(event) {
+    if (menuRef && isOutsideClick(event, [buttonRef, menuRef])) {
+      const shouldContinue = dispatch(
+        "close",
+        { trigger: "outside-click" },
+        { cancelable: true },
+      );
+      if (shouldContinue) {
+        open = false;
+      }
+    }
+  }
+
+  /** @param {KeyboardEvent} event */
+  function handleMenuKeydown(event) {
+    if (ARROW_KEYS.includes(event.key)) {
+      event.preventDefault();
+    } else if (isTypeaheadKey(event)) {
+      event.preventDefault();
+      typeaheadSearch(event.key);
+    } else if (event.key === "Escape") {
+      event.stopPropagation();
+      const shouldContinue = dispatch(
+        "close",
+        { trigger: "escape-key" },
+        { cancelable: true },
+      );
+      if (shouldContinue) {
+        open = false;
+        buttonRef.focus({ preventScroll: true });
+      }
+    }
+  }
+</script>
+
+<button
+  bind:this={buttonRef}
+  use:dismiss={{ enabled: open, type: "click", handler: handleOutsideClick }}
+  type="button"
+  {disabled}
+  aria-haspopup="menu"
+  aria-expanded={open}
+  aria-label={ariaLabel}
+  aria-controls={menuId}
+  {id}
+  class:bx--overflow-menu={true}
+  class:bx--overflow-menu--open={open}
+  class:bx--overflow-menu--light={light}
+  class:bx--overflow-menu--xs={size === "xs"}
+  class:bx--overflow-menu--sm={size === "sm"}
+  class:bx--overflow-menu--xl={size === "xl"}
+  class:bx--overflow-menu--custom-trigger={$$slots.menu}
+  {...$$restProps}
+  on:click
+  on:click={({ target }) => {
+    if (!menuRef?.contains(target)) {
+      if (open) {
+        const shouldContinue = dispatch(
+          "close",
+          { trigger: "toggle" },
+          { cancelable: true },
+        );
+        if (shouldContinue) {
+          open = false;
+        }
+      } else {
+        open = true;
+      }
+    }
+  }}
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+  on:keydown
+  on:keydown={(event) => {
+    if (open) {
+      if (ARROW_KEYS.includes(event.key)) {
+        event.preventDefault();
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        first();
+      } else if (event.key === "End") {
+        event.preventDefault();
+        last();
+      } else if (event.key === "Escape") {
+        event.stopPropagation();
+        const shouldContinue = dispatch(
+          "close",
+          { trigger: "escape-key" },
+          { cancelable: true },
+        );
+        if (shouldContinue) {
+          open = false;
+          buttonRef.focus({ preventScroll: true });
+        }
+      }
+    }
+  }}
+>
+  <slot name="menu">
+    <svelte:component
+      this={icon}
+      aria-label={iconDescription}
+      title={iconDescription}
+      class="bx--overflow-menu__icon {iconClass}"
+    />
+  </slot>
+</button>
+
+{#if open && !effectivePortalMenu}
+  <ul
+    bind:this={menuRef}
+    use:rovingFocus={menuRovingFocus}
+    role="menu"
+    tabindex="-1"
+    id={menuId}
+    aria-label={ariaLabel}
+    data-floating-menu-direction={direction}
+    class:bx--overflow-menu-options={true}
+    class:bx--overflow-menu--flip={flipped}
+    class:bx--overflow-menu-options--open={open}
+    class:bx--overflow-menu-options--light={light}
+    class:bx--overflow-menu-options--xs={size === "xs"}
+    class:bx--overflow-menu-options--sm={size === "sm"}
+    class:bx--overflow-menu-options--xl={size === "xl"}
+    class:bx--overflow-menu-options--scrollable={!!maxHeight}
+    class:bx--breadcrumb-menu-options={!!ctxBreadcrumbItem}
+    class={menuOptionsClass}
+    style:--overflow-menu-options-after-width={overflowMenuOptionsAfterWidth}
+    style:max-height={maxHeightStyle}
+    on:keydown={handleMenuKeydown}
+  >
+    <slot />
+  </ul>
+{/if}
+
+{#if effectivePortalMenu}
+  <FloatingPortal
+    anchor={buttonRef}
+    {direction}
+    {open}
+    let:direction={portalDirection}
+  >
+    <ul
+      bind:this={menuRef}
+      use:rovingFocus={menuRovingFocus}
+      role="menu"
+      tabindex="-1"
+      id={menuId}
+      aria-label={ariaLabel}
+      data-floating-menu-direction={portalDirection}
+      class:bx--overflow-menu-options={true}
+      class:bx--overflow-menu--flip={flipped}
+      class:bx--overflow-menu-options--open={open}
+      class:bx--overflow-menu-options--light={light}
+      class:bx--overflow-menu-options--xs={size === "xs"}
+      class:bx--overflow-menu-options--sm={size === "sm"}
+      class:bx--overflow-menu-options--xl={size === "xl"}
+      class:bx--overflow-menu-options--scrollable={!!maxHeight}
+      class:bx--breadcrumb-menu-options={!!ctxBreadcrumbItem}
+      class={menuOptionsClass}
+      style:position="relative"
+      style:top="auto"
+      style:left="auto"
+      style:--overflow-menu-options-after-width={overflowMenuOptionsAfterWidth}
+      style:max-height={maxHeightStyle}
+      on:keydown={handleMenuKeydown}
+    >
+      <slot />
+    </ul>
+  </FloatingPortal>
+{/if}
+
+<style>
+  .bx--overflow-menu-options:after {
+    width: var(--overflow-menu-options-after-width, 2rem);
+  }
+</style>

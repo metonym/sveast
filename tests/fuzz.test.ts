@@ -1,0 +1,33 @@
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+test("exits non-zero and writes a finding when a trial reports a finding", async () => {
+  const findingsDir = mkdtempSync(join(tmpdir(), "sveast-fuzz-smoke-"));
+
+  try {
+    const proc = Bun.spawn({
+      cmd: [
+        "bun",
+        "scripts/fuzz-parser.ts",
+        "--iterations",
+        "5",
+        "--seed",
+        "1",
+        "--findings-dir",
+        findingsDir,
+      ],
+      cwd: join(import.meta.dir, ".."),
+      env: { ...process.env, SVEAST_FUZZ_FORCE_CRASH: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const exitCode = await proc.exited;
+
+    expect(exitCode).not.toBe(0);
+    expect(readdirSync(findingsDir).length).toBeGreaterThan(0);
+  } finally {
+    rmSync(findingsDir, { recursive: true, force: true });
+  }
+}, 30_000);

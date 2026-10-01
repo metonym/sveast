@@ -1,0 +1,198 @@
+<script>
+  /**
+   * @event {null} open
+   * @event {null} close
+   */
+
+  /** Specify the tooltip text */
+  export let tooltipText = "";
+
+  /**
+   * Set to `true` to open the tooltip.
+   * @bindable writable
+   */
+  export let open = false;
+
+  /**
+   * Set the alignment of the tooltip relative to the icon.
+   * @type {"start" | "center" | "end"}
+   */
+  export let align = "center";
+
+  /**
+   * Set the direction of the tooltip relative to the icon.
+   * @type {"top" | "bottom"}
+   */
+  export let direction = "bottom";
+
+  /** Set an id for the tooltip div element */
+  export let id = uniqueId();
+
+  /**
+   * By default, the tooltip is opened on hover or focus.
+   * Set to `true` to open the tooltip on click/focus instead of on hover.
+   * Unhovering or blurring the tooltip will close it.
+   */
+  export let clickToOpen = false;
+
+  /**
+   * Specify the duration in milliseconds to delay before displaying the tooltip.
+   * @type {number}
+   */
+  export let enterDelayMs = TOOLTIP_ENTER_DELAY_MS;
+
+  /**
+   * Specify the duration in milliseconds to delay before hiding the tooltip.
+   * @type {number}
+   */
+  export let leaveDelayMs = TOOLTIP_LEAVE_DELAY_MS;
+
+  /**
+   * Obtain a reference to the button HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /**
+   * Set to `true` to render the tooltip in a portal,
+   * preventing it from being clipped by `overflow: hidden` containers.
+   * By default, the tooltip is portalled when inside a `Modal`.
+   * @type {boolean | undefined}
+   */
+  export let portalTooltip = undefined;
+
+  import { createEventDispatcher, getContext, onMount } from "svelte";
+  import { MODAL_CONTEXT_KEY } from "../constants/context-keys.js";
+  import {
+    TOOLTIP_ENTER_DELAY_MS,
+    TOOLTIP_LEAVE_DELAY_MS,
+  } from "../constants/timing.js";
+  import FloatingPortal from "../Portal/FloatingPortal.svelte";
+  import { createDelayedSetter } from "../utils/delayed-setter.js";
+  import { dismiss } from "../utils/dismiss.js";
+  import { createOpenCloseDispatcher } from "../utils/dispatch-open-close.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const insideModal = getContext(MODAL_CONTEXT_KEY);
+
+  $: effectivePortalTooltip =
+    portalTooltip === undefined ? !!insideModal : portalTooltip;
+
+  const PORTAL_VERTICAL_GAP_TOP_PX = -2;
+  const PORTAL_VERTICAL_GAP_BOTTOM_PX = -3;
+
+  const dispatch = createEventDispatcher();
+  const notifyOpenChange = createOpenCloseDispatcher(dispatch);
+
+  const scheduleOpen = createDelayedSetter();
+
+  function setOpenDelayed(value, delay = 0) {
+    scheduleOpen(delay, () => {
+      open = value;
+    });
+  }
+
+  function hide() {
+    open = false;
+  }
+
+  function show() {
+    open = true;
+  }
+
+  function toggle() {
+    open = !open;
+  }
+
+  $: notifyOpenChange(open);
+
+  onMount(() => {
+    return () => {
+      scheduleOpen.cancel();
+    };
+  });
+  function handleKeydown(event) {
+    if (event.key === "Escape") hide();
+  }
+</script>
+
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<span
+  use:dismiss={{ enabled: open, type: "keydown", handler: handleKeydown }}
+  class:bx--tooltip--definition={true}
+  class:bx--tooltip--a11y={true}
+  {...$$restProps}
+  on:mouseenter={clickToOpen
+    ? undefined
+    : () => setOpenDelayed(true, enterDelayMs)}
+  on:mouseleave={() => setOpenDelayed(false, leaveDelayMs)}
+>
+  <button
+    bind:this={ref}
+    type="button"
+    aria-describedby={id}
+    class:bx--tooltip--portal-active={effectivePortalTooltip}
+    class:bx--tooltip--a11y={!effectivePortalTooltip}
+    class:bx--tooltip__trigger={true}
+    class:bx--tooltip__trigger--definition={true}
+    class:bx--tooltip--hidden={!effectivePortalTooltip && !open}
+    class:bx--tooltip--visible={!effectivePortalTooltip && open}
+    class:bx--tooltip--top={!effectivePortalTooltip && direction === "top"}
+    class:bx--tooltip--bottom={!effectivePortalTooltip &&
+      direction === "bottom"}
+    class:bx--tooltip--align-start={!effectivePortalTooltip &&
+      align === "start"}
+    class:bx--tooltip--align-center={!effectivePortalTooltip &&
+      align === "center"}
+    class:bx--tooltip--align-end={!effectivePortalTooltip && align === "end"}
+    on:click={clickToOpen ? toggle : undefined}
+    on:click
+    on:mouseover
+    on:mouseenter
+    on:mouseleave
+    on:focus
+    on:focus={clickToOpen ? undefined : show}
+    on:blur={hide}
+  >
+    <slot />
+  </button>
+  {#if !effectivePortalTooltip}
+    <div role="tooltip" {id} class:bx--assistive-text={true}>
+      <slot name="tooltip">{tooltipText}</slot>
+    </div>
+  {/if}
+</span>
+
+{#if effectivePortalTooltip}
+  <FloatingPortal
+    anchor={ref}
+    {direction}
+    {open}
+    gapTop={direction === "top" ? PORTAL_VERTICAL_GAP_TOP_PX : 0}
+    gapBottom={direction === "bottom" ? PORTAL_VERTICAL_GAP_BOTTOM_PX : 0}
+    intrinsicAlign={align}
+    intrinsicWidth={true}
+    let:direction={actualDirection}
+  >
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div
+      class:bx--tooltip-portal={true}
+      data-direction={actualDirection ?? direction}
+      data-tooltip-type="definition"
+      on:mouseenter={clickToOpen ? undefined : () => setOpenDelayed(true, 0)}
+      on:mouseleave={clickToOpen
+        ? undefined
+        : () => setOpenDelayed(false, leaveDelayMs)}
+    >
+      <span class:bx--tooltip-portal__caret={true}></span>
+      <span
+        {id}
+        role="tooltip"
+        class:bx--tooltip-portal__content={true}
+        class:bx--assistive-text={true}
+      >
+        <slot name="tooltip">{tooltipText}</slot>
+      </span>
+    </div>
+  </FloatingPortal>
+{/if}

@@ -1,0 +1,557 @@
+<script>
+  /**
+   * @template [Icon=any]
+   */
+
+  /**
+   * @extends {"./ButtonSkeleton.svelte"} ButtonSkeletonProps
+   * @restProps {button | a | div}
+   * @slot {{ props: { role: "button"; type?: string; tabindex: any; disabled: boolean; href?: string; class: string; [key: string]: any; } }}
+   * @slot {{ style: undefined | string; }} icon
+   * @slot {{}} badge - Compose a `BadgeIndicator` overlaid on an icon-only button. Size is set to `lg` automatically.
+   */
+
+  /**
+   * Specify the kind of button.
+   * @type {"primary" | "secondary" | "tertiary" | "ghost" | "danger" | "danger-tertiary" | "danger-ghost"}
+   */
+  export let kind = "primary";
+
+  /**
+   * Specify the size of button.
+   * When the `badge` slot is used, size is set to `lg` per Carbon design guidelines.
+   * Falls back to the size set by an ancestor `ActionSet` when unset.
+   * @type {"default" | "field" | "small" | "lg" | "xl"}
+   * @default "default"
+   */
+  export let size = undefined;
+
+  /** Set to `true` to use Carbon's expressive typesetting */
+  export let expressive = false;
+
+  /**
+   * Set to `true` to enable the selected state for an icon-only, ghost button.
+   */
+  export let isSelected = false;
+
+  /** Set to `true` to span the full width of the container */
+  export let fullWidth = false;
+
+  /**
+   * Specify the icon to render.
+   * Alternatively, use the named slot "icon".
+   *
+   * @type {Icon}
+   * @example
+   * ```svelte
+   * <Button>
+   *   <Icon slot="icon" size={20} />
+   * </Button>
+   * ```
+   */
+  export let icon = /** @type {Icon} */ (undefined);
+
+  /**
+   * Specify the ARIA label for the button icon.
+   * On an icon-only button, this also drives Carbon's tooltip. If omitted,
+   * the icon-only button renders without a tooltip; supply your own
+   * `aria-label` or `aria-labelledby` for accessibility in that case.
+   * @type {string}
+   */
+  export let iconDescription = undefined;
+
+  /**
+   * Set the alignment of the tooltip relative to the icon.
+   * Only applies to icon-only buttons.
+   * @type {"start" | "center" | "end"}
+   */
+  export let tooltipAlignment = "center";
+
+  /**
+   * Set the position of the tooltip relative to the icon.
+   * @type {"top" | "right" | "bottom" | "left"}
+   */
+  export let tooltipPosition = "bottom";
+
+  /**
+   * Set to `true` to hide the tooltip while maintaining accessibility.
+   * Only applies to icon-only buttons.
+   * When `true`, the tooltip is visually hidden but the `iconDescription` remains accessible to screen readers.
+   */
+  export let hideTooltip = false;
+
+  /**
+   * Set to `true` to render a custom HTML element.
+   * Props are destructured as `props` in the default slot.
+   * @example
+   * ```svelte
+   * <Button let:props>
+   *   <div {...props}>Custom Element</div>
+   * </Button>
+   * ```
+   */
+  export let as = false;
+
+  /** Set to `true` to display the skeleton state */
+  export let skeleton = false;
+
+  /** Set to `true` to disable the button */
+  export let disabled = false;
+
+  /**
+   * Set the `href` to use an anchor link.
+   * @type {string}
+   */
+  export let href = undefined;
+
+  /**
+   * Specify the tabindex
+   * @type {number | string | undefined}
+   */
+  export let tabindex = "0";
+
+  /** Specify the `type` attribute for the button element */
+  export let type = "button";
+
+  /**
+   * Obtain a reference to the HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /**
+   * Set to `true` to render the icon-only tooltip in a portal,
+   * preventing it from being clipped by `overflow: hidden` containers
+   * and enabling auto-flipping when the preferred direction lacks space.
+   * By default, the tooltip is portalled when inside a `Modal`.
+   * @type {boolean | undefined}
+   */
+  export let portalTooltip = undefined;
+
+  /**
+   * Set to `true` to display a loading spinner in place of the icon
+   * and prevent the button from being activated.
+   * Unlike `disabled`, the button remains focusable; use `disabled`
+   * as well if it should also be removed from the tab order.
+   */
+  export let loading = false;
+
+  /**
+   * Specify the accessible description for the loading spinner.
+   * @type {string}
+   */
+  export let loadingDescription = undefined;
+
+  import { getContext, onMount } from "svelte";
+  import { MODAL_CONTEXT_KEY } from "../constants/context-keys.js";
+  import Loading from "../Loading/Loading.svelte";
+  import { iconTooltipPortalGaps } from "../Portal/icon-tooltip-portal-gaps.js";
+  import PortalTooltip from "../Portal/PortalTooltip.svelte";
+  import { observeModalClose } from "../Portal/portal-utils.js";
+  import { resolveLinkRel } from "../utils/link-rel.js";
+  import { noop } from "../utils/noop.js";
+  import { createTooltipHandoff } from "../utils/tooltip-handoff.js";
+  import ButtonSkeleton from "./ButtonSkeleton.svelte";
+  import { activeButtonTooltip } from "./button-tooltip-store.js";
+
+  const insideModal = getContext(MODAL_CONTEXT_KEY);
+  const actionSetSize = getContext("carbon:ActionSet")?.size;
+
+  $: hasIconOnly = (icon || $$slots.icon) && !$$slots.default;
+  // Without an iconDescription there is nothing to show in a tooltip or
+  // announce as the accessible name via the assistive-text span; skip the
+  // whole tooltip apparatus and let the consumer's own aria-label/
+  // aria-labelledby (passed through $$restProps) carry accessibility instead.
+  // While loading, Loading's own <title> + aria-live carries the accessible
+  // name instead, so the tooltip is suppressed to avoid double-announcing.
+  $: hasTooltipContent = hasIconOnly && Boolean(iconDescription) && !loading;
+  $: effectivePortalTooltip =
+    portalTooltip === undefined ? !!insideModal : portalTooltip;
+  $: usePortal = hasTooltipContent && !hideTooltip && effectivePortalTooltip;
+  $: hasTooltip = hasTooltipContent && !hideTooltip && !usePortal;
+
+  const tooltipId = {};
+
+  // Warm-handoff hover/focus scheduling: gate on the shared store so only
+  // one icon-only tooltip can be open at a time. When another button claims
+  // the store, this one closes immediately — preventing overlapping
+  // tooltips (e.g. Pagination's adjacent buttons).
+  const tooltipHandoff = createTooltipHandoff({
+    activeTooltip: activeButtonTooltip,
+    getId: () => tooltipId,
+  });
+
+  let hovered = false;
+  let focused = false;
+
+  $: portalOpen =
+    usePortal &&
+    !disabled &&
+    (hovered || focused) &&
+    $activeButtonTooltip === tooltipId;
+
+  function dismissPortalTooltip() {
+    tooltipHandoff.cancel();
+    hovered = false;
+    focused = false;
+    tooltipHandoff.release();
+  }
+
+  // Re-attach the portal observer so the tooltip dismisses when an
+  // ancestor modal closes (mirrors CopyButton).
+  let disconnectModalObserver = noop;
+
+  $: {
+    disconnectModalObserver();
+    disconnectModalObserver =
+      usePortal && ref
+        ? observeModalClose(ref, dismissPortalTooltip)
+        : () => {};
+  }
+
+  $: tooltipHidden =
+    hasTooltipContent &&
+    !hideTooltip &&
+    $activeButtonTooltip !== null &&
+    $activeButtonTooltip !== tooltipId;
+
+  function handleMouseenter() {
+    if (hasTooltip) {
+      tooltipHandoff.claim();
+    }
+  }
+
+  function handleMouseleave() {
+    if (usePortal) return;
+    tooltipHandoff.release();
+  }
+
+  function handlePortalMouseEnter() {
+    if (!usePortal || disabled) return;
+    tooltipHandoff.scheduleEnter(() => {
+      hovered = true;
+    });
+  }
+
+  function handlePortalMouseLeave() {
+    if (!usePortal) return;
+    tooltipHandoff.scheduleLeave(() => {
+      hovered = false;
+      if (!focused) tooltipHandoff.release();
+    });
+  }
+
+  function handlePortalFocus() {
+    if (!usePortal || disabled) return;
+    focused = true;
+    tooltipHandoff.claim();
+  }
+
+  function handlePortalBlur() {
+    if (!usePortal) return;
+    focused = false;
+    if (!hovered) tooltipHandoff.release();
+  }
+
+  $: portalGaps = iconTooltipPortalGaps(tooltipPosition, tooltipAlignment);
+
+  onMount(() => {
+    return () => {
+      tooltipHandoff.cancel();
+      disconnectModalObserver();
+      tooltipHandoff.release();
+    };
+  });
+
+  // Native `disabled` is reserved for the `disabled` prop. `loading` alone
+  // never sets it: disabling the element the user just clicked steals focus
+  // (browsers move it to <body>), which is jarring for keyboard/screen
+  // reader users mid-submit. Loading instead keeps the element focusable,
+  // marks it with aria-disabled, and blocks the click itself (see
+  // handleClick) — the same pattern Modal's primaryButtonLoading already
+  // uses, minus the focus loss.
+  $: isDisabled = Boolean(disabled);
+  $: isVisuallyDisabled = isDisabled || loading;
+  $: effectiveSize = $$slots.badge
+    ? "lg"
+    : (size ?? $actionSetSize ?? "default");
+  $: iconProps = {
+    "aria-hidden": "true",
+    class: "bx--btn__icon",
+  };
+
+  function handleClick(event) {
+    if (loading) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }
+
+  $: buttonProps = {
+    type: href && !isDisabled ? undefined : type,
+    tabindex,
+    disabled: isDisabled ? true : undefined,
+    href: href && !isDisabled ? href : undefined,
+    rel: href && !isDisabled ? resolveLinkRel($$restProps.target) : undefined,
+    "aria-pressed":
+      hasIconOnly && kind === "ghost" && !href ? isSelected : undefined,
+    "aria-busy": loading || undefined,
+    "aria-disabled": loading || undefined,
+    ...$$restProps,
+    class: [
+      "bx--btn",
+      expressive && "bx--btn--expressive",
+      effectiveSize === "small" && "bx--btn--sm",
+      effectiveSize === "field" && "bx--btn--field",
+      effectiveSize === "lg" && "bx--btn--lg",
+      effectiveSize === "xl" && "bx--btn--xl",
+      kind && `bx--btn--${kind}`,
+      fullWidth && "bx--btn--full-width",
+      isVisuallyDisabled && "bx--btn--disabled",
+      hasIconOnly && "bx--btn--icon-only",
+      hasTooltip && "bx--tooltip__trigger",
+      hasTooltip && "bx--tooltip--a11y",
+      hasTooltip && tooltipPosition && `bx--btn--icon-only--${tooltipPosition}`,
+      hasTooltip &&
+        tooltipAlignment &&
+        `bx--tooltip--align-${tooltipAlignment}`,
+      hasTooltip && tooltipHidden && "bx--tooltip--hidden",
+      hasIconOnly && isSelected && kind === "ghost" && "bx--btn--selected",
+      $$restProps.class,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  };
+</script>
+
+{#if skeleton}
+  <ButtonSkeleton
+    {href}
+    {size}
+    {...$$restProps}
+    style={hasIconOnly && "width: 3rem;"}
+    on:click
+    on:focus
+    on:blur
+    on:mouseover
+    on:mouseenter
+    on:mouseleave
+  />
+{:else if as}
+  <slot props={buttonProps} />
+{:else if href && !isDisabled}
+  {#if $$slots.badge}
+    <div class:bx--btn__badge-wrapper={true}>
+      <a
+        bind:this={ref}
+        {...buttonProps}
+        on:click={handleClick}
+        on:click
+        on:mousedown
+        on:focus
+        on:focus={handlePortalFocus}
+        on:blur
+        on:blur={handlePortalBlur}
+        on:mouseover
+        on:mouseenter
+        on:mouseenter={handleMouseenter}
+        on:mouseenter={handlePortalMouseEnter}
+        on:mouseleave
+        on:mouseleave={handleMouseleave}
+        on:mouseleave={handlePortalMouseLeave}
+      >
+        {#if hasIconOnly && iconDescription && !loading}
+          <span class:bx--assistive-text={true} style:pointer-events="none">
+            {iconDescription}
+          </span>
+        {/if}
+        <slot />
+        {#if loading}
+          <Loading
+            small
+            withOverlay={false}
+            description={loadingDescription}
+            class="bx--btn__loading"
+            style={hasIconOnly ? "margin-left: 0" : undefined}
+          />
+        {:else if $$slots.icon}
+          <slot
+            name="icon"
+            style={hasIconOnly ? "margin-left: 0" : undefined}
+            {...iconProps}
+          />
+        {:else if icon}
+          <svelte:component
+            this={icon}
+            style={hasIconOnly ? "margin-left: 0" : undefined}
+            {...iconProps}
+          />
+        {/if}
+      </a>
+      <slot name="badge" />
+    </div>
+  {:else}
+    <a
+      bind:this={ref}
+      {...buttonProps}
+      on:click={handleClick}
+      on:click
+      on:mousedown
+      on:focus
+      on:focus={handlePortalFocus}
+      on:blur
+      on:blur={handlePortalBlur}
+      on:mouseover
+      on:mouseenter
+      on:mouseenter={handleMouseenter}
+      on:mouseenter={handlePortalMouseEnter}
+      on:mouseleave
+      on:mouseleave={handleMouseleave}
+      on:mouseleave={handlePortalMouseLeave}
+    >
+      {#if hasIconOnly && iconDescription && !loading}
+        <span class:bx--assistive-text={true} style:pointer-events="none">
+          {iconDescription}
+        </span>
+      {/if}
+      <slot />
+      {#if loading}
+        <Loading
+          small
+          withOverlay={false}
+          description={loadingDescription}
+          class="bx--btn__loading"
+          style={hasIconOnly ? "margin-left: 0" : undefined}
+        />
+      {:else if $$slots.icon}
+        <slot
+          name="icon"
+          style={hasIconOnly ? "margin-left: 0" : undefined}
+          {...iconProps}
+        />
+      {:else if icon}
+        <svelte:component
+          this={icon}
+          style={hasIconOnly ? "margin-left: 0" : undefined}
+          {...iconProps}
+        />
+      {/if}
+    </a>
+  {/if}
+{:else if $$slots.badge}
+  <div class:bx--btn__badge-wrapper={true}>
+    <button
+      type="button"
+      bind:this={ref}
+      {...buttonProps}
+      on:click={handleClick}
+      on:click
+      on:mousedown
+      on:focus
+      on:focus={handlePortalFocus}
+      on:blur
+      on:blur={handlePortalBlur}
+      on:mouseover
+      on:mouseenter
+      on:mouseenter={handleMouseenter}
+      on:mouseenter={handlePortalMouseEnter}
+      on:mouseleave
+      on:mouseleave={handleMouseleave}
+      on:mouseleave={handlePortalMouseLeave}
+    >
+      {#if hasIconOnly && iconDescription && !loading}
+        <span class:bx--assistive-text={true} style:pointer-events="none">
+          {iconDescription}
+        </span>
+      {/if}
+      <slot />
+      {#if loading}
+        <Loading
+          small
+          withOverlay={false}
+          description={loadingDescription}
+          class="bx--btn__loading"
+          style={hasIconOnly ? "margin-left: 0" : undefined}
+        />
+      {:else if $$slots.icon}
+        <slot
+          name="icon"
+          style={hasIconOnly ? "margin-left: 0" : undefined}
+          {...iconProps}
+        />
+      {:else if icon}
+        <svelte:component
+          this={icon}
+          style={hasIconOnly ? "margin-left: 0" : undefined}
+          {...iconProps}
+        />
+      {/if}
+    </button>
+    <slot name="badge" />
+  </div>
+{:else}
+  <button
+    type="button"
+    bind:this={ref}
+    {...buttonProps}
+    on:click={handleClick}
+    on:click
+    on:mousedown
+    on:focus
+    on:focus={handlePortalFocus}
+    on:blur
+    on:blur={handlePortalBlur}
+    on:mouseover
+    on:mouseenter
+    on:mouseenter={handleMouseenter}
+    on:mouseenter={handlePortalMouseEnter}
+    on:mouseleave
+    on:mouseleave={handleMouseleave}
+    on:mouseleave={handlePortalMouseLeave}
+  >
+    {#if hasIconOnly && iconDescription && !loading}
+      <span class:bx--assistive-text={true} style:pointer-events="none">
+        {iconDescription}
+      </span>
+    {/if}
+    <slot />
+    {#if loading}
+      <Loading
+        small
+        withOverlay={false}
+        description={loadingDescription}
+        class="bx--btn__loading"
+        style={hasIconOnly ? "margin-left: 0" : undefined}
+      />
+    {:else if $$slots.icon}
+      <slot
+        name="icon"
+        style={hasIconOnly ? "margin-left: 0" : undefined}
+        {...iconProps}
+      />
+    {:else if icon}
+      <svelte:component
+        this={icon}
+        style={hasIconOnly ? "margin-left: 0" : undefined}
+        {...iconProps}
+      />
+    {/if}
+  </button>
+{/if}
+
+{#if usePortal}
+  <PortalTooltip
+    anchor={ref}
+    direction={tooltipPosition}
+    open={portalOpen}
+    text={iconDescription}
+    tooltipType="icon"
+    intrinsicAlign={tooltipAlignment}
+    horizontalGapLeft={portalGaps.horizontalGapLeft}
+    horizontalGapRight={portalGaps.horizontalGapRight}
+    gapTop={portalGaps.gapTop}
+    gapBottom={portalGaps.gapBottom}
+    verticalAlignOffsetLeft={portalGaps.verticalAlignOffsetLeft}
+    verticalAlignOffsetRight={portalGaps.verticalAlignOffsetRight}
+  />
+{/if}

@@ -1,0 +1,502 @@
+<script>
+  /**
+   * @event {number} change
+   * @event {number} input
+   */
+
+  /**
+   * Specify the value of the slider.
+   * Kept when the owning form resets.
+   * @bindable writable
+   */
+  export let value = 0;
+
+  /** Set the maximum slider value */
+  export let max = 100;
+
+  /** Specify the label for the max value */
+  export let maxLabel = "";
+
+  /** Set the minimum slider value */
+  export let min = 0;
+
+  /** Specify the label for the min value */
+  export let minLabel = "";
+
+  /**
+   * Format displayed values for range labels and `aria-valuetext`.
+   * Does not change the numeric model; the text input stays numeric.
+   * @type {undefined | ((value: number) => string)}
+   */
+  export let formatValue = undefined;
+
+  /** Set the step value */
+  export let step = 1;
+
+  /**
+   * Show tick marks along the track.
+   * Set to `true` to place a tick at every `step`, or pass an array of
+   * `{ value, label? }` for specific stops with optional labels below the track.
+   * Marks are visual only unless `snapToMarks` is set; snapping otherwise follows `step`.
+   * @type {boolean | ReadonlyArray<{ value: number; label?: string }>}
+   */
+  export let marks = false;
+
+  /**
+   * Set to `true` to snap drag, click, and arrow key navigation to the configured `marks`
+   * instead of `step`. Has no effect when `marks` is not set.
+   */
+  export let snapToMarks = false;
+
+  /** Set the step multiplier value */
+  export let stepMultiplier = 4;
+
+  /** Set to `true` to require a value */
+  export let required = false;
+
+  /** Specify the input type */
+  export let inputType = "number";
+
+  /** Set to `true` to disable the slider */
+  export let disabled = false;
+
+  /** Set to `true` to use the read-only variant */
+  export let readonly = false;
+
+  /**
+   * Specify the assistive text announced to screen readers when read-only.
+   * Exposed because VoiceOver does not announce `aria-readonly`.
+   */
+  export let readonlyText = "Read-only";
+
+  /** Set to `true` to enable the light variant */
+  export let light = false;
+
+  /** Set to `true` to hide the text input */
+  export let hideTextInput = false;
+
+  /**
+   * Set to `true` for the slider to span
+   * the full width of its containing element.
+   */
+  export let fullWidth = false;
+
+  /**
+   * Set to "vertical" to lay out the slider along the vertical axis
+   * @type {"horizontal" | "vertical"}
+   */
+  export let orientation = "horizontal";
+
+  /** Set an id for the slider div element */
+  export let id = uniqueId();
+
+  /** Set to `true` to indicate an invalid state */
+  export let invalid = false;
+
+  /** Specify the invalid state text */
+  export let invalidText = "";
+
+  /** Set to `true` to indicate a warning state */
+  export let warn = false;
+
+  /** Specify the warning state text */
+  export let warnText = "";
+
+  /** Specify the helper text */
+  export let helperText = "";
+
+  /**
+   * Specify the label text.
+   * Alternatively, use the "labelChildren" slot.
+   * @example
+   * ```svelte
+   * <Slider>
+   *   <span slot="labelChildren">Custom Label</span>
+   * </Slider>
+   * ```
+   */
+  export let labelText = "";
+
+  /** Set to `true` to visually hide the label text */
+  export let hideLabel = false;
+
+  /** Set a name for the slider element */
+  export let name = "";
+
+  /**
+   * Obtain a reference to the HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /** Set to `true` to select the number input's text when it receives focus */
+  export let selectTextOnFocus = false;
+
+  import { createEventDispatcher, tick } from "svelte";
+  import WarningAltFilled from "../icons/WarningAltFilled.svelte";
+  import WarningFilled from "../icons/WarningFilled.svelte";
+  import { dismiss } from "../utils/dismiss.js";
+  import {
+    buildFieldIds,
+    joinDescribedBy,
+    resolveStatusDescribedBy,
+    resolveValidationVisibility,
+  } from "../utils/field-status.js";
+  import { clamp } from "../utils/numeric-format.js";
+  import { reflectDefaultValue } from "../utils/reflect-default-value.js";
+  import {
+    nearestMark,
+    resolveSliderMarks,
+  } from "../utils/resolve-slider-marks.js";
+  import {
+    formatRangeLabel as formatSliderRangeLabel,
+    getValueText as getSliderValueText,
+    valueFromPointer,
+  } from "../utils/slider-value.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const dispatch = createEventDispatcher();
+
+  let trackRef = null;
+  let textInputRef = null;
+  let dragging = false;
+  let holding = false;
+  let currentEvent = null;
+
+  /** @type {(label: string, numericValue: number) => string | number} */
+  function formatRangeLabel(label, numericValue) {
+    return formatSliderRangeLabel(label, numericValue, formatValue);
+  }
+
+  /** @type {(numericValue: number) => string | undefined} */
+  function getValueText(numericValue) {
+    return getSliderValueText(numericValue, formatValue);
+  }
+
+  function startInteraction(event) {
+    if (disabled || readonly) return;
+    currentEvent = event;
+    holding = true;
+    dragging = true;
+  }
+
+  function stopHolding() {
+    const wasHolding = holding;
+    holding = false;
+    dragging = false;
+    currentEvent = null;
+    if (wasHolding && !disabled && !readonly) {
+      dispatch("change", value);
+    }
+  }
+
+  function move(event) {
+    if (holding) {
+      currentEvent = event;
+      dragging = true;
+    }
+  }
+
+  function handleTextInputFocus() {
+    if (selectTextOnFocus && !disabled) {
+      tick().then(() => textInputRef?.select());
+    }
+  }
+
+  function calcValue(event) {
+    if (disabled || readonly || !event) return;
+
+    let nextValue = valueFromPointer(event, trackRef.getBoundingClientRect(), {
+      orientation,
+      min,
+      max,
+      step,
+    });
+    if (nextValue == null) return;
+    if (snapToMarks && resolvedMarks.length) {
+      nextValue = nearestMark(nextValue, resolvedMarks).value;
+    }
+    value = nextValue;
+    dispatch("input", value);
+  }
+
+  $: labelId = `label-${id}`;
+  $: ({ errorId, warnId, readonlyId, helperId } = buildFieldIds(id));
+  $: inputId = `input-${id}`;
+  // Invalid/warn states are suppressed when the slider is disabled or read-only.
+  $: ({ showInvalid, showWarn } = resolveValidationVisibility({
+    invalid,
+    warn,
+    disabled,
+    readonly,
+  }));
+  $: range = max - min;
+  $: left = range === 0 ? 0 : ((value - min) / range) * 100;
+  $: resolvedMarks = resolveSliderMarks(marks, min, max, step);
+  $: hasMarkLabels = resolvedMarks.some(
+    (mark) => mark.label != null && mark.label !== "",
+  );
+  $: {
+    value = clamp(value, min, max);
+
+    if (dragging && currentEvent) {
+      calcValue(currentEvent);
+      dragging = false;
+    }
+  }
+</script>
+
+<!-- svelte-ignore a11y-mouse-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div
+  class:bx--form-item={true}
+  use:dismiss={{
+    enabled: holding,
+    listeners: [
+      { type: "mousemove", handler: move, options: { passive: true } },
+      { type: "touchmove", handler: move, options: { passive: true } },
+      { type: "mouseup", handler: stopHolding },
+      { type: "touchend", handler: stopHolding },
+      { type: "touchcancel", handler: stopHolding },
+    ],
+  }}
+  {...$$restProps}
+  on:click
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+>
+  <label
+    for={inputId}
+    id={labelId}
+    class:bx--label={true}
+    class:bx--label--disabled={disabled}
+    class:bx--visually-hidden={hideLabel}
+  >
+    <slot name="labelChildren"> {labelText} </slot>
+  </label>
+  <div
+    class:bx--slider-container={true}
+    class:bx--slider-container--readonly={readonly}
+    style:width={fullWidth && "100%"}
+  >
+    <span class:bx--slider__range-label={true}
+      >{formatRangeLabel(minLabel, min)}</span
+    >
+    <div
+      bind:this={ref}
+      class:bx--slider={true}
+      class:bx--slider--disabled={disabled}
+      class:bx--slider--readonly={readonly}
+      class:bx--slider--with-marks={resolvedMarks.length > 0}
+      class:bx--slider--with-mark-labels={hasMarkLabels}
+      class:bx--slider--vertical={orientation === "vertical"}
+      style:max-width={fullWidth ? "none" : undefined}
+      on:mousedown={startInteraction}
+      on:touchstart={startInteraction}
+    >
+      <div
+        role="slider"
+        tabindex={readonly || disabled ? undefined : 0}
+        class:bx--slider__thumb={true}
+        style:left={orientation === "vertical" ? undefined : `${left}%`}
+        style:top={orientation === "vertical" ? `${100 - left}%` : undefined}
+        aria-valuemax={max}
+        aria-valuemin={min}
+        aria-valuenow={value}
+        aria-valuetext={getValueText(value)}
+        aria-labelledby={labelId}
+        aria-orientation={orientation}
+        aria-describedby={joinDescribedBy(
+          readonly ? readonlyId : null,
+          resolveStatusDescribedBy({
+            showInvalid,
+            showWarn,
+            helperText,
+            errorId,
+            warnId,
+            helperId,
+          }),
+        )}
+        aria-invalid={showInvalid || undefined}
+        aria-readonly={readonly || undefined}
+        {id}
+        on:keydown={(event) => {
+          if (disabled || readonly) return;
+
+          if (event.key === "Home" || event.key === "End") {
+            // Prevent the browser from also scrolling to the top/bottom of the page.
+            event.preventDefault();
+            value = event.key === "Home" ? min : max;
+            dispatch("input", value);
+            dispatch("change", value);
+            return;
+          }
+
+          const keys = {
+            ArrowDown: -1,
+            ArrowLeft: -1,
+            ArrowRight: 1,
+            ArrowUp: 1,
+            PageDown: -1,
+            PageUp: 1,
+          };
+          if (keys[event.key]) {
+            // Prevent the arrow/page keys from also scrolling the page.
+            event.preventDefault();
+            const isLargeStep =
+              event.shiftKey ||
+              event.key === "PageUp" ||
+              event.key === "PageDown";
+
+            if (snapToMarks && resolvedMarks.length) {
+              // Marks may be passed in any order; walk them from lowest to highest.
+              const stops = [...resolvedMarks].sort(
+                (a, b) => a.value - b.value,
+              );
+              const currentIndex = stops.findIndex(
+                (mark) => mark.value === value,
+              );
+              const fromIndex =
+                currentIndex === -1
+                  ? stops.indexOf(nearestMark(value, stops))
+                  : currentIndex;
+              const jump = isLargeStep ? stepMultiplier : 1;
+              let nextIndex = fromIndex + keys[event.key] * jump;
+              if (nextIndex < 0) nextIndex = 0;
+              else if (nextIndex > stops.length - 1)
+                nextIndex = stops.length - 1;
+              value = stops[nextIndex].value;
+            } else {
+              const delta =
+                step *
+                (isLargeStep ? range / step / stepMultiplier : 1) *
+                keys[event.key];
+              let next = Math.round((value + delta) / step) * step;
+              if (next < min) next = min;
+              else if (next > max) next = max;
+              value = next;
+            }
+            dispatch("input", value);
+            dispatch("change", value);
+          }
+        }}
+      ></div>
+      <div bind:this={trackRef} class:bx--slider__track={true}></div>
+      <div
+        class:bx--slider__filled-track={true}
+        style:transform={orientation === "vertical"
+          ? `translate(-50%, 0) scaleY(${left / 100})`
+          : `translate(0, -50%) scaleX(${left / 100})`}
+      ></div>
+      {#if resolvedMarks.length > 0}
+        <div class:bx--slider__marks={true} aria-hidden="true">
+          {#each resolvedMarks as mark (mark.value)}
+            {@const percent =
+              range === 0 ? 0 : ((mark.value - min) / range) * 100}
+            <span
+              class:bx--slider__mark={true}
+              style:left={orientation === "vertical"
+                ? undefined
+                : `${percent}%`}
+              style:top={orientation === "vertical"
+                ? `${100 - percent}%`
+                : undefined}
+            >
+              {#if mark.label != null && mark.label !== ""}
+                <span class:bx--slider__mark-label={true}>{mark.label}</span>
+              {/if}
+            </span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+    <span class:bx--slider__range-label={true}
+      >{formatRangeLabel(maxLabel, max)}</span
+    >
+    <div class:bx--slider-text-input-wrapper={true}>
+      {#if showInvalid}
+        <WarningFilled class="bx--slider__invalid-icon" />
+      {:else if showWarn}
+        <WarningAltFilled
+          class="bx--slider__invalid-icon bx--slider__invalid-icon--warning"
+        />
+      {/if}
+      <input
+        bind:this={textInputRef}
+        use:reflectDefaultValue={value}
+        type={hideTextInput ? "hidden" : inputType}
+        id={inputId}
+        {name}
+        class:bx--text-input={true}
+        class:bx--slider-text-input={true}
+        class:bx--text-input--light={light}
+        class:bx--text-input--invalid={showInvalid}
+        class:bx--slider-text-input--warn={showWarn}
+        {value}
+        aria-labelledby={$$props["aria-label"] ? undefined : labelId}
+        aria-label={$$props["aria-label"] ?? "Slider number input"}
+        {disabled}
+        {readonly}
+        {required}
+        {min}
+        {max}
+        {step}
+        on:change={(event) => {
+          if (!readonly) {
+            let next = Number(event.target.value);
+            if (next < min) next = min;
+            else if (next > max) next = max;
+            value = next;
+            dispatch("change", value);
+          }
+        }}
+        data-invalid={showInvalid || null}
+        data-warn={showWarn || null}
+        aria-invalid={showInvalid || null}
+        aria-describedby={resolveStatusDescribedBy({
+          showInvalid,
+          showWarn,
+          helperText,
+          errorId,
+          warnId,
+          helperId,
+        })}
+        on:focus
+        on:focus={handleTextInputFocus}
+        on:blur
+      >
+    </div>
+  </div>
+  {#if showInvalid}
+    <div
+      id={errorId}
+      class:bx--slider__validation-msg={true}
+      class:bx--slider__validation-msg--invalid={true}
+      class:bx--form-requirement={true}
+    >
+      {invalidText}
+    </div>
+  {/if}
+  {#if showWarn}
+    <div
+      id={warnId}
+      class:bx--slider__validation-msg={true}
+      class:bx--form-requirement={true}
+    >
+      {warnText}
+    </div>
+  {/if}
+  {#if helperText && !showInvalid && !showWarn}
+    <div
+      id={helperId}
+      class:bx--form__helper-text={true}
+      class:bx--form__helper-text--disabled={disabled}
+    >
+      {helperText}
+    </div>
+  {/if}
+  {#if readonly}
+    <span id={readonlyId} class:bx--visually-hidden={true}>{readonlyText}</span>
+  {/if}
+</div>

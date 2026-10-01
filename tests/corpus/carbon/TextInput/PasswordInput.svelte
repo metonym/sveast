@@ -1,0 +1,372 @@
+<script>
+  /**
+   * Set the size of the input.
+   * @type {"xs" | "sm" | "xl"}
+   */
+  export let size = undefined;
+
+  /**
+   * Specify the input value.
+   * Follows the field when the owning form resets.
+   * @type {number | string}
+   * @bindable writable
+   */
+  export let value = "";
+
+  /**
+   * Set to `"text"` to toggle the password visibility.
+   * @type {"text" | "password"}
+   * @bindable writable
+   */
+  export let type = "password";
+
+  /** Specify the placeholder text */
+  export let placeholder = "";
+
+  /** Specify the hide password label text */
+  export let hidePasswordLabel = "Hide password";
+
+  /** Specify the show password label text */
+  export let showPasswordLabel = "Show password";
+
+  /**
+   * Set the alignment of the tooltip relative to the icon.
+   * @type {"start" | "center" | "end"}
+   */
+  export let tooltipAlignment = "end";
+
+  /**
+   * Set the position of the tooltip relative to the icon.
+   * @type {"top" | "right" | "bottom" | "left"}
+   */
+  export let tooltipPosition = "bottom";
+
+  /** Set to `true` to enable the light variant */
+  export let light = false;
+
+  /** Set to `true` to disable the input */
+  export let disabled = false;
+
+  /** Specify the helper text */
+  export let helperText = "";
+
+  /** Specify the label text */
+  export let labelText = "";
+
+  /** Set to `true` to visually hide the label text */
+  export let hideLabel = false;
+
+  /** Set to `true` to indicate an invalid state */
+  export let invalid = false;
+
+  /** Specify the text for the invalid state */
+  export let invalidText = "";
+
+  /** Set to `true` to indicate a warning state */
+  export let warn = false;
+
+  /** Specify the warning state text */
+  export let warnText = "";
+
+  /** Set to `true` to use inline version */
+  export let inline = false;
+
+  /** Set to `true` to use the read-only variant */
+  export let readonly = false;
+
+  /**
+   * Set to `true` to use the fluid variant.
+   * Inherited from the parent `FluidForm` context,
+   * so it does not need to be set when used inside `FluidForm`.
+   * Cannot be combined with the inline variant.
+   */
+  export let fluid = false;
+
+  /** Set an id for the input element */
+  export let id = uniqueId();
+
+  /**
+   * Specify a name attribute for the input.
+   * @type {string}
+   */
+  export let name = undefined;
+
+  /**
+   * Obtain a reference to the input HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /**
+   * Set to `true` to render the tooltip in a portal,
+   * preventing it from being clipped by `overflow: hidden` containers.
+   * By default, the tooltip is portalled when inside a `Modal`.
+   * @type {boolean | undefined}
+   */
+  export let portalTooltip = undefined;
+
+  /** Set to `true` to select the input's text when it receives focus */
+  export let selectTextOnFocus = false;
+
+  import { getContext, tick } from "svelte";
+  import {
+    FORM_CONTEXT_KEY,
+    MODAL_CONTEXT_KEY,
+  } from "../constants/context-keys.js";
+  import EditOff from "../icons/EditOff.svelte";
+  import View from "../icons/View.svelte";
+  import ViewOff from "../icons/ViewOff.svelte";
+  import WarningAltFilled from "../icons/WarningAltFilled.svelte";
+  import WarningFilled from "../icons/WarningFilled.svelte";
+  import PortalTooltip from "../Portal/PortalTooltip.svelte";
+  import {
+    buildFieldIds,
+    resolveStatusDescribedBy,
+    resolveValidationVisibility,
+  } from "../utils/field-status.js";
+  import { formReset } from "../utils/form-reset.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const ctx = getContext(FORM_CONTEXT_KEY);
+  const insideModal = getContext(MODAL_CONTEXT_KEY);
+
+  $: ({ showInvalid, showWarn } = resolveValidationVisibility({
+    invalid,
+    warn,
+    disabled,
+    readonly,
+  }));
+  $: isFluid = !inline && (fluid || !!ctx?.isFluid);
+  $: effectivePortalTooltip =
+    portalTooltip === undefined ? !!insideModal : portalTooltip;
+
+  /** @type {null | HTMLButtonElement} */
+  let toggleButtonRef = null;
+  let tooltipOpen = false;
+
+  $: ({ helperId, errorId, warnId } = buildFieldIds(id));
+  $: tooltipLabel = type === "text" ? hidePasswordLabel : showPasswordLabel;
+
+  function handleFocus() {
+    if (selectTextOnFocus && !disabled) {
+      tick().then(() => ref?.select());
+    }
+  }
+
+  // A form reset restores the field without an input event, and this is a
+  // one-way value write, not bind:value, so no Svelte version syncs it back
+  // on its own (Svelte 5's built-in resync only instruments genuine two-way
+  // bindings — see the note in the TextArea prompt, item 23).
+  function handleFormReset() {
+    if (ref) value = ref.value;
+  }
+</script>
+
+<!-- svelte-ignore a11y-mouse-events-have-key-events -->
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div
+  class:bx--form-item={true}
+  class:bx--text-input-wrapper={true}
+  class:bx--password-input-wrapper={true}
+  class:bx--text-input-wrapper--light={light}
+  class:bx--text-input-wrapper--inline={inline}
+  class:bx--text-input-wrapper--readonly={readonly}
+  class:bx--text-input--fluid={isFluid}
+  on:click
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+>
+  {#if inline}
+    <label
+      for={id}
+      class:bx--label={true}
+      class:bx--visually-hidden={hideLabel}
+      class:bx--label--disabled={disabled}
+      class:bx--label--inline={inline}
+      class:bx--label--inline--xs={inline && size === "xs"}
+      class:bx--label--inline--sm={inline && size === "sm"}
+      class:bx--label--inline--xl={inline && size === "xl"}
+      class:bx--label--slotted={isFluid && $$slots.labelChildren}
+    >
+      <slot name="labelChildren"> {labelText} </slot>
+    </label>
+    {#if !isFluid && helperText}
+      <div
+        id={helperId}
+        class:bx--form__helper-text={true}
+        class:bx--form__helper-text--disabled={disabled}
+        class:bx--form__helper-text--inline={inline}
+      >
+        {helperText}
+      </div>
+    {/if}
+  {/if}
+  {#if !inline && (labelText || $$slots.labelChildren)}
+    <label
+      for={id}
+      class:bx--label={true}
+      class:bx--visually-hidden={hideLabel}
+      class:bx--label--disabled={disabled}
+      class:bx--label--inline={inline}
+      class:bx--label--inline--xs={inline && size === "xs"}
+      class:bx--label--inline--sm={inline && size === "sm"}
+      class:bx--label--inline--xl={inline && size === "xl"}
+      class:bx--label--slotted={isFluid && $$slots.labelChildren}
+    >
+      <slot name="labelChildren"> {labelText} </slot>
+    </label>
+  {/if}
+  <div
+    class:bx--text-input__field-outer-wrapper={true}
+    class:bx--text-input__field-outer-wrapper--inline={inline}
+  >
+    <div
+      class:bx--text-input__field-wrapper={true}
+      class:bx--text-input__field-wrapper--warning={showWarn}
+      data-invalid={showInvalid || undefined}
+      data-warn={showWarn || undefined}
+    >
+      {#if readonly}
+        <EditOff class="bx--text-input__readonly-icon" />
+      {:else}
+        {#if showInvalid}
+          <WarningFilled class="bx--text-input__invalid-icon" />
+        {/if}
+        {#if showWarn}
+          <WarningAltFilled
+            class="bx--text-input__invalid-icon
+              bx--text-input__invalid-icon--warning"
+          />
+        {/if}
+      {/if}
+      <input
+        bind:this={ref}
+        use:formReset={handleFormReset}
+        data-invalid={showInvalid || undefined}
+        aria-invalid={showInvalid || undefined}
+        data-warn={showWarn || undefined}
+        aria-errormessage={showInvalid ? errorId : undefined}
+        aria-describedby={resolveStatusDescribedBy({
+          showInvalid,
+          showWarn,
+          helperText,
+          isFluid,
+          errorId,
+          warnId,
+          helperId,
+          includeErrorId: false,
+        })}
+        {id}
+        {name}
+        {placeholder}
+        {type}
+        value={value ?? ""}
+        {disabled}
+        {readonly}
+        class:bx--text-input={true}
+        class:bx--password-input={true}
+        class:bx--text-input--light={light}
+        class:bx--text-input--invalid={showInvalid}
+        class:bx--text-input--warning={showWarn}
+        class:bx--text-input--xs={size === "xs"}
+        class:bx--text-input--sm={size === "sm"}
+        class:bx--text-input--xl={size === "xl"}
+        {...$$restProps}
+        on:change
+        on:input
+        on:input={(event) => {
+          value = event.target.value;
+        }}
+        on:keydown
+        on:keyup
+        on:focus
+        on:focus={handleFocus}
+        on:blur
+        on:paste
+      >
+      {#if isFluid}
+        <hr class:bx--text-input__divider={true}>
+      {/if}
+      {#if isFluid && showInvalid}
+        <div class:bx--form-requirement={true} id={errorId} role="alert">
+          {invalidText}
+        </div>
+      {/if}
+      {#if isFluid && showWarn}
+        <div class:bx--form-requirement={true} id={warnId}>{warnText}</div>
+      {/if}
+      <button
+        bind:this={toggleButtonRef}
+        type="button"
+        {disabled}
+        class:bx--text-input--password__visibility__toggle={true}
+        class:bx--btn={true}
+        class:bx--btn--icon-only={true}
+        class:bx--btn--disabled={disabled}
+        class:bx--tooltip__trigger={true}
+        class:bx--tooltip--a11y={true}
+        class:bx--tooltip--portal-active={effectivePortalTooltip}
+        class:bx--tooltip--top={tooltipPosition === "top"}
+        class:bx--tooltip--right={tooltipPosition === "right"}
+        class:bx--tooltip--bottom={tooltipPosition === "bottom"}
+        class:bx--tooltip--left={tooltipPosition === "left"}
+        class:bx--tooltip--align-start={tooltipAlignment === "start"}
+        class:bx--tooltip--align-center={tooltipAlignment === "center"}
+        class:bx--tooltip--align-end={tooltipAlignment === "end"}
+        aria-label={effectivePortalTooltip ? tooltipLabel : undefined}
+        on:click={() => {
+          type = type === "password" ? "text" : "password";
+        }}
+        on:mouseenter={() => {
+          tooltipOpen = true;
+        }}
+        on:mouseleave={() => {
+          tooltipOpen = false;
+        }}
+        on:focus={() => {
+          tooltipOpen = true;
+        }}
+        on:blur={() => {
+          tooltipOpen = false;
+        }}
+      >
+        {#if !disabled && !effectivePortalTooltip}
+          <span class:bx--assistive-text={true}> {tooltipLabel} </span>
+        {/if}
+        {#if type === "text"}
+          <ViewOff class="bx--icon-visibility-off" />
+        {:else}
+          <View class="bx--icon-visibility-on" />
+        {/if}
+      </button>
+    </div>
+    {#if !isFluid && showInvalid}
+      <div class:bx--form-requirement={true} id={errorId} role="alert">
+        {invalidText}
+      </div>
+    {/if}
+    {#if !showInvalid && !showWarn && !isFluid && !inline && helperText}
+      <div
+        class:bx--form__helper-text={true}
+        class:bx--form__helper-text--disabled={disabled}
+        class:bx--form__helper-text--inline={inline}
+      >
+        {helperText}
+      </div>
+    {/if}
+    {#if !isFluid && showWarn}
+      <div class:bx--form-requirement={true} id={warnId}>{warnText}</div>
+    {/if}
+  </div>
+</div>
+
+{#if effectivePortalTooltip && !disabled}
+  <PortalTooltip
+    anchor={toggleButtonRef}
+    direction={tooltipPosition === "top" ? "top" : "bottom"}
+    open={tooltipOpen}
+    text={tooltipLabel}
+  />
+{/if}

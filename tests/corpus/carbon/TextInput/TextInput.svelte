@@ -1,0 +1,323 @@
+<script>
+  /**
+   * @event {null | number | string} change
+   * @event {null | number | string} input
+   */
+
+  /**
+   * Set the size of the input.
+   * @type {"xs" | "sm" | "xl"}
+   */
+  export let size = undefined;
+
+  /**
+   * Specify the input value.
+   *
+   * `value` will be set to `null` if type="number" and the value is empty.
+   * Follows the field when the owning form resets.
+   * @type {null | number | string}
+   * @bindable writable
+   */
+  export let value = "";
+
+  /** Specify the placeholder text */
+  export let placeholder = "";
+
+  /** Set to `true` to enable the light variant */
+  export let light = false;
+
+  /** Set to `true` to disable the input */
+  export let disabled = false;
+
+  /** Specify the helper text */
+  export let helperText = "";
+
+  /** Set an id for the input element */
+  export let id = uniqueId();
+
+  /**
+   * Specify a name attribute for the input.
+   * @type {string}
+   */
+  export let name = undefined;
+
+  /** Specify the label text */
+  export let labelText = "";
+
+  /** Set to `true` to visually hide the label text */
+  export let hideLabel = false;
+
+  /**
+   * Specify the max character count allowed for the input.
+   * Displays a character counter to the right of the label.
+   * @type {number}
+   */
+  export let maxCount = undefined;
+
+  /** Set to `true` to indicate an invalid state */
+  export let invalid = false;
+
+  /** Specify the invalid state text */
+  export let invalidText = "";
+
+  /** Set to `true` to indicate a warning state */
+  export let warn = false;
+
+  /** Specify the warning state text */
+  export let warnText = "";
+
+  /**
+   * Obtain a reference to the input HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /** Set to `true` to mark the field as required */
+  export let required = false;
+
+  /** Set to `true` to use the inline variant */
+  export let inline = false;
+
+  /** Set to `true` to use the read-only variant */
+  export let readonly = false;
+
+  /**
+   * Set to `true` to use the fluid variant.
+   * Inherited from the parent `FluidForm` context,
+   * so it does not need to be set when used inside `FluidForm`.
+   * Cannot be combined with the inline variant.
+   */
+  export let fluid = false;
+
+  /** Set to `true` to select the input's text when it receives focus */
+  export let selectTextOnFocus = false;
+
+  import { createEventDispatcher, getContext, tick } from "svelte";
+  import { FORM_CONTEXT_KEY } from "../constants/context-keys.js";
+  import EditOff from "../icons/EditOff.svelte";
+  import WarningAltFilled from "../icons/WarningAltFilled.svelte";
+  import WarningFilled from "../icons/WarningFilled.svelte";
+  import {
+    buildFieldIds,
+    resolveStatusDescribedBy,
+    resolveValidationVisibility,
+  } from "../utils/field-status.js";
+  import { formReset } from "../utils/form-reset.js";
+  import { graphemeCount } from "../utils/grapheme-count.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const ctx = getContext(FORM_CONTEXT_KEY);
+  const dispatch = createEventDispatcher();
+
+  function parse(raw) {
+    if ($$restProps.type !== "number") return raw;
+    return raw === "" ? null : Number(raw);
+  }
+
+  // A form reset restores the field without an input event. Svelte 5 syncs
+  // `bind:value` back on its own; Svelte 3 and 4 do not, so read the field.
+  function handleFormReset() {
+    if (ref) value = parse(ref.value);
+  }
+
+  /** @type {(e: Event) => void} */
+  function handleInput(event) {
+    value = parse(event.target.value);
+    dispatch("input", value);
+  }
+
+  /** @type {(e: Event) => void} */
+  function handleChange(event) {
+    dispatch("change", parse(event.target.value));
+  }
+
+  function handleFocus() {
+    if (selectTextOnFocus && !disabled) {
+      tick().then(() => ref?.select());
+    }
+  }
+
+  $: ({ showInvalid, showWarn } = resolveValidationVisibility({
+    invalid,
+    warn,
+    disabled,
+    readonly,
+  }));
+  $: isFluid = !inline && (fluid || !!ctx?.isFluid);
+  $: ({ helperId, errorId, warnId } = buildFieldIds(id));
+</script>
+
+<!-- svelte-ignore a11y-mouse-events-have-key-events -->
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div
+  class:bx--form-item={true}
+  class:bx--text-input-wrapper={true}
+  class:bx--text-input-wrapper--inline={inline}
+  class:bx--text-input-wrapper--light={light}
+  class:bx--text-input-wrapper--readonly={readonly}
+  class:bx--text-input--fluid={isFluid}
+  on:click
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+>
+  {#if inline}
+    <div class:bx--text-input__label-helper-wrapper={true}>
+      {#if labelText || $$slots.labelChildren}
+        <div class:bx--text-input__label-wrapper={true}>
+          <label
+            for={id}
+            class:bx--label={true}
+            class:bx--visually-hidden={hideLabel}
+            class:bx--label--disabled={disabled}
+            class:bx--label--inline={inline}
+            class:bx--label--inline--xs={size === "xs"}
+            class:bx--label--inline--sm={size === "sm"}
+            class:bx--label--inline--xl={size === "xl"}
+            class:bx--label--slotted={isFluid && $$slots.labelChildren}
+          >
+            <slot name="labelChildren"> {labelText} </slot>
+          </label>
+          {#if maxCount != null}
+            <div
+              class:bx--label={true}
+              class:bx--label--disabled={disabled}
+              class:bx--text-input__label-counter={true}
+            >
+              {graphemeCount((value ?? "").toString())}/{maxCount}
+            </div>
+          {/if}
+        </div>
+      {/if}
+      {#if !isFluid && helperText}
+        <div
+          class:bx--form__helper-text={true}
+          class:bx--form__helper-text--disabled={disabled}
+          class:bx--form__helper-text--inline={inline}
+        >
+          {helperText}
+        </div>
+      {/if}
+    </div>
+  {/if}
+  {#if !inline && (labelText || $$slots.labelChildren)}
+    <div class:bx--text-input__label-wrapper={true}>
+      <label
+        for={id}
+        class:bx--label={true}
+        class:bx--visually-hidden={hideLabel}
+        class:bx--label--disabled={disabled}
+        class:bx--label--inline={inline}
+        class:bx--label--slotted={isFluid && $$slots.labelChildren}
+      >
+        <slot name="labelChildren"> {labelText} </slot>
+      </label>
+      {#if maxCount != null}
+        <div
+          class:bx--label={true}
+          class:bx--label--disabled={disabled}
+          class:bx--text-input__label-counter={true}
+        >
+          {graphemeCount((value ?? "").toString())}/{maxCount}
+        </div>
+      {/if}
+    </div>
+  {/if}
+  <div
+    class:bx--text-input__field-outer-wrapper={true}
+    class:bx--text-input__field-outer-wrapper--inline={inline}
+  >
+    <div
+      data-invalid={showInvalid || undefined}
+      data-warn={showWarn || undefined}
+      class:bx--text-input__field-wrapper={true}
+      class:bx--text-input__field-wrapper--warning={showWarn}
+    >
+      {#if readonly}
+        <EditOff class="bx--text-input__readonly-icon" />
+      {:else}
+        {#if showInvalid}
+          <WarningFilled class="bx--text-input__invalid-icon" />
+        {/if}
+        {#if showWarn}
+          <WarningAltFilled
+            class="bx--text-input__invalid-icon
+            bx--text-input__invalid-icon--warning"
+          />
+        {/if}
+      {/if}
+      <input
+        bind:this={ref}
+        use:formReset={handleFormReset}
+        data-invalid={showInvalid || undefined}
+        aria-invalid={showInvalid || undefined}
+        data-warn={showWarn || undefined}
+        aria-errormessage={showInvalid ? errorId : undefined}
+        aria-describedby={resolveStatusDescribedBy({
+          showInvalid,
+          showWarn,
+          helperText,
+          isFluid,
+          errorId,
+          warnId,
+          helperId,
+          includeErrorId: false,
+        })}
+        {disabled}
+        {id}
+        {name}
+        {placeholder}
+        bind:value
+        {required}
+        {readonly}
+        class:bx--text-input={true}
+        class:bx--text-input--light={light}
+        class:bx--text-input--invalid={showInvalid}
+        class:bx--text-input--warning={showWarn}
+        class:bx--text-input--xs={size === "xs"}
+        class:bx--text-input--sm={size === "sm"}
+        class:bx--text-input--xl={size === "xl"}
+        maxlength={maxCount ?? undefined}
+        {...$$restProps}
+        on:change={handleChange}
+        on:input={handleInput}
+        on:keydown
+        on:keyup
+        on:focus
+        on:focus={handleFocus}
+        on:blur
+        on:paste
+      >
+      {#if isFluid}
+        <hr class:bx--text-input__divider={true}>
+      {/if}
+      {#if isFluid && showInvalid}
+        <div class:bx--form-requirement={true} id={errorId} role="alert">
+          {invalidText}
+        </div>
+      {/if}
+      {#if isFluid && showWarn}
+        <div class:bx--form-requirement={true} id={warnId}>{warnText}</div>
+      {/if}
+    </div>
+    {#if !showInvalid && !showWarn && !isFluid && !inline && helperText}
+      <div
+        id={helperId}
+        class:bx--form__helper-text={true}
+        class:bx--form__helper-text--disabled={disabled}
+        class:bx--form__helper-text--inline={inline}
+      >
+        {helperText}
+      </div>
+    {/if}
+    {#if !isFluid && showInvalid}
+      <div class:bx--form-requirement={true} id={errorId} role="alert">
+        {invalidText}
+      </div>
+    {/if}
+    {#if !isFluid && showWarn}
+      <div class:bx--form-requirement={true} id={warnId}>{warnText}</div>
+    {/if}
+  </div>
+</div>

@@ -1,0 +1,51 @@
+{
+  "name": "sveast",
+  "version": "0.0.0",
+  "license": "MIT",
+  "description": "Zero-dependency Svelte 5 parser, TypeScript included, with svelte/compiler's exact AST, 2-3x faster.",
+  "author": "Eric Liu (https://github.com/metonym)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "test": "bun test --parallel ./tests",
+    "test:package": "bun scripts/test-package.ts",
+    "bench": "ostia bench bench/parse.bench.ts",
+    "bench:ab": "ostia ab bench/sveast.bench.ts",
+    "bench:sveast": "ostia bench bench/sveast.bench.ts",
+    "bench:mem": "bun bench/mem.ts",
+    "bench:cold": "bun bench/cold.ts",
+    "fuzz": "bun scripts/fuzz-parser.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome ci --error-on-warnings",
+    "lint:fix": "biome check --write --unsafe ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@sveltejs/acorn-typescript": "1.0.13",
+    "@types/bun": "^1.4.2",
+    "@types/estree": "^1.0.9",
+    "@types/jest": "^30.0.0",
+    "@typescript/typescript6": "^6.0.2",
+    "acorn": "^8.18.0",
+    "ostia": "^0.2.9",
+    "svelte": "^5.57.1",
+    "typescript": "^7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/metonym/sveast.git"
+  },
+  "homepage": "https://github.com/metonym/sveast",
+  "bugs": "https://github.com/metonym/sveast/issues",
+  "keywords": [
+    "svelte",
+    "parser",
+    "ast",
+    "typescript",
+    "acorn",
+    "zero-dependency"
+  ]
+}

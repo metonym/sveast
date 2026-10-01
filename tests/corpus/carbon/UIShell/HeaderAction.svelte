@@ -1,0 +1,174 @@
+<script>
+  /**
+   * @template [Icon=any]
+   * @event open
+   * @type {object}
+   * @property {"toggle"} trigger
+   * @event close
+   * @type {object}
+   * @property {"outside-click" | "toggle" | "escape-key"} trigger
+   */
+
+  /**
+   * Set to `true` to open the panel.
+   * @bindable writable
+   */
+  export let isOpen = false;
+
+  /**
+   * Specify the icon to render when the action panel is closed.
+   * @type {Icon}
+   */
+  export let icon = /** @type {Icon} */ (Switcher);
+
+  /**
+   * Specify the icon to render when the action panel is open.
+   * @type {Icon}
+   */
+  export let closeIcon = /** @type {Icon} */ (Close);
+
+  /**
+   * Specify the text displayed next to the icon.
+   * Alternatively, use the named slot "textChildren".
+   * @type {string}
+   * @example
+   * ```svelte
+   * <HeaderAction>
+   *   <div slot="textChildren">Custom Text</div>
+   * </HeaderAction>
+   * ```
+   */
+  export let text = undefined;
+
+  /**
+   * Specify an icon tooltip. The tooltip will not be displayed
+   * if either the `text` prop or a named slot="textChildren" is used.
+   * @type {string}
+   */
+  export let iconDescription = undefined;
+
+  /**
+   * Set the alignment of the tooltip relative to the icon.
+   * Only applies when `iconDescription` is provided.
+   * @type {"start" | "center" | "end"}
+   */
+  export let tooltipAlignment = "center";
+
+  /**
+   * Obtain a reference to the button HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /**
+   * Customize the panel transition (e.g., `transition:slide`).
+   * The panel does not animate by default; provide slide
+   * params (e.g., `{ duration: 200 }`) to enable the transition.
+   * @type {false | import("svelte/transition").SlideParams}
+   */
+  export let transition = false;
+
+  /** Set to `true` to prevent the panel from closing when clicking outside */
+  export let preventCloseOnClickOutside = false;
+
+  /** Set an id for the trigger button element. Also used to label the panel. */
+  export let id = uniqueId();
+
+  import { createEventDispatcher } from "svelte";
+  import { slide } from "svelte/transition";
+  import Close from "../icons/Close.svelte";
+  import Switcher from "../icons/Switcher.svelte";
+  import { dismiss } from "../utils/dismiss.js";
+  import { isOutsideClick } from "../utils/is-outside-click.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const dispatch = createEventDispatcher();
+
+  let refPanel = null;
+
+  $: hasIconOnly = iconDescription && !(text || $$slots.textChildren);
+  $: buttonClass = [
+    hasIconOnly && "bx--btn",
+    hasIconOnly && "bx--tooltip__trigger bx--tooltip--a11y",
+    hasIconOnly && "bx--btn--icon-only--bottom",
+    hasIconOnly && `bx--tooltip--align-${tooltipAlignment}`,
+    $$restProps.class,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  function handleOutsideClick(event) {
+    if (
+      isOpen &&
+      !preventCloseOnClickOutside &&
+      isOutsideClick(event, [ref, refPanel])
+    ) {
+      isOpen = false;
+      dispatch("close", { trigger: "outside-click" });
+    }
+  }
+
+  function handleKeydown(event) {
+    if (isOpen && event.key === "Escape") {
+      isOpen = false;
+      dispatch("close", { trigger: "escape-key" });
+      ref?.focus();
+    }
+  }
+</script>
+
+<button
+  bind:this={ref}
+  use:dismiss={{
+    enabled: isOpen,
+    listeners: [
+      { type: "click", handler: handleOutsideClick },
+      { type: "keydown", handler: handleKeydown },
+    ],
+  }}
+  type="button"
+  aria-haspopup="true"
+  aria-expanded={isOpen}
+  {id}
+  class:bx--header__action={true}
+  class:bx--header__action--active={isOpen}
+  class:bx--header__action--text={text}
+  {...$$restProps}
+  class={buttonClass}
+  on:click
+  on:click|stopPropagation={() => {
+    isOpen = !isOpen;
+    dispatch(isOpen ? "open" : "close", { trigger: "toggle" });
+  }}
+>
+  {#if hasIconOnly}
+    <span class:bx--assistive-text={true}>{iconDescription}</span>
+  {/if}
+  {#if isOpen}
+    <slot name="closeIcon">
+      <svelte:component this={closeIcon} size={20} />
+    </slot>
+  {:else}
+    <slot name="icon"> <svelte:component this={icon} size={20} /> </slot>
+  {/if}
+  <slot name="textChildren">
+    {#if text}
+      <span class:bx--header__action-text={true}>{text}</span>
+    {/if}
+  </slot>
+</button>
+{#if isOpen}
+  <div
+    bind:this={refPanel}
+    role="region"
+    aria-labelledby={id}
+    class:bx--header-panel={true}
+    class:bx--header-panel--expanded={true}
+    transition:slide|local={{
+      ...transition,
+      duration: transition === false ? 0 : transition.duration,
+    }}
+  >
+    <slot />
+  </div>
+{/if}

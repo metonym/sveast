@@ -1,0 +1,12 @@
+<div
+  class:bx--form-item={true}
+  class:bx--text-area--fluid__skeleton={true}
+  {...$$restProps}
+  on:click
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+>
+  <span class:bx--label={true} class:bx--skeleton={true}></span>
+  <div class:bx--skeleton={true} class:bx--text-area={true}></div>
+</div>

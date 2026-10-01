@@ -1,0 +1,183 @@
+<script>
+  /**
+   * @template {import("./DataTable.svelte").DataTableRow} [Row=import("./DataTable.svelte").DataTableRow]
+   * @restProps {input}
+   * @event {null} clear
+   * @event {number | string} search
+   */
+
+  /**
+   * Specify the value of the search input.
+   * @type {number | string}
+   * @bindable writable
+   */
+  export let value = "";
+
+  /**
+   * Set to `true` to expand the search bar.
+   * @bindable writable
+   */
+  export let expanded = false;
+
+  /** Set to `true` to keep the search bar expanded */
+  export let persistent = false;
+
+  /** Set to `true` to disable the search bar */
+  export let disabled = false;
+
+  /**
+   * Set to `true` to filter table rows using the search value.
+   *
+   * If `true`, the default search excludes `id`, `cells` fields and
+   * only does a basic comparison on string and number type cell values.
+   *
+   * To implement your own client-side filtering, pass a function
+   * that accepts a row and value and returns a boolean.
+   * @type {boolean | ((row: Row, value: number | string) => boolean)}
+   */
+  export let shouldFilterRows = false;
+
+  /**
+   * The filtered row ids.
+   * @type {ReadonlyArray<Row["id"]>}
+   * @bindable readonly
+   */
+  export let filteredRowIds = [];
+
+  /**
+   * Specify the tabindex
+   * @type {number | string | undefined}
+   */
+  export let tabindex = "0";
+
+  /**
+   * Milliseconds of quiet time before rows are filtered. Filtering waits
+   * until typing pauses; `value` still updates immediately; clearing
+   * applies at once. `0` filters synchronously on every keystroke.
+   *
+   * Unrelated to the `search` event, which fires on <kbd>Enter</kbd>
+   * regardless of this delay.
+   */
+  export let debounce = 0;
+
+  /**
+   * Obtain a reference to the input HTML element.
+   * @type {null | HTMLInputElement}
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  /** Set to `true` to select the input's text when it receives focus */
+  export let selectTextOnFocus = false;
+
+  import { getContext, onMount, tick } from "svelte";
+  import Search from "../Search/Search.svelte";
+  import { debounce as debounceFn } from "../utils/debounce.js";
+  import { rowsEqual } from "./data-table-utils.js";
+
+  const ctx = getContext("carbon:DataTable") ?? {};
+
+  let rows = null;
+  let unsubscribe = null;
+
+  $: {
+    unsubscribe?.();
+    unsubscribe = null;
+    if (shouldFilterRows) {
+      unsubscribe = ctx?.tableRows.subscribe((tableRows) => {
+        // Only update if the rows have actually changed.
+        // This approach works in both Svelte 4 and Svelte 5.
+        if (!rowsEqual(tableRows, rows)) {
+          rows = tableRows;
+        }
+      });
+    } else {
+      rows = null;
+    }
+  }
+
+  let debouncedFilter = null;
+
+  function applyFilter(searchValue, filter) {
+    filteredRowIds = ctx.filterRows(searchValue, filter);
+  }
+
+  $: {
+    debouncedFilter?.cancel();
+    debouncedFilter = debounce > 0 ? debounceFn(applyFilter, debounce) : null;
+  }
+
+  onMount(() => {
+    return () => {
+      unsubscribe?.();
+      debouncedFilter?.cancel();
+    };
+  });
+
+  $: if (rows !== null) {
+    if (debouncedFilter && String(value ?? "").length > 0) {
+      debouncedFilter(value, shouldFilterRows);
+    } else {
+      debouncedFilter?.cancel();
+      applyFilter(value, shouldFilterRows);
+    }
+  }
+
+  async function expandSearch() {
+    await tick();
+    if (disabled || persistent || expanded) return;
+    expanded = true;
+    await tick();
+    ref.focus();
+  }
+
+  /**
+   * Programmatically clear the search input.
+   * Resets `value` and collapses the search bar (unless `persistent`).
+   * @type {() => void}
+   * @example
+   * ```svelte
+   * <ToolbarSearch bind:this={search} />
+   * <Button on:click={() => search.clear()}>Clear search</Button>
+   * ```
+   */
+  export function clear() {
+    value = "";
+    if (!persistent) expanded = false;
+  }
+
+  $: if (!persistent) expanded = String(value ?? "").length > 0;
+  $: classes = [
+    expanded && "bx--toolbar-search-container-active",
+    persistent
+      ? "bx--toolbar-search-container-persistent"
+      : "bx--toolbar-search-container-expandable",
+    disabled && "bx--toolbar-search-container-disabled",
+  ]
+    .filter(Boolean)
+    .join(" ");
+</script>
+
+<Search
+  {tabindex}
+  {disabled}
+  {selectTextOnFocus}
+  {...$$restProps}
+  searchClass={[classes, $$restProps.class].filter(Boolean).join(" ")}
+  bind:ref
+  bind:value
+  on:clear
+  on:clear={clear}
+  on:change
+  on:input
+  on:search
+  on:focus
+  on:focus={expandSearch}
+  on:blur
+  on:blur={() => {
+    expanded = !persistent && String(value ?? "").length > 0;
+  }}
+  on:keyup
+  on:keydown
+  on:paste
+/>

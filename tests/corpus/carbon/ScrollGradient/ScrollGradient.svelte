@@ -1,0 +1,228 @@
+<script context="module">
+  const FILL_TOKENS = new Set([
+    "background",
+    "layer-01",
+    "layer-02",
+    "layer-03",
+    "layer-accent",
+    "field",
+    "inverse",
+    "brand",
+  ]);
+</script>
+
+<script>
+  /**
+   * @slot {{}}
+   */
+
+  /**
+   * Specify the gradient color: a fill token name, the same set as Box
+   * `fill`, or any CSS color. Defaults to the `layer-01` theme token.
+   * @type {"background" | "layer-01" | "layer-02" | "layer-03" | "layer-accent" | "field" | "inverse" | "brand" | (string & {}) | undefined}
+   */
+  export let color = undefined;
+
+  /**
+   * Specify the background color of the scrollable content area: a fill
+   * token name, the same set as Box `fill`, or any CSS color. Defaults to
+   * the `layer-01` theme token. Does not affect the gradient color — use
+   * `color` for that.
+   * @type {"background" | "layer-01" | "layer-02" | "layer-03" | "layer-accent" | "field" | "inverse" | "brand" | (string & {}) | undefined}
+   */
+  export let background = undefined;
+
+  /**
+   * Specify the height of the component. Set a height so the content
+   * can overflow vertically.
+   * @type {"100%" | "100vh" | (string & {})}
+   */
+  export let height = undefined;
+
+  /**
+   * Set to `true` to suppress the top and left gradients,
+   * even when their edge is scrollable.
+   */
+  export let hideStartGradient = false;
+
+  /**
+   * Specify a class for the inner scrollable element.
+   * @type {string | undefined}
+   */
+  export let scrollElementClassName = undefined;
+
+  /**
+   * Obtain a reference to the inner scrollable element.
+   * @type {null | HTMLDivElement}
+   * @bindable readonly
+   */
+  export let scrollElementRef = null;
+
+  import { onMount } from "svelte";
+
+  let contentRef = null;
+  let sentinelTop = null;
+  let sentinelBottom = null;
+  let sentinelLeft = null;
+  let sentinelRight = null;
+
+  let xScrollable = false;
+  let yScrollable = false;
+  let atTop = true;
+  let atBottom = true;
+  let atLeft = true;
+  let atRight = true;
+
+  $: showTopGradient = yScrollable && !hideStartGradient && !atTop;
+  $: showBottomGradient = yScrollable && !atBottom;
+  $: showLeftGradient = xScrollable && !hideStartGradient && !atLeft;
+  $: showRightGradient = xScrollable && !atRight;
+
+  // Fill token names compile to per-theme classes; any other CSS color is
+  // applied inline.
+  $: colorClass = FILL_TOKENS.has(color)
+    ? `bx--scroll-gradient--color-${color}`
+    : undefined;
+  $: backgroundClass = FILL_TOKENS.has(background)
+    ? `bx--scroll-gradient__scroll-element--${background}`
+    : undefined;
+  $: wrapperClass =
+    [colorClass, $$restProps.class].filter(Boolean).join(" ") || undefined;
+  $: scrollElementClass =
+    [backgroundClass, scrollElementClassName].filter(Boolean).join(" ") ||
+    undefined;
+
+  $: declarations = [
+    color && !colorClass && `--cds-scroll-gradient-color: ${color};`,
+    height && `height: ${height};`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  $: style = declarations
+    ? `${declarations}${$$restProps.style ? ` ${$$restProps.style}` : ""}`
+    : $$restProps.style;
+
+  function updateScrollable() {
+    if (!scrollElementRef) return;
+    xScrollable = scrollElementRef.scrollWidth > scrollElementRef.clientWidth;
+    yScrollable = scrollElementRef.scrollHeight > scrollElementRef.clientHeight;
+  }
+
+  onMount(() => {
+    updateScrollable();
+
+    // Scrollability changes only when the viewport or the content changes
+    // size. Observing both catches slot updates, font swaps and wrapping
+    // without a subtree MutationObserver, which fired (and forced a
+    // scrollWidth/scrollHeight read) on every DOM mutation inside the
+    // content, e.g. each row update of a wrapped DataTable.
+    const resizeObserver = new ResizeObserver(updateScrollable);
+    resizeObserver.observe(scrollElementRef);
+    resizeObserver.observe(contentRef);
+
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.target === sentinelTop) {
+            atTop = entry.isIntersecting;
+          } else if (entry.target === sentinelBottom) {
+            atBottom = entry.isIntersecting;
+          } else if (entry.target === sentinelLeft) {
+            atLeft = entry.isIntersecting;
+          } else if (entry.target === sentinelRight) {
+            atRight = entry.isIntersecting;
+          }
+        }
+      },
+      { root: scrollElementRef },
+    );
+
+    for (const sentinel of [
+      sentinelTop,
+      sentinelBottom,
+      sentinelLeft,
+      sentinelRight,
+    ]) {
+      intersectionObserver.observe(sentinel);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+    };
+  });
+</script>
+
+<div
+  class:bx--scroll-gradient={true}
+  role="presentation"
+  {...$$restProps}
+  class={wrapperClass}
+  {style}
+>
+  <div
+    class:bx--scroll-gradient__scroll-element={true}
+    class={scrollElementClass}
+    style:background-color={backgroundClass ? undefined : background}
+    bind:this={scrollElementRef}
+    on:scroll
+  >
+    <div
+      bind:this={contentRef}
+      class:bx--scroll-gradient__content={true}
+      class:bx--scroll-gradient__content--v-scrollable={yScrollable}
+      class:bx--scroll-gradient__content--h-scrollable={xScrollable}
+    >
+      <div
+        class:bx--scroll-gradient__sentinel={true}
+        bind:this={sentinelTop}
+      ></div>
+      <div
+        class:bx--scroll-gradient__sentinel={true}
+        bind:this={sentinelBottom}
+      ></div>
+      <div
+        class:bx--scroll-gradient__sentinel={true}
+        bind:this={sentinelLeft}
+      ></div>
+      <div
+        class:bx--scroll-gradient__sentinel={true}
+        bind:this={sentinelRight}
+      ></div>
+      <slot />
+    </div>
+  </div>
+  {#if showTopGradient}
+    <div
+      class:bx--scroll-gradient__gradient={true}
+      class:bx--scroll-gradient__gradient--top={true}
+      role="presentation"
+      aria-hidden="true"
+    ></div>
+  {/if}
+  {#if showBottomGradient}
+    <div
+      class:bx--scroll-gradient__gradient={true}
+      class:bx--scroll-gradient__gradient--bottom={true}
+      role="presentation"
+      aria-hidden="true"
+    ></div>
+  {/if}
+  {#if showLeftGradient}
+    <div
+      class:bx--scroll-gradient__gradient={true}
+      class:bx--scroll-gradient__gradient--left={true}
+      role="presentation"
+      aria-hidden="true"
+    ></div>
+  {/if}
+  {#if showRightGradient}
+    <div
+      class:bx--scroll-gradient__gradient={true}
+      class:bx--scroll-gradient__gradient--right={true}
+      role="presentation"
+      aria-hidden="true"
+    ></div>
+  {/if}
+</div>
