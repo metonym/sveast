@@ -104,7 +104,7 @@ try {
   await writeFile(
     join(dir, "smoke.js"),
     `import assert from "node:assert/strict";
-import { parse, parseModule, STOP, walk } from "sveast";
+import { parse, parseModule, SKIP, STOP, walk } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
 
 const source = \`<script lang="ts">
@@ -141,6 +141,15 @@ walk(parse(source), {
 });
 assert.equal(first, "name");
 
+const entered = [];
+walk(parse(source).fragment, {
+  enter(node) {
+    entered.push(node.type);
+    if (node.type === "IfBlock") return SKIP;
+  },
+});
+assert.deepEqual(entered, ["Fragment", "Text", "IfBlock"]);
+
 const core = await import("sveast/core");
 const { typescript } = await import("sveast/typescript");
 const { entities } = await import("sveast/entities");
@@ -171,6 +180,7 @@ assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
   ParseError,
   parse,
   parseModule,
+  SKIP,
   STOP,
   visitorKeys,
   walk,
@@ -240,7 +250,7 @@ const visitor: Visitor = {
     if (node.type === "IfBlock" && parent?.type === "Fragment") {
       const test: Node = node.test;
       void test;
-      return false;
+      return SKIP;
     }
   },
   leave(node) {

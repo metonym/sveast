@@ -1,6 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type AST, parse, parseModule, STOP, visitorKeys, walk } from "sveast";
+import {
+  type AST,
+  parse,
+  parseModule,
+  SKIP,
+  STOP,
+  visitorKeys,
+  walk,
+} from "sveast";
 import { byCodeUnit, isRecord } from "../scripts/shared";
 import { SNIPPETS } from "./ts-snippets";
 
@@ -134,13 +142,13 @@ test("parent, key and index locate the node", () => {
   expect(roots).toEqual(ASTS.map((ast) => [ast, null, null, null]));
 });
 
-test("enter returning false skips the children, and leave still runs", () => {
+test("enter returning SKIP skips the children, and leave still runs", () => {
   const ast = parse("<div><p>{a}</p></div><span></span>");
   const events: string[] = [];
   walk(ast.fragment, {
     enter(node) {
       events.push(`enter ${node.type}`);
-      return !(node.type === "RegularElement" && node.name === "p");
+      if (node.type === "RegularElement" && node.name === "p") return SKIP;
     },
     leave(node) {
       events.push(`leave ${node.type}`);
@@ -160,6 +168,14 @@ test("enter returning false skips the children, and leave still runs", () => {
     "leave RegularElement",
     "leave Fragment",
   ]);
+});
+
+test("enter returning false or another value visits the children", () => {
+  const names = new Set<string>();
+  walk(parse("<div><A /><p><B.C>{d}</B.C></p></div>"), {
+    enter: (node) => node.type === "Component" && names.add(node.name),
+  });
+  expect([...names]).toEqual(["A", "B.C"]);
 });
 
 function walkEvents(

@@ -257,14 +257,22 @@ const NO_KEYS: readonly string[] = [];
  */
 export const STOP: unique symbol = Symbol("sveast.walk.stop");
 
+/**
+ * Return it from `enter` to skip the node's children; `leave` is still
+ * called on the node.
+ */
+export const SKIP: unique symbol = Symbol("sveast.walk.skip");
+
 /** The callbacks {@link walk} calls for each node. */
 export interface Visitor {
   /**
-   * Called before the node's children. Return `false` to skip them; `leave`
-   * is still called, so the two stay paired. Return {@link STOP} to end the
-   * walk. Return another node to put it in this one's place: `walk` writes it
-   * to `parent[key]` (or `parent[key][index]`), then calls `enter` on it and
-   * visits its children instead.
+   * Called before the node's children. Return {@link SKIP} to skip them;
+   * `leave` is still called, so the two stay paired. Return {@link STOP} to
+   * end the walk. Return another node to put it in this one's place: `walk`
+   * writes it to `parent[key]` (or `parent[key][index]`), then calls `enter`
+   * on it and visits its children instead. Any other value, `false`
+   * included, is ignored, so `(node) => node.type === "Component" &&
+   * names.add(node.name)` visits every node.
    */
   enter?(
     node: AST.SvelteNode,
@@ -302,7 +310,7 @@ function visit(
   if (keys === undefined) throw new Error(`unknown node type: ${node.type}`);
   const entered = visitor.enter?.(node, parent, key, index);
   if (entered === STOP) return true;
-  if (entered !== false) {
+  if (entered !== SKIP) {
     if (entered !== node && isNode(entered)) {
       return replace(entered, parent, key, index, visitor);
     }
