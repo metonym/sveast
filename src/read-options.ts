@@ -9,14 +9,20 @@ import {
   svelte_options_reserved_tagname,
   svelte_options_unknown_attribute,
 } from "./errors";
-import type { Node } from "./types/estree";
+import type {
+  Expression,
+  Literal,
+  ObjectExpression,
+  Pattern,
+} from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
 type Options = AST.SvelteOptions;
 type CustomElement = NonNullable<Options["customElement"]>;
 type PropConfig = NonNullable<CustomElement["props"]>[string];
+type LiteralValue = Literal["value"];
 
-const NAMESPACES = new Map<unknown, Options["namespace"]>([
+const NAMESPACES = new Map<LiteralValue, Options["namespace"]>([
   ["html", "html"],
   ["svg", "svg"],
   ["mathml", "mathml"],
@@ -24,18 +30,43 @@ const NAMESPACES = new Map<unknown, Options["namespace"]>([
   ["http://www.w3.org/1998/Math/MathML", "mathml"],
 ]);
 
-const PROP_CHECKS = new Map<string, (value: unknown) => boolean>([
+/** Sets the field if `value` is one it allows; reports whether it did. */
+const PROP_READERS = new Map<
+  string,
+  (prop: PropConfig, value: LiteralValue) => boolean
+>([
   [
     "type",
-    (value) =>
-      value === "String" ||
-      value === "Number" ||
-      value === "Boolean" ||
-      value === "Array" ||
-      value === "Object",
+    (prop, value) => {
+      if (
+        value !== "String" &&
+        value !== "Number" &&
+        value !== "Boolean" &&
+        value !== "Array" &&
+        value !== "Object"
+      ) {
+        return false;
+      }
+      prop.type = value;
+      return true;
+    },
   ],
-  ["reflect", (value) => typeof value === "boolean"],
-  ["attribute", (value) => typeof value === "string"],
+  [
+    "reflect",
+    (prop, value) => {
+      if (typeof value !== "boolean") return false;
+      prop.reflect = value;
+      return true;
+    },
+  ],
+  [
+    "attribute",
+    (prop, value) => {
+      if (typeof value !== "string") return false;
+      prop.attribute = value;
+      return true;
+    },
+  ],
 ]);
 
 const NAME_CHAR =
@@ -101,15 +132,13 @@ const READERS = new Map<
 ]);
 
 export function readOptions(node: AST.SvelteOptionsRaw): Options {
-  const options: Options = {
-    start: node.start,
-    end: node.end,
-    attributes: node.attributes as AST.Attribute[],
-  };
+  const attributes: AST.Attribute[] = [];
+  const options: Options = { start: node.start, end: node.end, attributes };
   for (const attribute of node.attributes) {
     if (attribute.type !== "Attribute") {
       svelte_options_invalid_attribute(attribute);
     }
+    attributes.push(attribute);
     const read = READERS.get(attribute.name);
     if (!read) svelte_options_unknown_attribute(attribute, attribute.name);
     read(options, attribute);
@@ -118,7 +147,7 @@ export function readOptions(node: AST.SvelteOptionsRaw): Options {
 }
 
 /** A value given as text or a literal expression; `true` for a bare attribute, `null` otherwise. */
-function staticValue({ value }: AST.Attribute): unknown {
+function staticValue({ value }: AST.Attribute): LiteralValue {
   if (value === true) return true;
   const chunks = Array.isArray(value) ? value : [value];
   if (chunks.length === 0) return true;
@@ -128,7 +157,10 @@ function staticValue({ value }: AST.Attribute): unknown {
   return chunk.expression.type === "Literal" ? chunk.expression.value : null;
 }
 
-function checkName(node: AST.Attribute | null, name: unknown): void {
+function checkName(
+  node: AST.Attribute | null,
+  name: LiteralValue,
+): asserts name is string {
   if (typeof name !== "string") svelte_options_invalid_tagname(node);
   if (!name) return;
   if (!REGEX_CUSTOM_ELEMENT_NAME.test(name)) {
@@ -138,9 +170,12 @@ function checkName(node: AST.Attribute | null, name: unknown): void {
 }
 
 /** Non-computed `key: value` properties, first occurrence of each key; `fail` on anything else. */
-function propertiesOf(object: Node, fail: () => never): Map<string, Node> {
-  const properties = new Map<string, Node>();
-  for (const property of (object as { properties: Node[] }).properties) {
+function propertiesOf(
+  object: ObjectExpression,
+  fail: () => never,
+): Map<string, Expression | Pattern> {
+  const properties = new Map<string, Expression | Pattern>();
+  for (const property of object.properties) {
     if (
       property.type !== "Property" ||
       property.computed ||
@@ -168,7 +203,7 @@ function readCustomElement(
   if (chunk.type === "Text") {
     const tag = staticValue(attribute);
     checkName(attribute, tag);
-    return { tag: tag as string };
+    return { tag };
   }
 
   const { expression } = chunk;
@@ -180,10 +215,11 @@ function readCustomElement(
   const properties = propertiesOf(expression, fail);
   const customElement: CustomElement = {};
 
-  if (properties.has("tag")) {
-    const tag = (properties.get("tag") as { value?: unknown }).value;
+  const tagValue = properties.get("tag");
+  if (tagValue) {
+    const tag = tagValue.type === "Literal" ? tagValue.value : undefined;
     checkName(null, tag);
-    customElement.tag = tag as string;
+    customElement.tag = tag;
   }
 
   const props = properties.get("props");
@@ -192,7 +228,7 @@ function readCustomElement(
       svelte_options_invalid_customelement_props(attribute);
     if (props.type !== "ObjectExpression") failProps();
     customElement.props = {};
-    for (const property of (props as { properties: Node[] }).properties) {
+    for (const property of props.properties) {
       if (
         property.type !== "Property" ||
         property.computed ||
@@ -212,9 +248,9 @@ function readCustomElement(
         ) {
           failProps();
         }
-        const value = field.value.value;
-        if (!PROP_CHECKS.get(field.key.name)?.(value)) failProps();
-        (prop as Record<string, unknown>)[field.key.name] = value;
+        if (!PROP_READERS.get(field.key.name)?.(prop, field.value.value)) {
+          failProps();
+        }
       }
     }
   }
@@ -222,7 +258,7 @@ function readCustomElement(
   const shadow = properties.get("shadow");
   if (shadow) {
     if (shadow.type === "ObjectExpression") {
-      customElement.shadow = shadow as never;
+      customElement.shadow = shadow;
     } else if (
       shadow.type === "Literal" &&
       (shadow.value === "open" || shadow.value === "none")
@@ -234,7 +270,8 @@ function readCustomElement(
   }
 
   const extend = properties.get("extend");
-  if (extend) customElement.extend = extend as never;
+  // svelte assigns it unchecked; its analysis phase validates it
+  if (extend) customElement.extend = extend as CustomElement["extend"];
 
   return customElement;
 }

@@ -47,12 +47,13 @@ export function parse(source: string, options?: ParseOptions): AST.Root {
     block_unclosed(current);
   }
 
-  const optionsIndex = state.root.fragment.nodes.findIndex(
+  const { nodes: rootNodes } = state.root.fragment;
+  const optionsIndex = rootNodes.findIndex(
     (node) => node.type === "SvelteOptions",
   );
-  if (optionsIndex !== -1) {
-    const [node] = state.root.fragment.nodes.splice(optionsIndex, 1);
-    const raw = node as AST.SvelteOptionsRaw;
+  const raw = rootNodes[optionsIndex];
+  if (raw?.type === "SvelteOptions") {
+    rootNodes.splice(optionsIndex, 1);
     state.root.options = readOptions(raw);
     const { nodes } = raw.fragment;
     if (nodes.length > 0) {

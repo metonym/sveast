@@ -24,7 +24,7 @@ import {
 } from "./errors";
 import { readExpression } from "./expression";
 import { decodeCharacterReferences } from "./html-entities";
-import type { ParseError } from "./parse-error";
+import { ParseError } from "./parse-error";
 import { readScript } from "./script";
 import {
   isWhitespace,
@@ -32,6 +32,7 @@ import {
   type TemplateParserState,
 } from "./state";
 import { readStyle } from "./style";
+import type { Expression, SourceLocation } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
 const REGEX_CLOSING_TEXTAREA = /<\/textarea(\s[^>]*)?>/iy;
@@ -41,9 +42,12 @@ const REGEX_NAMESPACED_NAME =
 const REGEX_CUSTOM_ELEMENT_NAME =
   /^[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9.\-_\u00B7\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u037D\u037F-\u1FFF\u200C-\u200D\u203F-\u2040\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u{10000}-\u{EFFFF}]*)?$/u;
 
-// biome-ignore format: kept on one line so the lint suppression below stays adjacent to it
-// biome-ignore lint/suspicious/noMisleadingCharacterClass: ZWNJ and ZWJ are allowed in identifiers on their own
-const REGEX_COMPONENT_NAME = /^(?:\p{Lu}[$‌‍\p{ID_Continue}.]*|\p{ID_Start}[$‌‍\p{ID_Continue}]*(?:\.[$‌‍\p{ID_Continue}]+)+)$/u;
+// ZWNJ and ZWJ are allowed in identifiers on their own
+const ID_JOINERS = "\\u200C\\u200D";
+const REGEX_COMPONENT_NAME = new RegExp(
+  `^(?:\\p{Lu}[$${ID_JOINERS}\\p{ID_Continue}.]*|\\p{ID_Start}[$${ID_JOINERS}\\p{ID_Continue}]*(?:\\.[$${ID_JOINERS}\\p{ID_Continue}]+)+)$`,
+  "u",
+);
 
 const VOID_ELEMENTS = new Set(
   "area base br col command embed hr img input keygen link meta param source track wbr".split(
@@ -74,7 +78,7 @@ type AttributeLike =
 
 const META_TAGS = new Map<string, [type: ElementType, rootOnly: boolean]>([
   ["svelte:head", ["SvelteHead", true]],
-  ["svelte:options", ["SvelteOptions" as ElementType, true]],
+  ["svelte:options", ["SvelteOptions", true]],
   ["svelte:window", ["SvelteWindow", true]],
   ["svelte:document", ["SvelteDocument", true]],
   ["svelte:body", ["SvelteBody", true]],
@@ -99,20 +103,20 @@ const isQuote = (code: number) =>
   code === DOUBLE_QUOTE || code === SINGLE_QUOTE;
 
 /** End of a tag or attribute name: stops at whitespace, `/` and `>`, and for attributes at quotes and `=`. */
-function nameEnd(source: string, from: number, attribute: boolean): number {
+function nameEnd(source: string, from: number, isAttribute: boolean): number {
   let i = from;
   for (; i < source.length; i++) {
     const code = source.charCodeAt(i);
     if (isWhitespace(code) || code === SLASH || code === GT) break;
-    if (attribute && (isQuote(code) || code === EQUALS)) break;
+    if (isAttribute && (isQuote(code) || code === EQUALS)) break;
   }
   return i;
 }
 
-function readName(state: TemplateParserState, attribute: boolean) {
+function readName(state: TemplateParserState, isAttribute: boolean) {
   const start = state.index;
   if (start >= state.source.length) unexpected_eof(state.source.length);
-  const end = nameEnd(state.source, start, attribute);
+  const end = nameEnd(state.source, start, isAttribute);
   state.index = end;
   return {
     name: state.source.slice(start, end),
@@ -122,8 +126,12 @@ function readName(state: TemplateParserState, attribute: boolean) {
   };
 }
 
-const text = (start: number, end: number, raw: string, data = raw) =>
-  ({ start, end, type: "Text", raw, data }) as AST.Text;
+const text = (
+  start: number,
+  end: number,
+  raw: string,
+  data = raw,
+): AST.Text => ({ start, end, type: "Text", raw, data });
 
 function isVoid(name: string): boolean {
   return (
@@ -172,13 +180,12 @@ function elementType(
   if (meta) return meta[0];
   if (isComponent) return "Component";
   if (name === "title") {
-    const inHead = hasAncestor(state.stack, ({ type }) =>
-      type === "SvelteHead"
-        ? true
-        : type === "RegularElement" || type === "Component"
-          ? false
-          : undefined,
-    );
+    const inHead = hasAncestor(state.stack, ({ type }) => {
+      if (type === "SvelteHead") return true;
+      return type === "RegularElement" || type === "Component"
+        ? false
+        : undefined;
+    });
     if (inHead) return "TitleElement";
   }
   if (name === "slot") {
@@ -215,7 +222,7 @@ function closeElement(state: TemplateParserState, start: number): void {
   if (isVoid(name)) void_element_invalid_content(start);
 
   let open = state.current();
-  while ((open as { name?: string }).name !== name) {
+  while (!("name" in open) || open.name !== name) {
     if (open.type !== "RegularElement") {
       const autoClosed = state.lastAutoClosedTag;
       if (autoClosed?.tag === name) {
@@ -233,6 +240,15 @@ function closeElement(state: TemplateParserState, start: number): void {
   if (state.stack.length < (state.lastAutoClosedTag?.depth ?? 0)) {
     state.lastAutoClosedTag = undefined;
   }
+}
+
+/** Svelte's `type` and `name` for a tag always go together, which TypeScript can't see. */
+function createElement(
+  type: ElementType,
+  start: number,
+  name: string,
+): AST.ElementLike {
+  return { type, start, end: -1, name } as AST.ElementLike;
 }
 
 function openElement(state: TemplateParserState, start: number): void {
@@ -253,13 +269,12 @@ function openElement(state: TemplateParserState, start: number): void {
     state.metaTags.add(name);
   }
 
-  const element = {
-    type: elementType(state, name, isComponent),
+  const element = createElement(
+    elementType(state, name, isComponent),
     start,
-    end: -1,
     name,
-  } as AST.ElementLike;
-  if (state.loc) element.name_loc = tag.loc as never;
+  );
+  if (state.loc) element.name_loc = tag.loc;
   element.attributes = [];
   element.fragment = { type: "Fragment", nodes: [] };
 
@@ -281,7 +296,14 @@ function openElement(state: TemplateParserState, start: number): void {
 
   const topLevel =
     (name === "script" || name === "style") && state.current().type === "Root";
-  readAttributes(state, element.attributes as AttributeLike[], topLevel);
+  if (topLevel) {
+    const attributes: AST.Attribute[] = [];
+    element.attributes = attributes;
+    readAttributes(state, attributes, readStaticAttribute);
+    readTopLevelBlock(state, element, start, attributes);
+    return;
+  }
+  readAttributes(state, element.attributes, readAttribute);
 
   if (element.type === "SvelteComponent") {
     const definition = takeThis(element);
@@ -296,12 +318,7 @@ function openElement(state: TemplateParserState, start: number): void {
     if (definition.value === true) svelte_element_missing_this(definition);
     element.tag = isExpressionValue(definition.value)
       ? expressionOf(definition.value)
-      : literalTag((definition.value as Chunk[])[0]);
-  }
-
-  if (topLevel) {
-    readTopLevelBlock(state, element, start);
-    return;
+      : literalTag(definition.value[0]);
   }
 
   if (!state.eat("/") && !isVoid(name)) {
@@ -319,7 +336,7 @@ function openElement(state: TemplateParserState, start: number): void {
     } else if (name === "script" || name === "style") {
       element.fragment.nodes.push(readRawText(state, `</${name}>`));
     } else {
-      state.open(element as StackNode & AST.ElementLike, element.fragment);
+      state.open(element, element.fragment);
       return;
     }
   } else {
@@ -342,14 +359,14 @@ function readTopLevelBlock(
   state: TemplateParserState,
   element: AST.ElementLike,
   start: number,
+  attributes: AST.Attribute[],
 ): void {
   state.eat(">", true);
-  const attributes = element.attributes as AST.Attribute[];
   const comment = commentBefore(state.root.fragment.nodes, start);
 
   if (element.name === "style") {
     const css = readStyle(state, start, attributes);
-    (css.content as { comment: AST.Comment | null }).comment = comment;
+    css.content.comment = comment;
     if (state.root.css) style_duplicate(start);
     state.root.css = css;
     return;
@@ -379,26 +396,28 @@ function commentBefore(
   return null;
 }
 
-function takeThis(element: AST.ElementLike): AST.Attribute {
-  const attributes = element.attributes as AST.Attribute[];
-  const index = attributes.findIndex(
-    (a) => a.type === "Attribute" && a.name === "this",
-  );
-  return (index === -1 ? undefined : attributes.splice(index, 1)[0]) as never;
+const isThisAttribute = (node: AttributeLike): node is AST.Attribute =>
+  node.type === "Attribute" && node.name === "this";
+
+function takeThis(element: AST.ElementLike): AST.Attribute | undefined {
+  const found = element.attributes.find(isThisAttribute);
+  if (found) element.attributes.splice(element.attributes.indexOf(found), 1);
+  return found;
 }
 
-function isExpressionValue(value: AST.Attribute["value"]): boolean {
+function isExpressionValue(
+  value: AST.Attribute["value"],
+): value is AST.ExpressionTag | [AST.ExpressionTag] {
   if (value === true) return false;
   if (!Array.isArray(value)) return true;
   return value.length === 1 && value[0].type === "ExpressionTag";
 }
 
-function expressionOf(value: AST.Attribute["value"]) {
-  return ((Array.isArray(value) ? value[0] : value) as AST.ExpressionTag)
-    .expression;
+function expressionOf(value: AST.ExpressionTag | [AST.ExpressionTag]) {
+  return (Array.isArray(value) ? value[0] : value).expression;
 }
 
-function literalTag(chunk: Chunk) {
+function literalTag(chunk: Chunk): Expression {
   if (chunk.type !== "Text") return chunk.expression;
   return {
     type: "Literal",
@@ -406,53 +425,52 @@ function literalTag(chunk: Chunk) {
     raw: `'${chunk.raw}'`,
     start: chunk.start,
     end: chunk.end,
-  } as never;
+  };
 }
 
 /** Reads attributes up to `>` or `/>`, rejecting a repeated name as svelte does. */
-function readAttributes(
+function readAttributes<T extends AttributeLike>(
   state: TemplateParserState,
-  into: AttributeLike[],
-  isStatic: boolean,
+  into: T[],
+  read: (state: TemplateParserState) => T | null,
 ): void {
   const seen = new Set<string>();
   for (;;) {
-    const attribute = isStatic
-      ? readStaticAttribute(state)
-      : readAttribute(state);
-    if (!attribute) return;
-    const { type } = attribute;
+    const parsed = read(state);
+    if (!parsed) return;
+    const { type } = parsed;
     if (
       type === "Attribute" ||
       type === "BindDirective" ||
       type === "StyleDirective" ||
       type === "ClassDirective"
     ) {
-      const key = `${type === "BindDirective" ? "Attribute" : type}${attribute.name}`;
-      if (seen.has(key)) attribute_duplicate(attribute);
-      if (attribute.name !== "this") seen.add(key);
+      const key = `${type === "BindDirective" ? "Attribute" : type}${parsed.name}`;
+      if (seen.has(key)) attribute_duplicate(parsed);
+      if (parsed.name !== "this") seen.add(key);
     }
-    into.push(attribute);
+    into.push(parsed);
     state.allowWhitespace();
   }
 }
 
-function attribute(
+function createAttribute(
   state: TemplateParserState,
   name: { name: string; loc?: AST.Attribute["name_loc"] },
   start: number,
   end: number,
   value: AST.Attribute["value"],
 ): AST.Attribute {
-  const node = {
-    type: "Attribute",
-    start,
-    end,
-    name: name.name,
-  } as AST.Attribute;
-  if (state.loc) node.name_loc = name.loc;
-  node.value = value;
-  return node;
+  return state.loc
+    ? {
+        type: "Attribute",
+        start,
+        end,
+        name: name.name,
+        name_loc: name.loc,
+        value,
+      }
+    : { type: "Attribute", start, end, name: name.name, value };
 }
 
 function rejectQuote(state: TemplateParserState): void {
@@ -502,7 +520,7 @@ function readStaticAttribute(state: TemplateParserState): AST.Attribute | null {
   }
 
   rejectQuote(state);
-  return attribute(state, name, start, state.index, value);
+  return createAttribute(state, name, start, state.index, value);
 }
 
 function readJsComment(state: TemplateParserState): boolean {
@@ -512,15 +530,15 @@ function readJsComment(state: TemplateParserState): boolean {
   state.index += 2;
   const value = state.readUntil(block ? "*/" : "\n");
   if (block) state.eat("*/");
-  const comment = {
+  const comment: AST.JSComment = {
     type: block ? "Block" : "Line",
     start,
     end: state.index,
     value,
   };
   const loc = state.sourceLocation(start, state.index);
-  if (loc) (comment as AST.JSComment).loc = loc;
-  state.root.comments.push(comment as never);
+  if (loc) comment.loc = loc;
+  state.root.comments.push(comment);
   return true;
 }
 
@@ -553,7 +571,7 @@ function readAttribute(state: TemplateParserState): AttributeLike | null {
     colon > 0 ? DIRECTIVES.get(name.name.slice(0, colon)) : undefined;
   return type
     ? directive(state, type, name, colon, start, end, value)
-    : attribute(state, name, start, end, value);
+    : createAttribute(state, name, start, end, value);
 }
 
 function readBraceAttribute(
@@ -575,19 +593,44 @@ function readBraceAttribute(
   const id = state.readIdentifierName();
   if (id.name === "") attribute_empty_shorthand(start);
   state.eatClosingBrace();
-  const value = {
+  const value: AST.ExpressionTag = {
     type: "ExpressionTag",
     start: id.start,
     end: id.end,
     expression: id,
-  } as AST.ExpressionTag;
-  return attribute(state, id as never, start, state.index, value);
+  };
+  return createAttribute(state, id, start, state.index, value);
+}
+
+/**
+ * What svelte builds for every directive. Its published types leave
+ * `modifiers` off some and give `class:` a literal `name`, so the result is
+ * cast to `AST.Directive` once, at the end.
+ */
+interface DirectiveFields {
+  start: number;
+  end: number;
+  type: AST.Directive["type"];
+  name: string;
+  name_loc?: SourceLocation;
+  expression?: Expression | null;
+  modifiers?: string[];
+  value?: true | AST.ExpressionTag | Chunk[];
+  intro?: boolean;
+  outro?: boolean;
+}
+
+function firstChunk(
+  value: true | AST.ExpressionTag | Chunk[],
+): Chunk | undefined {
+  if (value === true) return undefined;
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function directive(
   state: TemplateParserState,
   type: AST.Directive["type"],
-  tag: { name: string; loc?: unknown },
+  tag: { name: string; loc?: SourceLocation },
   colon: number,
   start: number,
   end: number,
@@ -598,29 +641,26 @@ function directive(
     directive_missing_name({ start, end: start + colon + 1 }, tag.name);
   }
 
-  const node = { start, end, type, name } as AST.Directive;
-  if (state.loc) node.name_loc = tag.loc as never;
+  const node: DirectiveFields = { start, end, type, name };
+  if (state.loc) node.name_loc = tag.loc;
 
-  if (node.type === "StyleDirective") {
-    node.modifiers = modifiers as AST.StyleDirective["modifiers"];
+  if (type === "StyleDirective") {
+    node.modifiers = modifiers;
     node.value = value;
-    return node;
+    return node as AST.Directive;
   }
 
-  const first =
-    value === true ? undefined : Array.isArray(value) ? value[0] : value;
+  const first = firstChunk(value);
   if (
     first &&
     ((Array.isArray(value) && value.length > 1) || first.type === "Text")
   ) {
     directive_invalid_value(first.start);
   }
-  const target = node as { expression: unknown; modifiers: string[] };
-  target.expression =
-    (first as AST.ExpressionTag | undefined)?.expression ?? null;
-  target.modifiers = modifiers;
+  node.expression = first?.expression ?? null;
+  node.modifiers = modifiers;
 
-  if (node.type === "TransitionDirective") {
+  if (type === "TransitionDirective") {
     const direction = tag.name.slice(0, colon);
     node.intro = direction !== "out";
     node.outro = direction !== "in";
@@ -628,16 +668,16 @@ function directive(
 
   if (
     (type === "BindDirective" || type === "ClassDirective") &&
-    !target.expression
+    !node.expression
   ) {
-    target.expression = {
+    node.expression = {
       start: start + colon + 1,
       end,
       type: "Identifier",
       name,
-    } as never;
+    };
   }
-  return node;
+  return node as AST.Directive;
 }
 
 /** `"..."`, `'...'` or an unquoted value, as text and `{expression}` chunks. */
@@ -666,9 +706,10 @@ function readAttributeValue(
     );
   } catch (error) {
     // `<a b={{c:1} />`: acorn read `/>` as the start of a regex.
-    const at = (error as ParseError).position?.[0];
+    const at = error instanceof ParseError ? error.position?.[0] : undefined;
     if (
-      (error as ParseError).code === "js_parse_error" &&
+      error instanceof ParseError &&
+      error.code === "js_parse_error" &&
       at !== undefined &&
       state.source.startsWith("/>", at - 1)
     ) {
@@ -770,7 +811,7 @@ function readSequence(
       start: at,
       end: state.index,
       expression,
-    } as AST.ExpressionTag);
+    });
     textStart = state.index;
   }
 

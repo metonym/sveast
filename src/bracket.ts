@@ -27,7 +27,7 @@ export function matchBracket(
     } else if (Object.hasOwn(brackets, char)) {
       stack.push(char);
     } else if (close.includes(char)) {
-      const expected = brackets[stack.pop() as string];
+      const expected = brackets[stack.pop() ?? ""];
       if (char !== expected) expected_token(i - 1, expected);
       if (stack.length === 0) return i;
     }

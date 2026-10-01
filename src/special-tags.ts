@@ -8,13 +8,24 @@ import {
 import { readExpression } from "./expression";
 import type { TemplateParserState } from "./state";
 import type {
+  Expression,
   Identifier,
-  SimpleCallExpression,
+  Pattern,
   VariableDeclarator,
 } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
 const REGEX_WHITESPACE_THEN_CLOSING_BRACE = /\s*}/y;
+
+function isCall(
+  expression: Expression,
+): expression is AST.RenderTag["expression"] {
+  return (
+    expression.type === "CallExpression" ||
+    (expression.type === "ChainExpression" &&
+      expression.expression.type === "CallExpression")
+  );
+}
 
 export function readSpecialTag(
   state: TemplateParserState,
@@ -26,19 +37,16 @@ export function readSpecialTag(
     state.eatClosingBrace();
     state.append({ type: "HtmlTag", start, end: state.index, expression });
   } else if (state.eat("debug")) {
-    let identifiers: Identifier[] = [];
+    const identifiers: Identifier[] = [];
     if (!state.read(REGEX_WHITESPACE_THEN_CLOSING_BRACE)) {
       const expression = readExpression(state);
-      identifiers =
+      const nodes =
         expression.type === "SequenceExpression"
-          ? (expression.expressions as Identifier[])
-          : [expression as Identifier];
-      for (const node of identifiers) {
-        if (node.type !== "Identifier") {
-          debug_tag_invalid_arguments(
-            (node as unknown as { start: number }).start,
-          );
-        }
+          ? expression.expressions
+          : [expression];
+      for (const node of nodes) {
+        if (node.type !== "Identifier") debug_tag_invalid_arguments(node.start);
+        identifiers.push(node);
       }
       state.eatClosingBrace();
     }
@@ -55,21 +63,19 @@ export function readSpecialTag(
     const declaratorEnd = state.index;
     if (
       init.type === "SequenceExpression" &&
-      !state.source
-        .substring(expressionStart, (init as { start?: number }).start)
-        .includes("(")
+      !state.source.slice(expressionStart, init.start).includes("(")
     ) {
-      const_tag_invalid_expression(init as never);
+      const_tag_invalid_expression(init);
     }
     state.eatClosingBrace();
 
-    const declarator = {
+    const declarator: VariableDeclarator & { id: Pattern; init: Expression } = {
       type: "VariableDeclarator",
       id,
       init,
-      start: (id as unknown as { start: number }).start,
+      start: id.start,
       end: declaratorEnd,
-    } as unknown as VariableDeclarator;
+    };
 
     state.append({
       type: "ConstTag",
@@ -81,24 +87,18 @@ export function readSpecialTag(
         declarations: [declarator],
         start: start + 2,
         end: state.index - 1,
-      } as unknown as AST.ConstTag["declaration"],
+      },
     });
   } else if (state.eat("render")) {
     state.requireWhitespace();
     const expression = readExpression(state);
-    if (
-      expression.type !== "CallExpression" &&
-      (expression.type !== "ChainExpression" ||
-        expression.expression.type !== "CallExpression")
-    ) {
-      render_tag_invalid_expression(expression as never);
-    }
+    if (!isCall(expression)) render_tag_invalid_expression(expression);
     state.eatClosingBrace();
     state.append({
       type: "RenderTag",
       start,
       end: state.index,
-      expression: expression as unknown as SimpleCallExpression,
+      expression,
     });
   } else {
     expected_tag(state.index);
