@@ -91,8 +91,9 @@ export const CONSTRUCTS: Construct[] = [
       repeatTo(
         bytes,
         () =>
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal in the component
-          "<p>{a(b)} {c ? d : e} {f.map((g) => g.h)} {`t-${i}`} {a + b * c} {x?.y} {(z)} {[1, 2]} {{ k: v }.k} {i++}</p>\n",
+          // the component holds a template literal; split so it isn't read as a placeholder
+          "<p>{a(b)} {c ? d : e} {f.map((g) => g.h)} {`t-$" +
+          "{i}`} {a + b * c} {x?.y} {(z)} {[1, 2]} {{ k: v }.k} {i++}</p>\n",
       ),
   },
   {

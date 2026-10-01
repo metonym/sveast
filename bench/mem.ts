@@ -25,29 +25,30 @@ if (name === undefined) {
         { encoding: "utf8" },
       );
       if (child.status !== 0) throw new Error(child.stderr);
-      return JSON.parse(child.stdout).mb as number;
+      const { mb }: { mb: number } = JSON.parse(child.stdout);
+      return mb;
     });
     const mb = readings.sort((a, b) => a - b)[PROCESSES >> 1];
     console.log(`${parser.padEnd(20)}${mb.toFixed(1).padStart(8)} MB retained`);
   }
 } else {
   const sources: string[] = JSON.parse(readFileSync(corpusFile, "utf8"));
-  const parse: (source: string) => unknown = name.startsWith("sveast")
+  const parse: (source: string) => object = name.startsWith("sveast")
     ? await import("sveast").then(
-        ({ parse }) =>
+        ({ parse: sveastParse }) =>
           (source: string) =>
-            parse(source, { loc: name.includes("loc") }),
+            sveastParse(source, { loc: name.includes("loc") }),
       )
     : await import("svelte/compiler").then(
-        ({ parse }) =>
+        ({ parse: svelteParse }) =>
           (source: string) =>
-            parse(source, { modern: true }),
+            svelteParse(source, { modern: true }),
       );
   for (const source of sources.slice(0, 50)) parse(source);
 
   Bun.gc(true);
   const before = heapStats().heapSize;
-  const asts: unknown[] = [];
+  const asts: object[] = [];
   for (let i = 0; i < COPIES; i++) {
     for (const source of sources) asts.push(parse(source));
   }

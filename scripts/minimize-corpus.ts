@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $, Glob } from "bun";
 import { parse } from "../src/index";
+import { byCodeUnit, errorCode, isRecord } from "./shared";
 
 const ROOT = join(import.meta.dir, "..");
 const CORPUS = join(ROOT, "tests/corpus");
@@ -14,7 +15,7 @@ writeFileSync(
   `import { readFileSync } from "node:fs";
 import { parse } from ${JSON.stringify(join(ROOT, "src/index.ts"))};
 test("parse", () => {
-  const source = readFileSync(process.env.FILE as string, "utf8");
+  const source = readFileSync(process.env.FILE ?? "", "utf8");
   for (const options of [undefined, { loc: true }, { css: false }]) {
     try {
       parse(source, options);
@@ -26,7 +27,7 @@ test("parse", () => {
 
 const files: string[] = [];
 for await (const f of new Glob("**/*.svelte").scan(CORPUS)) files.push(f);
-files.sort();
+files.sort(byCodeUnit);
 const FUZZ_FIXTURE = /(^|\/)fuzz-/;
 const alwaysKeep = (f: string) =>
   f.startsWith("carbon/") || FUZZ_FIXTURE.test(f);
@@ -53,9 +54,9 @@ function shapes(source: string): Set<string> {
   const out = new Set<string>();
   try {
     const visit = (node: unknown) => {
-      if (!node || typeof node !== "object") return;
       if (Array.isArray(node)) return node.forEach(visit);
-      const record = node as Record<string, unknown>;
+      if (!isRecord(node)) return;
+      const record = node;
       const type = typeof record.type === "string" ? record.type : "?";
       out.add(`node:${type}`);
       for (const [key, value] of Object.entries(record)) {
@@ -66,7 +67,7 @@ function shapes(source: string): Set<string> {
     };
     visit(parse(source, { loc: true }));
   } catch (error) {
-    out.add(`error:${(error as { code?: string }).code}`);
+    out.add(`error:${errorCode(error)}`);
   }
   return out;
 }

@@ -281,7 +281,7 @@ ${estree}`,
 
 const types = read("node_modules/svelte/types/index.d.ts");
 const compiler = block(types, "declare module 'svelte/compiler' {");
-const estreeImport = compiler.match(/import type \{([^}]+)\} from 'estree';/);
+const estreeImport = /import type \{([^}]+)\} from 'estree';/.exec(compiler);
 if (!estreeImport) throw new Error("estree import not found");
 
 let ast = block(compiler, "\texport namespace AST {");
@@ -329,7 +329,7 @@ for (const directive of [
   ast = `${ast.slice(0, end)}\n\t\t\t/** Parsed for every directive, e.g. \`use:x|y\`; svelte's types declare it only on some. */\n\t\t\tmodifiers: string[];${ast.slice(end)}`;
 }
 const css = block(compiler, "\tnamespace _CSS {");
-const namespace = compiler.match(/\ttype Namespace = [^;]+;/)?.[0];
+const namespace = /\ttype Namespace = [^;]+;/.exec(compiler)?.[0];
 if (!namespace) throw new Error("Namespace type not found");
 
 const dedent = (text: string) => text.replace(/^\t/gm, "");

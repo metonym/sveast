@@ -24,11 +24,12 @@ export const SNIPPETS: Record<string, string> = {
   interfaces:
     "interface A<T> extends B<T>, C.D { a?: string; readonly b: number; [k: string]: any; m?<U>(x: U): void; (x): y; new (): Z; get g(): T; set s(v: T); new: boolean }",
   "type aliases":
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal type, not a mistaken placeholder
-    'type A = { a: 1 } | "b" | `x${Y}` | [a: string, b?: number, ...c: D[]] | (() => void) | keyof T | T[K] | typeof import("x").Y;',
+    // template literal types; split so they aren't read as placeholders
+    'type A = { a: 1 } | "b" | `x$' +
+    '{Y}` | [a: string, b?: number, ...c: D[]] | (() => void) | keyof T | T[K] | typeof import("x").Y;',
   "mapped and conditional types":
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal type, not a mistaken placeholder
-    "type M = { readonly [K in keyof T as `get${K}`]-?: T[K] }; type C<T> = T extends infer U extends string ? U : never;",
+    "type M = { readonly [K in keyof T as `get$" +
+    "{K}`]-?: T[K] }; type C<T> = T extends infer U extends string ? U : never;",
   "type operators":
     "let a: unique symbol; let b: readonly string[]; let c: abstract new () => T; let d: -1 | 1n | true | null | undefined | this;",
   "import and export forms":

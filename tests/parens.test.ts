@@ -1,13 +1,13 @@
 import { parse } from "sveast";
+import { isRecord } from "../scripts/shared";
 
-function parenthesizedCount(root: unknown): number {
+function parenthesizedCount(root: object): number {
   let count = 0;
   (function walk(node: unknown) {
-    if (!node || typeof node !== "object") return;
-    const n = node as { type?: string; [key: string]: unknown };
-    if (n.type === "ParenthesizedExpression") count++;
-    for (const key in n) {
-      const value = n[key];
+    if (!isRecord(node)) return;
+    if (node.type === "ParenthesizedExpression") count++;
+    for (const key in node) {
+      const value = node[key];
       if (Array.isArray(value)) value.forEach(walk);
       else if (value && typeof value === "object") walk(value);
     }
@@ -15,13 +15,10 @@ function parenthesizedCount(root: unknown): number {
   return count;
 }
 
-function expressions(source: string): unknown[] {
-  const root = parse(source) as {
-    fragment: { nodes: Array<{ type: string; expression?: unknown }> };
-  };
-  return root.fragment.nodes
-    .filter((node) => node.type === "ExpressionTag")
-    .map((node) => node.expression);
+function expressions(source: string) {
+  return parse(source).fragment.nodes.flatMap((node) =>
+    node.type === "ExpressionTag" ? [node.expression] : [],
+  );
 }
 
 describe("ParenthesizedExpression unwrapping", () => {
@@ -30,16 +27,14 @@ describe("ParenthesizedExpression unwrapping", () => {
     const nodes = expressions(source);
     expect(nodes).toHaveLength(5);
     expect(parenthesizedCount(nodes)).toBe(0);
-    expect((nodes[0] as { type: string }).type).toBe("Identifier");
-    expect((nodes[2] as { body: { type: string } }).body.type).toBe(
-      "Identifier",
-    );
+    expect(nodes[0]).toMatchObject({ type: "Identifier" });
+    expect(nodes[2]).toMatchObject({ body: { type: "Identifier" } });
   });
 
   test("leaves calls and arrows alone when there is nothing to unwrap", () => {
     const nodes = expressions("{f(a)}{(a) => a + 1}{new X(1)}");
     expect(parenthesizedCount(nodes)).toBe(0);
-    expect(nodes.map((node) => (node as { type: string }).type)).toEqual([
+    expect(nodes.map((node) => node.type)).toEqual([
       "CallExpression",
       "ArrowFunctionExpression",
       "NewExpression",

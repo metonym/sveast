@@ -1,6 +1,12 @@
 import { parse as svelteParse } from "svelte/compiler";
 import { parse } from "../src/index";
-import { firstDifference } from "./shared";
+import {
+  errorCode,
+  errorMessage,
+  firstDifference,
+  isRecord,
+  type Json,
+} from "./shared";
 
 async function readStdin(): Promise<string> {
   const chunks: Uint8Array[] = [];
@@ -13,52 +19,58 @@ const source = await readStdin();
 if (process.env.SVEAST_FUZZ_FORCE_CRASH === "1") process.exit(1);
 
 type Outcome =
-  | { ok: true; ast: unknown }
+  | { ok: true; ast: object }
   | { ok: false; code: string; position?: number[]; message: string };
 
-function run(parser: () => unknown): Outcome {
+function run(parser: () => object): Outcome {
   try {
     return { ok: true, ast: parser() };
   } catch (error) {
-    const { code, position, message } = error as {
-      code?: string;
-      position?: number[];
-      message: string;
+    const position =
+      isRecord(error) && Array.isArray(error.position)
+        ? error.position
+        : undefined;
+    return {
+      ok: false,
+      code: errorCode(error) ?? "(none)",
+      position,
+      message: errorMessage(error),
     };
-    return { ok: false, code: code ?? "(none)", position, message };
   }
 }
 
-function plain(value: unknown, dropLoc: boolean): unknown {
+function plain(value: object, dropLoc: boolean): Json {
   return JSON.parse(
     JSON.stringify(value, (key, item) => {
-      if (dropLoc && (key === "loc" || key === "name_loc")) return undefined;
-      return typeof item === "bigint" ? `${item}n` : item;
+      if (typeof item === "bigint") return `${item}n`;
+      return dropLoc && (key === "loc" || key === "name_loc")
+        ? undefined
+        : item;
     }),
   );
 }
 
-function compare(ours: Outcome, svelte: Outcome, dropLoc: boolean) {
-  if (ours.ok && svelte.ok) {
+function compare(ours: Outcome, theirs: Outcome, dropLoc: boolean) {
+  if (ours.ok) {
+    if (!theirs.ok) return `accepts what svelte rejects (${theirs.code})`;
     const path = firstDifference(
       plain(ours.ast, dropLoc),
-      plain(svelte.ast, dropLoc),
+      plain(theirs.ast, dropLoc),
     );
     return path === null
       ? null
       : `ast differs at ${path.replace(/\.\d+/g, "[]") || "(root)"}`;
   }
-  if (!ours.ok && !svelte.ok) {
-    if (ours.code !== svelte.code) {
-      return `error ${ours.code} where svelte has ${svelte.code}`;
-    }
-    if (String(ours.position) !== String(svelte.position)) {
-      return `error ${ours.code} at a different position`;
-    }
-    return null;
+  if (theirs.ok) {
+    return `rejects (${ours.code}: ${ours.message.split("\n")[0]})`;
   }
-  if (!ours.ok) return `rejects (${ours.code}: ${ours.message.split("\n")[0]})`;
-  return `accepts what svelte rejects (${(svelte as { code: string }).code})`;
+  if (ours.code !== theirs.code) {
+    return `error ${ours.code} where svelte has ${theirs.code}`;
+  }
+  if (String(ours.position) !== String(theirs.position)) {
+    return `error ${ours.code} at a different position`;
+  }
+  return null;
 }
 
 const svelte = run(() => svelteParse(source, { modern: true }));
