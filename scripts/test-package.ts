@@ -1,7 +1,10 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { $ } from "bun";
+
+const RELATIVE_IMPORT = /["']\.\/([^"']+\.js)["']/g;
 
 const root = resolve(import.meta.dir, "..");
 const dir = await mkdtemp(join(tmpdir(), "sveast-package-"));
@@ -9,15 +12,30 @@ const dir = await mkdtemp(join(tmpdir(), "sveast-package-"));
 try {
   await $`bun run build`.cwd(root).quiet();
 
-  const bundle = await readFile(join(root, "dist/index.js"), "utf8");
-  for (const pattern of [
-    /["']node:/,
-    /\brequire\(/,
-    /\bprocess\./,
-    /\bBuffer\b/,
-  ]) {
-    if (pattern.test(bundle))
-      throw new Error(`dist/index.js matches ${pattern}`);
+  const dist = join(root, "dist");
+  const bundles = (await readdir(dist)).filter((file) => file.endsWith(".js"));
+  for (const file of bundles) {
+    const bundle = readFileSync(join(dist, file), "utf8");
+    for (const pattern of [
+      /["']node:/,
+      /\brequire\(/,
+      /\bprocess\./,
+      /\bBuffer\b/,
+    ]) {
+      if (pattern.test(bundle))
+        throw new Error(`dist/${file} matches ${pattern}`);
+    }
+  }
+
+  const reached = new Set(["parse-module.js"]);
+  for (const file of reached) {
+    const code = readFileSync(join(dist, file), "utf8");
+    for (const [, imported] of code.matchAll(RELATIVE_IMPORT)) {
+      reached.add(imported);
+    }
+  }
+  if (reached.has("parse.js")) {
+    throw new Error("dist/parse-module.js imports the template parser");
   }
 
   const types = await readFile(join(root, "dist/index.d.ts"), "utf8");

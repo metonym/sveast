@@ -12,7 +12,7 @@ bun run test          # svelte/compiler and acorn-typescript parity, API, fuzzer
 bun run test:package  # build, pack, install, and use it as a consumer would
 bun run typecheck
 bun run lint          # biome; `bun run lint:fix` formats and applies fixes
-bun run build         # dist/: minified ESM with acorn bundled, bundled index.d.ts, slimmed package.json
+bun run build         # dist/: minified ESM with acorn bundled, split for consumers' bundlers, bundled index.d.ts, slimmed package.json
 bun run fuzz          # differential fuzzer against svelte/compiler
 ```
 
@@ -33,7 +33,7 @@ Three files or directories are generated from upstream sources. Don't edit them 
 | `src/entities.ts` | `bun scripts/generate-entities.ts` | The HTML standard's [`entities.json`](https://html.spec.whatwg.org/entities.json), the named character references |
 | `src/types/` | `bun scripts/generate-types.ts` | svelte's published `AST` types and `@types/estree`, so the package has no type dependencies |
 
-The build (`scripts/build.ts`) bundles acorn, and `scripts/shrink-parser.ts` cuts its size: it stubs acorn's regex validator and shortens the TypeScript plugin's `ts*` member names. Both fail the build if the source they rewrite changes shape.
+The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` only re-exports, `parse-module.js` holds `parseModule`, `parse.js` the template parser, and a shared chunk acorn, the TypeScript plugin and the code both need. A consumer's bundler can then load `parseModule` without the template parser (`"sideEffects": false` lets it drop the unused re-export). `scripts/shrink-parser.ts` cuts its size: it stubs acorn's regex validator and shortens the TypeScript plugin's `ts*` member names. Both fail the build if the source they rewrite changes shape.
 
 ## Rules every change must keep
 

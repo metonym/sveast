@@ -2,6 +2,8 @@ import { parseProgram } from "./acorn-bridge";
 import { setSource } from "./locator";
 import type { Program } from "./types/estree";
 
+export { ParseError } from "./parse-error";
+
 /**
  * Parses a JavaScript or TypeScript module, e.g. a `.ts` file a component
  * imports, into the same kind of AST as a component's `<script>`:
