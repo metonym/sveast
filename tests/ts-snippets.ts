@@ -46,6 +46,8 @@ export const SNIPPETS: Record<string, string> = {
     "o = { m<T>(a: T): T { return a }, get x(): number { return 1 }, set x(v: number) {} };",
   "import attributes":
     'import j from "./j.json" with { type: "json" }; export { k } from "./k.json" with { type: "json" };',
+  "string module export names":
+    'import { "a-b" as ab } from "a"; export { "c-d" as "e-f" } from "c"; export * as "g-h" from "g"; import k from "./k.json" with { "type": "json" };',
   "dynamic import":
     'const m = await import("./m", { with: { type: "json" } });',
   decorators:

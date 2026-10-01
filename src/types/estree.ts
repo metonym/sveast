@@ -506,6 +506,11 @@ export interface SimpleLiteral extends BaseNode, BaseExpression {
   raw?: string | undefined;
 }
 
+/** A string `Literal`: a module specifier, an import attribute, or a quoted module export name. */
+export interface StringLiteral extends SimpleLiteral {
+  value: string;
+}
+
 export interface RegExpLiteral extends BaseNode, BaseExpression {
   type: "Literal";
   value?: RegExp | null | undefined;
@@ -724,20 +729,20 @@ export interface ImportDeclaration extends BaseModuleDeclaration {
   >;
   /** Absent with `typescript: true` unless there's a `with` clause, as in acorn-typescript. */
   attributes?: ImportAttribute[] | undefined;
-  source: Literal;
+  source: StringLiteral;
   importKind?: "type" | "value";
 }
 
 export interface ImportSpecifier extends BaseModuleSpecifier {
   type: "ImportSpecifier";
-  imported: Identifier | Literal;
+  imported: Identifier | StringLiteral;
   importKind?: "type" | "value";
 }
 
 export interface ImportAttribute extends BaseNode {
   type: "ImportAttribute";
-  key: Identifier | Literal;
-  value: Literal;
+  key: Identifier | StringLiteral;
+  value: StringLiteral;
 }
 
 export interface ImportExpression extends BaseExpression {
@@ -762,14 +767,14 @@ export interface ExportNamedDeclaration extends BaseModuleDeclaration {
   specifiers: ExportSpecifier[];
   /** Absent with `typescript: true` unless there's a `with` clause, as in acorn-typescript. */
   attributes?: ImportAttribute[] | undefined;
-  source?: Literal | null | undefined;
+  source?: StringLiteral | null | undefined;
   exportKind?: "type" | "value";
 }
 
 export interface ExportSpecifier extends Omit<BaseModuleSpecifier, "local"> {
   type: "ExportSpecifier";
-  local: Identifier | Literal;
-  exported: Identifier | Literal;
+  local: Identifier | StringLiteral;
+  exported: Identifier | StringLiteral;
   exportKind?: "type" | "value";
 }
 
@@ -786,10 +791,10 @@ export interface ExportDefaultDeclaration extends BaseModuleDeclaration {
 
 export interface ExportAllDeclaration extends BaseModuleDeclaration {
   type: "ExportAllDeclaration";
-  exported: Identifier | Literal | null;
+  exported: Identifier | StringLiteral | null;
   /** Absent with `typescript: true` unless there's a `with` clause, as in acorn-typescript. */
   attributes?: ImportAttribute[] | undefined;
-  source: Literal;
+  source: StringLiteral;
   exportKind?: "type" | "value";
 }
 
