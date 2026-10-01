@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.6.0 — 2026-10-01
+
+**Features**
+
+- `parseImportsExports(source, options?)` returns a module's top-level
+  `import` and `export` statements, the same nodes `parseModule` returns
+  with `comments: false`, without parsing the rest. A tokenizer that only
+  tracks strings, comments, templates, regular expressions and brackets
+  skips to each one, and one acorn parser parses just that statement, so a
+  name exported twice still throws `ParseError`. Unlike a regex, it never
+  matches an `import` in a comment, a string, a template or a nested
+  `declare module` block. `import(...)` and `import.meta` aren't statements,
+  so they aren't returned. `typescript` (default `false`) parses `import
+  type`, `export type` and `import a = require("a")`. `localExports: false`
+  returns only imports and exports with a `from`, and skips `export let`,
+  `export function` and the like as other code. Default `true`.
+  `createParser` returns it too. `ParseImportsExportsOptions` is exported.
+- `isReference(node, parent)` is whether an `Identifier` names a binding
+  rather than a property, method or label name, or the renamed side of a
+  specifier: the check svelte's analyzer makes with the `is-reference`
+  package, given the `parent` `walk` passes. It also rejects `import.meta`'s
+  and `new.target`'s names, import attribute keys, `export * as` names, and
+  names in TypeScript types, keeping value positions under TypeScript nodes
+  such as `a as B` and `a!`. Any node that isn't an `Identifier` is `false`.
+- `extractIdentifiers(pattern)` returns the `Identifier` nodes a pattern
+  binds, in source order, as svelte's `extract_identifiers` does: not
+  property keys, defaults or type annotations, and nothing for a member
+  expression target. It also takes parameter properties and an assignment's
+  `left`, unwrapping `a!`, `a as T`, `a satisfies T` and `<T>a` there, so a
+  function's `params` and `node.left` type-check as they are.
+- `sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `Visitor`,
+  `isReference`, `extractIdentifiers` and the AST types, the same values as
+  `sveast`'s. `dist/walk.js` loads neither acorn nor the parser; the entry
+  now has a `package.json` export and `walk.d.ts`, so importing it doesn't
+  load the parser chunks.
+
+**Performance**
+
+- On Carbon's 327 component scripts, median of 50 runs, `parseImportsExports`
+  takes 10.7 ms against `parseModule`'s 33.8 ms, and 4.5 ms with
+  `localExports: false`. The largest script, 63 kB, takes 0.37 ms against
+  2.7 ms.
+
+**Breaking**
+
+- `walk` no longer treats `false` from `enter` as "skip the children". An
+  expression-bodied `enter` such as `(node) => node.type === "Component" &&
+  names.add(node.name)` returned `false` for every other node, so the walk
+  never got past the root and collected nothing, with no error. Return
+  `SKIP` to skip a node's children; `leave` still runs. Any other value,
+  `false` included, is ignored.
+
 ## 0.5.0 — 2026-10-01
 
 **Features**
