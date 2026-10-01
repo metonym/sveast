@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "target": "ESNext",
+    "module": "preserve",
+    "strict": true,
+    "erasableSyntaxOnly": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "sveast": ["./src/index.ts"]
+    },
+    "types": ["bun", "jest"]
+  },
+  "include": ["bench", "scripts", "src", "tests"]
+}

@@ -1,0 +1,177 @@
+<script>
+  /**
+   * @event {{ toggled: boolean; }} toggle
+   */
+
+  /**
+   * Specify the toggle size.
+   * @type {"default" | "sm"}
+   */
+  export let size = "default";
+
+  /**
+   * Set to `true` to toggle the checkbox input.
+   * Follows the switch when the owning form resets.
+   * @bindable writable
+   */
+  export let toggled = false;
+
+  /** Set to `true` to disable checkbox input */
+  export let disabled = false;
+
+  /** Specify the label for the untoggled state */
+  export let labelA = "Off";
+
+  /** Specify the label for the toggled state */
+  export let labelB = "On";
+
+  /** Specify the label text */
+  export let labelText = "";
+
+  /** Set to `true` to visually hide the label text */
+  export let hideLabel = false;
+
+  /** Set an id for the input element */
+  export let id = uniqueId();
+
+  /** Set to `true` to use the read-only variant */
+  export let readonly = false;
+
+  /**
+   * Specify the assistive text announced to screen readers when read-only.
+   * Exposed because VoiceOver does not announce `aria-readonly`.
+   */
+  export let readonlyText = "Read-only";
+
+  /** Set to `true` to indicate a warning state */
+  export let warn = false;
+
+  /** Specify the warning state text */
+  export let warnText = "";
+
+  /**
+   * Specify a name attribute for the checkbox input.
+   * @type {string}
+   */
+  export let name = undefined;
+
+  /**
+   * Specify the value submitted with the form while toggled.
+   * @type {string}
+   */
+  export let value = "on";
+
+  /**
+   * Obtain a reference to the input HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  import { createEventDispatcher } from "svelte";
+  import WarningAltFilled from "../icons/WarningAltFilled.svelte";
+  import { buildFieldIds, joinDescribedBy } from "../utils/field-status.js";
+  import { formReset } from "../utils/form-reset.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const dispatch = createEventDispatcher();
+
+  // A form reset restores the switch without a change event. Read the DOM
+  // back, like the other form controls do. A read-only switch keeps its
+  // state, so put the switch back instead of following the browser's
+  // native-reset default.
+  function handleFormReset() {
+    if (!ref) return;
+    if (readonly) {
+      ref.checked = toggled;
+      return;
+    }
+    toggled = ref.checked;
+  }
+
+  $: showWarn = warn && !disabled && !readonly;
+  $: ({ readonlyId, warnId } = buildFieldIds(id));
+</script>
+
+<div
+  class:bx--form-item={true}
+  class:bx--toggle--readonly={readonly}
+  class:bx--toggle--warning={showWarn}
+  style:user-select="none"
+  {...$$restProps}
+  on:click
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+>
+  <input
+    bind:this={ref}
+    use:formReset={handleFormReset}
+    role="switch"
+    type="checkbox"
+    class:bx--toggle-input={true}
+    class:bx--toggle-input--small={size === "sm"}
+    checked={toggled}
+    aria-readonly={readonly || undefined}
+    aria-describedby={joinDescribedBy(
+      readonly ? readonlyId : null,
+      showWarn ? warnId : null,
+    )}
+    on:click={(event) => {
+      if (readonly) event.preventDefault();
+    }}
+    on:change={(event) => {
+      if (readonly) return;
+      // Read the input, not the Svelte state: the two disagree after a form
+      // reset, and inverting stale state would undo the click.
+      toggled = event.currentTarget.checked;
+      dispatch("toggle", { toggled });
+    }}
+    on:change
+    on:keydown={(event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (!readonly) ref?.click();
+      }
+    }}
+    on:keyup
+    on:focus
+    on:blur
+    {disabled}
+    {id}
+    {name}
+    {value}
+  >
+  <label
+    aria-label={labelText ? undefined : ($$props["aria-label"] ?? "Toggle")}
+    for={id}
+    class:bx--toggle-input__label={true}
+  >
+    {#if labelText || $$slots.labelChildren}
+      <span class:bx--visually-hidden={hideLabel}>
+        <slot name="labelChildren"> {labelText} </slot>
+      </span>
+    {/if}
+    <span
+      class:bx--toggle__switch={true}
+      style:margin-top={hideLabel ? 0 : undefined}
+    >
+      <span aria-hidden="true" class:bx--toggle__text--off={true}>
+        <slot name="labelA"> {labelA} </slot>
+      </span>
+      <span aria-hidden="true" class:bx--toggle__text--on={true}>
+        <slot name="labelB"> {labelB} </slot>
+      </span>
+    </span>
+  </label>
+  {#if readonly}
+    <span id={readonlyId} class:bx--visually-hidden={true}>{readonlyText}</span>
+  {/if}
+  <div class:bx--toggle__validation-msg={true}>
+    {#if showWarn}
+      <WarningAltFilled
+        class="bx--toggle__invalid-icon bx--toggle__invalid-icon--warning"
+      />
+      <div id={warnId} class:bx--form-requirement={true}>{warnText}</div>
+    {/if}
+  </div>
+</div>

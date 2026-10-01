@@ -1,0 +1,83 @@
+name: svelte canary
+
+# Early warning for the parser: svelte
+# ships new template syntax in minor releases (<svelte:boundary> in 5.3,
+# {@attach} in 5.29), so this checks the generated errors and types, the
+# parity test, unit tests, and the differential fuzzer against the newest
+# svelte@latest, ahead of the lockfile pin. The npm `next` dist-tag is stale (pre-5.0), so `latest`
+# is the real frontier. Scheduled and manual only; never blocks PRs.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Upgrade to the newest svelte
+        run: |
+          bun add --dev svelte@latest
+          echo "svelte version:"
+          grep '"version"' node_modules/svelte/package.json
+
+      - name: Generated errors and types are current
+        run: |
+          bun scripts/generate-errors.ts
+          bun scripts/generate-types.ts
+          git diff --exit-code -- src/errors.ts src/types
+
+      - name: Parity with svelte/compiler
+        run: bun test tests/parity.test.ts
+
+      - name: Full unit tests
+        run: bun run test
+
+      - name: Differential fuzz
+        run: bun run fuzz --iterations 300 --findings-dir fuzz-findings
+
+      - name: Upload fuzz findings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-findings
+          path: fuzz-findings
+          if-no-files-found: ignore
+
+      - name: Open or update issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="svelte canary failed"
+          BODY="The svelte canary workflow failed.
+
+          This usually means a new svelte release changed template syntax,
+          output, errors or AST types in a way sveast doesn't match yet. See
+          .github/workflows/svelte-canary.yml for context.
+
+          Failed run: ${RUN_URL}"
+
+          existing=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --limit 100 --json number,title \
+            --jq '.[] | select(.title == "'"$TITLE"'") | .number' | head -n1)
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body "$BODY"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "$BODY"
+          fi

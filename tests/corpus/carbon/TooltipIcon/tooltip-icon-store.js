@@ -1,0 +1,5 @@
+// @ts-check
+import { writable } from "svelte/store";
+
+/** @type {import('svelte/store').Writable<object | null>} */
+export const activeTooltipIcon = writable(null);

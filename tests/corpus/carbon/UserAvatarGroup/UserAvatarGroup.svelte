@@ -1,0 +1,201 @@
+<script context="module">
+  /** @param {unknown} value */
+  function isNegativeGap(value) {
+    return typeof value === "string" && value.trim().startsWith("-");
+  }
+
+  // A `tooltipText` avatar wraps its element in a `TooltipDefinition`, so the
+  // registered node is nested a couple of levels below the direct child that
+  // the group's `> *` overlap/stacking CSS targets. Walk up to that direct
+  // child so the stacking custom property lands where the CSS reads it.
+  /** @param {HTMLElement} node */
+  function overlapTarget(node) {
+    let current = node;
+    while (
+      current?.parentElement &&
+      !current.parentElement.classList.contains("bx--user-avatar-group")
+    ) {
+      current = current.parentElement;
+    }
+    return current ?? null;
+  }
+</script>
+
+<script>
+  /**
+   * Render a row of `UserAvatar` children. The group adds the "+N" overflow chip.
+   * @restProps {div}
+   */
+
+  /**
+   * Specify the maximum number of avatars to show before collapsing the rest
+   * into a "+N" overflow avatar. Set to `0` to show every avatar.
+   * @type {number}
+   */
+  export let max = 5;
+
+  /**
+   * Specify the total number of people represented. Defaults to the number of
+   * slotted avatars. Set this when you render only a subset (large groups) so
+   * the overflow count stays right without mounting every avatar.
+   * @type {number}
+   */
+  export let total = undefined;
+
+  /**
+   * Specify the spacing between avatars. Leave unset for the default
+   * overlapping (stacked) layout. A positive value spaces the avatars apart,
+   * accepting a Carbon layout scale (`0`–`13`) or a CSS length string. A
+   * negative length string (for example `"-1rem"`) overlaps them by that
+   * amount.
+   * @type {import("../Stack/Stack.svelte").StackScale | string}
+   */
+  export let gap = undefined;
+
+  /**
+   * Specify the size of the avatars. Applies to slotted avatars without their
+   * own `size`, and to the "+N" overflow chip.
+   * @type {"sm" | "md" | "lg" | "xl"}
+   */
+  export let size = "md";
+
+  /**
+   * Specify which end of the stack renders on top when avatars overlap.
+   * `"last"` matches the default browser paint order (and most avatar
+   * stacks). `"first"` keeps the first avatar most prominent instead.
+   * @type {"last" | "first"}
+   */
+  export let stackOrder = "last";
+
+  /**
+   * Specify the tooltip text for the "+N" overflow avatar. Defaults to a
+   * comma-separated list of hidden slotted `name` values. Set this when using
+   * `total` for people who are not mounted.
+   * @type {string}
+   */
+  export let overflowTooltipText = undefined;
+
+  import { setContext } from "svelte";
+  import { writable } from "svelte/store";
+  import Stack from "../Stack/Stack.svelte";
+  import { batchStoreUpdates } from "../utils/batch-store-updates.js";
+  import { sortByDomOrder } from "../utils/sort-by-dom-order.js";
+  import UserAvatarGroupOverflow from "./UserAvatarGroupOverflow.svelte";
+
+  /** @type {import("svelte/store").Writable<Array<{ id: string; name: string; node?: HTMLElement }>>} */
+  const items = writable([]);
+  const sharedMax = writable(0);
+  const sharedSize = writable(size);
+  // Tracks which avatar's tooltip is open so only one shows at a time. Scoped
+  // per group instance.
+  /** @type {import("svelte/store").Writable<string | null>} */
+  const activeTooltip = writable(null);
+
+  // `max` of 0 (or non-positive) means "no limit"; mirror that as 0 in the
+  // store so registered avatars never mark themselves as overflow.
+  $: hasLimit = Number.isFinite(max) && max > 0;
+  $: sharedMax.set(hasLimit ? max : 0);
+  $: sharedSize.set(size);
+
+  // Avatars register in mount order, which differs from DOM order when they are
+  // conditionally rendered. Each registers from its own `onMount`, so its node
+  // is already in the DOM; sortByDomOrder keeps the visible avatars and
+  // overflow names tracking the rendered layout. Sorting after a batched
+  // flush matches sorting after each registration.
+
+  // Route register, unregister, and updateName through the same batched
+  // queue. Mixing in a direct items.update() would read a stale array
+  // still missing not-yet-flushed registrations.
+  const batchedItemsUpdate = batchStoreUpdates(items);
+
+  setContext("carbon:UserAvatarGroup", {
+    items,
+    max: sharedMax,
+    size: sharedSize,
+    activeTooltip,
+    register: ({ id, name, node }) => {
+      batchedItemsUpdate((current) =>
+        current.some((item) => item.id === id)
+          ? current
+          : sortByDomOrder([...current, { id, name, node }]),
+      );
+    },
+    unregister: (id) => {
+      batchedItemsUpdate((current) => current.filter((item) => item.id !== id));
+    },
+    updateName: (id, name) => {
+      batchedItemsUpdate((current) =>
+        current.map((item) => (item.id === id ? { ...item, name } : item)),
+      );
+    },
+  });
+
+  // Number of avatars actually shown: capped at `max` unless `max` is 0.
+  $: visibleCount = hasLimit ? Math.min($items.length, max) : $items.length;
+  // The total represented; defaults to the slotted count. Overflow is everyone
+  // past the visible slots, including people not rendered when `total` is set.
+  $: effectiveTotal = total ?? $items.length;
+  $: overflowCount = Math.max(0, effectiveTotal - visibleCount);
+  // Cap the label so it always fits the circle; counts above 99 read as "99+".
+  $: overflowLabel = overflowCount > 99 ? "99+" : `+${overflowCount}`;
+  // Names are known only for the slotted avatars past the visible ones.
+  $: hiddenNames = $items
+    .slice(visibleCount)
+    .map((item) => item.name)
+    .filter(Boolean);
+  $: overflowTooltip = overflowTooltipText ?? hiddenNames.join(", ");
+
+  // Overlap (stacked) when no gap is set, or when a negative gap tightens the
+  // stack; a positive gap switches to a spaced row.
+  $: overlap = gap == null || isNegativeGap(gap);
+  // `stackOrder: "first"` reverses which avatar paints on top. The default
+  // paint order already puts the last avatar on top for free, so only the
+  // reversed case needs an explicit per-avatar z-index; it's driven by a
+  // custom property (not `z-index` directly) so the hover/focus rule below
+  // can still win on specificity instead of losing to an inline style.
+  $: if (overlap && stackOrder === "first") {
+    for (const [index, item] of $items.entries()) {
+      overlapTarget(item.node)?.style.setProperty(
+        "--user-avatar-index",
+        String(index),
+      );
+    }
+  } else {
+    for (const item of $items) {
+      overlapTarget(item.node)?.style.removeProperty("--user-avatar-index");
+    }
+  }
+  // A negative gap overrides the default overlap amount via a custom property.
+  $: groupStyle =
+    [
+      isNegativeGap(gap) && `--user-avatar-group-overlap: ${gap}`,
+      overlap &&
+        stackOrder === "first" &&
+        `--user-avatar-group-count: ${$items.length}`,
+      $$restProps.style,
+    ]
+      .filter(Boolean)
+      .join("; ") || undefined;
+
+  $: groupClass = [
+    "bx--user-avatar-group",
+    overlap && "bx--user-avatar-group--overlap",
+    overlap && stackOrder === "first" && "bx--user-avatar-group--stack-first",
+    $$restProps.class,
+  ]
+    .filter(Boolean)
+    .join(" ");
+</script>
+
+<Stack
+  orientation="horizontal"
+  gap={overlap ? 0 : gap}
+  {...$$restProps}
+  class={groupClass}
+  style={groupStyle}
+>
+  <slot />
+  {#if overflowCount > 0}
+    <UserAvatarGroupOverflow label={overflowLabel} names={overflowTooltip} />
+  {/if}
+</Stack>

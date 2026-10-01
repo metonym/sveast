@@ -1,0 +1,38 @@
+<script>
+  /**
+   * Specify the kind of notification icon.
+   * @type {"error" | "info" | "info-square" | "success" | "warning" | "warning-alt"}
+   */
+  export let kind = "error";
+
+  /**
+   * Set the type of notification.
+   * @type {"toast" | "inline"}
+   */
+  export let notificationType = "toast";
+
+  import CheckmarkFilled from "../icons/CheckmarkFilled.svelte";
+  import ErrorFilled from "../icons/ErrorFilled.svelte";
+  import InformationFilled from "../icons/InformationFilled.svelte";
+  import InformationSquareFilled from "../icons/InformationSquareFilled.svelte";
+  import WarningAltFilled from "../icons/WarningAltFilled.svelte";
+  import WarningFilled from "../icons/WarningFilled.svelte";
+
+  const icons = {
+    error: ErrorFilled,
+    "info-square": InformationSquareFilled,
+    info: InformationFilled,
+    success: CheckmarkFilled,
+    warning: WarningFilled,
+    "warning-alt": WarningAltFilled,
+  };
+
+  $: iconClass = [
+    notificationType === "toast" && "bx--toast-notification__icon",
+    notificationType === "inline" && "bx--inline-notification__icon",
+  ]
+    .filter(Boolean)
+    .join(" ");
+</script>
+
+<svelte:component this={icons[kind]} size={20} class={iconClass} />

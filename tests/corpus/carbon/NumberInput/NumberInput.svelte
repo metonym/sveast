@@ -1,0 +1,692 @@
+<script context="module">
+  /**
+   * Fold the `invalid` prop, a custom `validate` result, and the
+   * auto-computed out-of-range state into one effective invalid flag.
+   * Explicit `invalid` wins, then a custom validator, then the
+   * auto-computed fallback.
+   * @param {boolean} isInvalid
+   * @param {boolean | undefined} isCustomValid
+   * @param {boolean} isAutoInvalid
+   * @returns {boolean}
+   */
+  function computeEffectiveInvalid(isInvalid, isCustomValid, isAutoInvalid) {
+    if (isInvalid) return true;
+    if (isCustomValid === false) return true;
+    if (isCustomValid === true) return false;
+    return isAutoInvalid;
+  }
+</script>
+
+<script>
+  /**
+   * @typedef {"increment" | "decrement"} NumberInputTranslationId
+   * @event {null | number} change
+   * @event {null | number} input
+   * @event {{ value: null | number, direction: "up" | "down" }} click:stepper
+   * @event {{ event: FocusEvent, value: null | number }} blur
+   * @event {{ event: FocusEvent, value: null | number, direction: "up" | "down" }} blur:stepper
+   */
+
+  /**
+   * Set the size of the input.
+   * @type {"sm" | "xl"}
+   */
+  export let size = undefined;
+
+  /**
+   * Specify the input value.
+   * Use `null` to denote "no value".
+   * Kept when the owning form resets; with `allowEmpty`, follows the field
+   * instead.
+   * @type {null | number}
+   * @bindable writable
+   */
+  export let value = null;
+
+  /** Specify the step increment */
+  export let step = 1;
+
+  /**
+   * Specify the maximum value.
+   * @type {number}
+   */
+  export let max = undefined;
+
+  /**
+   * Specify the minimum value.
+   * @type {number}
+   */
+  export let min = undefined;
+
+  /**
+   * Provide the value stepping should begin at when the input is empty.
+   * @type {number}
+   */
+  export let stepStartValue = undefined;
+
+  /** Set to `true` to enable the light variant */
+  export let light = false;
+
+  /** Set to `true` for the input to be read-only */
+  export let readonly = false;
+
+  /**
+   * Set to `true` to use the fluid variant.
+   * Inherited from the parent `FluidForm` context,
+   * so it does not need to be set when used inside `FluidForm`.
+   */
+  export let fluid = false;
+
+  /** Set to `true` to allow for an empty value */
+  export let allowEmpty = false;
+
+  /**
+   * Set to `true` to preserve decimal input formatting.
+   * When enabled, uses type="text" with inputmode="decimal" instead of type="number".
+   * @type {boolean}
+   * @example
+   * ```svelte
+   * <NumberInput allowDecimal={true} value="1.0" />
+   * <NumberInput allowDecimal={true} value="2.00" />
+   * ```
+   */
+  export let allowDecimal = false;
+
+  /**
+   * Specify a BCP 47 locale for number formatting.
+   * When set, forces type="text" with inputmode="decimal"
+   * and formats the display value using Intl.NumberFormat.
+   * @type {string}
+   * @example
+   * ```svelte
+   * <NumberInput locale="de-DE" value={1234.5} />
+   * <NumberInput locale="en-US" value={1234.5} />
+   * ```
+   */
+  export let locale = undefined;
+
+  /**
+   * Specify Intl.NumberFormat options when `locale` is set.
+   * @type {Intl.NumberFormatOptions}
+   * @example
+   * ```svelte
+   * <NumberInput locale="en-US" formatOptions={{ minimumFractionDigits: 2 }} value={1234.5} />
+   * ```
+   */
+  export let formatOptions = undefined;
+
+  /** Set to `true` to disable the input */
+  export let disabled = false;
+
+  /** Set to `true` to hide the input stepper buttons */
+  export let hideSteppers = false;
+
+  /** Set to `true` to prevent the scroll wheel from changing the input value */
+  export let disableWheel = false;
+
+  /** Set to `true` to select the input's text when it receives focus */
+  export let selectTextOnFocus = false;
+
+  /**
+   * Custom validation function.
+   * Receives the current raw input string and locale.
+   * Return `true` to force valid, `false` to force invalid,
+   * or `undefined` to defer to built-in validation.
+   * @type {(value: string, locale: string | undefined) => boolean | undefined}
+   * @example
+   * ```svelte
+   * <NumberInput validate={(raw) => Number(raw) % 2 === 0} invalidText="Must be even" />
+   * ```
+   */
+  export let validate = undefined;
+
+  /** Set to `true` to indicate an invalid state */
+  export let invalid = false;
+
+  /** Specify the invalid state text */
+  export let invalidText = "";
+
+  /** Set to `true` to indicate a warning state */
+  export let warn = false;
+
+  /** Specify the warning state text */
+  export let warnText = "";
+
+  /** Specify the helper text */
+  export let helperText = "";
+
+  /** Specify the label text */
+  export let labelText = "";
+
+  /** Set to `true` to visually hide the label text */
+  export let hideLabel = false;
+
+  /**
+   * Override the default translation ids.
+   * @type {(id: NumberInputTranslationId) => string}
+   */
+  export let translateWithId = function translateWithId(id) {
+    return defaultTranslations[id];
+  };
+
+  /**
+   * Default translation ids.
+   * @type {{ increment: "increment"; decrement: "decrement" }}
+   */
+  export const translationIds = {
+    increment: "increment",
+    decrement: "decrement",
+  };
+
+  /** Set an id for the input element */
+  export let id = uniqueId();
+
+  /**
+   * Specify a name attribute for the input.
+   * With `locale` or `allowDecimal`, the form submits the numeric value
+   * (for example `1234.5`), not the formatted display text.
+   * @type {string}
+   */
+  export let name = undefined;
+
+  /**
+   * Obtain a reference to the input HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  import { createEventDispatcher, getContext, tick } from "svelte";
+  import { FORM_CONTEXT_KEY } from "../constants/context-keys.js";
+  import Add from "../icons/Add.svelte";
+  import EditOff from "../icons/EditOff.svelte";
+  import Subtract from "../icons/Subtract.svelte";
+  import WarningAltFilled from "../icons/WarningAltFilled.svelte";
+  import WarningFilled from "../icons/WarningFilled.svelte";
+  import {
+    buildFieldIds,
+    resolveStatusDescribedBy,
+    resolveValidationVisibility,
+  } from "../utils/field-status.js";
+  import { formReset } from "../utils/form-reset.js";
+  import { getNumberFormatter } from "../utils/intl-formatter-cache.js";
+  import {
+    clamp,
+    getDefaultValue,
+    parse,
+    parseLocaleValue,
+    roundToStep,
+  } from "../utils/numeric-format.js";
+  import { reflectDefaultValue } from "../utils/reflect-default-value.js";
+  import { uniqueId } from "../utils/unique-id.js";
+
+  const defaultTranslations = {
+    [translationIds.increment]: "Increment number",
+    [translationIds.decrement]: "Decrement number",
+  };
+
+  const dispatch = createEventDispatcher();
+  const formContext = getContext(FORM_CONTEXT_KEY);
+
+  function updateValue(isIncrementing, multiplier = 1) {
+    // When the input is empty (null) or zero and stepStartValue is set,
+    // jump directly to stepStartValue on the first step.
+    if ((value === null || value === 0) && stepStartValue !== undefined) {
+      value = stepStartValue;
+      if (useTextMode) {
+        inputValue = formatter ? formatter.format(value) : value.toString();
+      } else if (ref) {
+        ref.value = value.toString();
+      }
+      dispatch("input", value);
+      dispatch("change", value);
+      return;
+    }
+
+    if (useTextMode) {
+      const stepAmount = step * multiplier;
+      const currentValue = value ?? getDefaultValue(stepStartValue, min);
+      const newValue = roundToStep(
+        isIncrementing
+          ? clamp(currentValue + stepAmount, undefined, max)
+          : clamp(currentValue - stepAmount, min, undefined),
+        step,
+      );
+
+      value = newValue;
+      inputValue = formatter ? formatter.format(newValue) : newValue.toString();
+
+      dispatch("input", value);
+      dispatch("change", value);
+    } else {
+      // When allowEmpty is false and value is null, set to default value first
+      if (!allowEmpty && value === null) {
+        const defaultValue = getDefaultValue(stepStartValue, min);
+        if (ref) {
+          ref.value = defaultValue.toString();
+        }
+        value = defaultValue;
+      }
+
+      if (isIncrementing) {
+        ref.stepUp(multiplier);
+      } else {
+        ref.stepDown(multiplier);
+      }
+      value = +ref.value;
+
+      dispatch("input", value);
+      dispatch("change", value);
+    }
+  }
+
+  $: incrementLabel = translateWithId("increment");
+  $: decrementLabel = translateWithId("decrement");
+  $: autoInvalid =
+    value !== null &&
+    ((min !== undefined && value < min) || (max !== undefined && value > max));
+  $: formatter = locale ? getNumberFormatter(locale, formatOptions) : null;
+  $: useTextMode = allowDecimal || !!locale;
+  $: separatorParts = locale
+    ? getNumberFormatter(locale, undefined).formatToParts(12345.6)
+    : null;
+  $: groupSeparator = separatorParts
+    ? (separatorParts.find((p) => p.type === "group")?.value ?? "")
+    : "";
+  $: decimalSeparator = separatorParts
+    ? (separatorParts.find((p) => p.type === "decimal")?.value ?? ".")
+    : ".";
+
+  let inputValue = value?.toString() ?? "";
+  let prevValue;
+  let userInputActive = false;
+  let inputFocused = false;
+
+  $: customValid =
+    typeof validate === "function"
+      ? validate(useTextMode ? inputValue : String(value ?? ""), locale)
+      : undefined;
+
+  $: effectiveInvalid = computeEffectiveInvalid(
+    invalid,
+    customValid,
+    autoInvalid,
+  );
+  // Invalid/warn states are suppressed when the input is disabled or read-only.
+  $: ({ showInvalid, showWarn } = resolveValidationVisibility({
+    invalid: effectiveInvalid,
+    warn,
+    disabled,
+    readonly,
+  }));
+  $: isFluid = fluid || !!formContext?.isFluid;
+  // Neutral = neither invalid nor warn is showing.
+  $: neutral = !showInvalid && !showWarn;
+  $: hasErrorMessage = showInvalid && !!invalidText;
+  $: ({ errorId, warnId, helperId } = buildFieldIds(id));
+  $: ariaLabel =
+    $$props["aria-label"] ||
+    "Numeric input field with increment and decrement buttons";
+
+  // Only use inputValue tracking in text mode (allowDecimal or locale).
+  // During user typing, don't interfere with inputValue — formatting
+  // happens on blur (handleChange) and programmatic changes only.
+  $: if (useTextMode) {
+    const valueChanged = value !== prevValue;
+    prevValue = value;
+
+    if (userInputActive) {
+      // Don't interfere with user typing
+    } else if (value != null) {
+      const valueStr = formatter ? formatter.format(value) : value.toString();
+      const parsedInput = locale
+        ? parseLocaleValue(inputValue, groupSeparator, decimalSeparator)
+        : parse(inputValue);
+      // Sync inputValue to value when:
+      // - The numeric values differ AND input is valid (preserves "1.0" formatting)
+      // - OR value changed programmatically (force sync even if input is temporarily invalid)
+      // This allows "1.5." to stay visible while user corrects their typo.
+      if ((parsedInput !== value && parsedInput !== null) || valueChanged) {
+        inputValue = valueStr;
+      }
+    } else if (value == null && inputValue !== "") {
+      inputValue = "";
+    }
+  }
+
+  // A form reset restores the field without an input event. Without
+  // `allowEmpty` the field cannot be empty, so its value attribute follows
+  // the current value (reflectDefaultValue) and a reset keeps it; with
+  // `allowEmpty` the reset clears it. Either way, read the field back, and
+  // keep a read-only field's state.
+  function handleFormReset() {
+    if (!ref) return;
+    if (readonly) {
+      ref.value = useTextMode ? inputValue : String(value ?? "");
+      return;
+    }
+    userInputActive = false;
+    const raw = ref.value;
+    value =
+      useTextMode && locale
+        ? parseLocaleValue(raw, groupSeparator, decimalSeparator)
+        : parse(raw);
+  }
+
+  function handleInput(event) {
+    if (useTextMode) {
+      userInputActive = true;
+      inputValue = event.target.value;
+      const parsed = locale
+        ? parseLocaleValue(event.target.value, groupSeparator, decimalSeparator)
+        : parse(event.target.value);
+      // Preserve last valid value when input is invalid (e.g., "1.5." with two decimals).
+      // This provides better UX by letting users see and correct typos without losing data.
+      if (
+        parsed !== null ||
+        event.target.value === "" ||
+        event.target.value === "-"
+      ) {
+        value = parsed;
+      }
+    } else {
+      value = parse(event.target.value);
+    }
+
+    dispatch("input", value);
+  }
+
+  function handleChange(event) {
+    userInputActive = false;
+    let parsedValue = locale
+      ? parseLocaleValue(event.target.value, groupSeparator, decimalSeparator)
+      : parse(event.target.value, useTextMode);
+
+    // If allowEmpty is false and value would be null, use default value
+    // This prevents the input from staying empty when allowEmpty is false
+    if (!allowEmpty && parsedValue === null && event.target.value === "") {
+      parsedValue = getDefaultValue(stepStartValue, min);
+      // Update the input to show the default value
+      if (useTextMode) {
+        inputValue = formatter
+          ? formatter.format(parsedValue)
+          : parsedValue.toString();
+        value = parsedValue;
+      } else if (ref) {
+        ref.value = parsedValue.toString();
+        value = parsedValue;
+      }
+    } else if (
+      useTextMode &&
+      parsedValue === null &&
+      event.target.value !== "" &&
+      value !== null
+    ) {
+      // In text mode, normalize invalid input (e.g., "1.5.") back to
+      // the last valid value on blur. This provides a clean UX where typos
+      // are corrected when the user leaves the field.
+      inputValue = formatter ? formatter.format(value) : value.toString();
+    } else {
+      value = parsedValue;
+      // Format the display value on blur when locale is set
+      if (formatter && value !== null) {
+        inputValue = formatter.format(value);
+      }
+    }
+
+    dispatch("change", value);
+  }
+
+  function handleKeydown(event) {
+    if (readonly || disabled) return;
+
+    if (useTextMode && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      event.preventDefault();
+      updateValue(event.key === "ArrowUp");
+      return;
+    }
+
+    if (event.key === "PageUp" || event.key === "PageDown") {
+      // Unlike Arrow keys, native number inputs don't step on Page Up/Down,
+      // so handle it here regardless of useTextMode. Steps by 10x `step`,
+      // clamped to min/max like a single step.
+      event.preventDefault();
+      updateValue(event.key === "PageUp", 10);
+    }
+  }
+
+  function handleInputFocus() {
+    if (isFluid) inputFocused = true;
+    if (selectTextOnFocus && !disabled) {
+      tick().then(() => ref?.select());
+    }
+  }
+
+  function handleBlur(event) {
+    if (isFluid) inputFocused = false;
+    dispatch("blur", { event, value });
+  }
+
+  function handleStepperBlur(event, direction) {
+    dispatch("blur:stepper", { event, value, direction });
+  }
+</script>
+
+<!-- svelte-ignore a11y-mouse-events-have-key-events -->
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div
+  class:bx--form-item={true}
+  class:bx--number-input--fluid={isFluid}
+  class:bx--number-input--fluid--focus={isFluid && inputFocused}
+  on:click
+  on:mouseover
+  on:mouseenter
+  on:mouseleave
+>
+  <div
+    data-invalid={showInvalid || undefined}
+    class:bx--number={true}
+    class:bx--number--neutral={neutral}
+    class:bx--number--helpertext={true}
+    class:bx--number--readonly={readonly}
+    class:bx--number--light={light}
+    class:bx--number--nolabel={hideLabel}
+    class:bx--number--nosteppers={hideSteppers}
+    class:bx--number--sm={size === "sm"}
+    class:bx--number--xl={size === "xl"}
+  >
+    {#if $$slots.labelChildren || labelText}
+      <label
+        for={id}
+        class:bx--label={true}
+        class:bx--label--disabled={disabled}
+        class:bx--visually-hidden={hideLabel}
+        class:bx--label--slotted={isFluid && $$slots.labelChildren}
+      >
+        <slot name="labelChildren">{labelText}</slot>
+      </label>
+    {/if}
+    <div
+      class:bx--number__input-wrapper={true}
+      class:bx--number__input-wrapper--warning={showWarn}
+    >
+      {#if useTextMode}
+        {#if name}
+          <!-- The visible input shows formatted text (for example 1,234.5);
+               submit the number itself, like a native number input. -->
+          <input
+            type="hidden"
+            {name}
+            value={value ?? ""}
+            {disabled}
+            form={$$restProps.form}
+          >
+        {/if}
+        <input
+          bind:this={ref}
+          use:formReset={handleFormReset}
+          use:reflectDefaultValue={allowEmpty ? undefined : inputValue}
+          value={inputValue}
+          type="text"
+          inputmode="decimal"
+          aria-errormessage={hasErrorMessage ? errorId : undefined}
+          aria-describedby={resolveStatusDescribedBy({
+            showInvalid: hasErrorMessage,
+            showWarn,
+            helperText,
+            isFluid,
+            errorId,
+            warnId,
+            helperId,
+            includeErrorId: false,
+          })}
+          data-invalid={showInvalid || undefined}
+          aria-invalid={showInvalid || undefined}
+          aria-label={labelText ? undefined : ariaLabel}
+          aria-readonly={readonly || undefined}
+          {disabled}
+          {id}
+          {max}
+          {min}
+          {step}
+          {readonly}
+          {...$$restProps}
+          on:change={handleChange}
+          on:input={handleInput}
+          on:keydown={handleKeydown}
+          on:keydown
+          on:keyup
+          on:focus={handleInputFocus}
+          on:focus
+          on:blur={handleBlur}
+          on:paste
+          on:wheel|nonpassive={(event) => {
+            if (disableWheel) event.preventDefault();
+          }}
+        >
+      {:else}
+        <input
+          bind:this={ref}
+          use:formReset={handleFormReset}
+          use:reflectDefaultValue={allowEmpty ? undefined : value}
+          type="number"
+          inputmode="decimal"
+          aria-errormessage={hasErrorMessage ? errorId : undefined}
+          aria-describedby={resolveStatusDescribedBy({
+            showInvalid: hasErrorMessage,
+            showWarn,
+            helperText,
+            isFluid,
+            errorId,
+            warnId,
+            helperId,
+            includeErrorId: false,
+          })}
+          data-invalid={showInvalid || undefined}
+          aria-invalid={showInvalid || undefined}
+          aria-label={labelText ? undefined : ariaLabel}
+          aria-readonly={readonly || undefined}
+          {disabled}
+          {id}
+          {name}
+          {max}
+          {min}
+          {step}
+          value={value ?? ""}
+          {readonly}
+          {...$$restProps}
+          on:change={handleChange}
+          on:input={handleInput}
+          on:keydown={handleKeydown}
+          on:keydown
+          on:keyup
+          on:focus={handleInputFocus}
+          on:focus
+          on:blur={handleBlur}
+          on:paste
+          on:wheel|nonpassive={(event) => {
+            if (disableWheel) event.preventDefault();
+          }}
+        >
+      {/if}
+      {#if readonly && !isFluid}
+        <EditOff class="bx--text-input__readonly-icon" />
+      {:else if !readonly}
+        {#if showInvalid}
+          <WarningFilled class="bx--number__invalid" />
+        {/if}
+        {#if showWarn}
+          <WarningAltFilled
+            class="bx--number__invalid bx--number__invalid--warning"
+          />
+        {/if}
+      {/if}
+      {#if !hideSteppers}
+        <div class:bx--number__controls={true}>
+          <button
+            type="button"
+            tabindex="-1"
+            title={decrementLabel}
+            aria-label={decrementLabel}
+            class:bx--number__control-btn={true}
+            class:down-icon={true}
+            on:click={() => {
+              updateValue(false);
+              dispatch("click:stepper", { value, direction: "down" });
+            }}
+            on:blur={(event) => handleStepperBlur(event, "down")}
+            disabled={disabled || readonly}
+          >
+            <Subtract class="down-icon" />
+          </button>
+          <div class:bx--number__rule-divider={true}></div>
+          <button
+            type="button"
+            tabindex="-1"
+            title={incrementLabel}
+            aria-label={incrementLabel}
+            class:bx--number__control-btn={true}
+            class:up-icon={true}
+            on:click={() => {
+              updateValue(true);
+              dispatch("click:stepper", { value, direction: "up" });
+            }}
+            on:blur={(event) => handleStepperBlur(event, "up")}
+            disabled={disabled || readonly}
+          >
+            <Add class="up-icon" />
+          </button>
+          <div class:bx--number__rule-divider={true}></div>
+        </div>
+      {/if}
+      {#if isFluid}
+        <hr class:bx--number-input__divider={true}>
+        {#if hasErrorMessage}
+          <div id={errorId} class:bx--form-requirement={true} role="alert">
+            {invalidText}
+          </div>
+        {/if}
+        {#if showWarn}
+          <div id={warnId} class:bx--form-requirement={true}>{warnText}</div>
+        {/if}
+      {/if}
+    </div>
+    {#if !isFluid && !showInvalid && !showWarn && helperText}
+      <div
+        id={helperId}
+        class:bx--form__helper-text={true}
+        class:bx--form__helper-text--disabled={disabled}
+      >
+        {helperText}
+      </div>
+    {/if}
+    {#if !isFluid && hasErrorMessage}
+      <div id={errorId} class:bx--form-requirement={true} role="alert">
+        {invalidText}
+      </div>
+    {/if}
+    {#if !isFluid && showWarn}
+      <div id={warnId} class:bx--form-requirement={true}>{warnText}</div>
+    {/if}
+  </div>
+</div>

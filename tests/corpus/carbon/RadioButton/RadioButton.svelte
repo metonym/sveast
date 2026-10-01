@@ -1,0 +1,268 @@
+<script>
+  /**
+   * @template {string | number} [Value=string | number]
+   */
+
+  /**
+   * Specify the value of the radio button.
+   * @type {Value}
+   */
+  export let value = "";
+
+  /**
+   * Set to `true` to check the radio button.
+   * Follows the radio button when the owning form resets.
+   * @bindable writable
+   */
+  export let checked = false;
+
+  /** Set to `true` to disable the radio button */
+  export let disabled = false;
+
+  /** Set to `true` for the radio button to be read-only */
+  export let readonly = false;
+
+  /**
+   * Specify the assistive text announced to screen readers when read-only.
+   * Exposed because VoiceOver does not announce `aria-readonly`, and ARIA
+   * does not support `aria-readonly` on role "radio" at all.
+   */
+  export let readonlyText = "Read-only";
+
+  /** Set to `true` to mark the field as required */
+  export let required = false;
+
+  /**
+   * Specify the label position.
+   * @type {"right" | "left"}
+   */
+  export let labelPosition = "right";
+
+  /** Specify the label text */
+  export let labelText = "";
+
+  /** Set to `true` to visually hide the label text */
+  export let hideLabel = false;
+
+  /** Set an id for the input element */
+  export let id = uniqueId();
+
+  /**
+   * Specify a name attribute for the radio button input.
+   * When multiple standalone RadioButton components share the same `name`,
+   * they form an implicit group and their `checked` state will be synchronized.
+   * @type {string}
+   */
+  export let name = undefined;
+
+  /**
+   * Obtain a reference to the input HTML element.
+   * @bindable readonly
+   */
+  export let ref = null;
+
+  import { getContext, onMount } from "svelte";
+  import { readable } from "svelte/store";
+  import { buildFieldIds, joinDescribedBy } from "../utils/field-status.js";
+  import { formReset } from "../utils/form-reset.js";
+  import { uniqueId } from "../utils/unique-id.js";
+  import {
+    registerRadioButton,
+    updateGroupSelection,
+  } from "./radio-button-registry.js";
+
+  const ctx = getContext("carbon:RadioButtonGroup");
+
+  const {
+    add,
+    update,
+    deselect,
+    selectedValue,
+    groupName,
+    fallbackName,
+    groupRequired,
+    readonly: groupReadonly,
+    allowDeselect,
+    helperId,
+  } = ctx ?? {
+    groupName: readable(undefined),
+    groupRequired: readable(undefined),
+    selectedValue: readable(checked ? value : undefined),
+    readonly: readable(false),
+    allowDeselect: readable(false),
+    helperId: readable(undefined),
+  };
+
+  // Track if we're in standalone mode (no RadioButtonGroup context)
+  const isStandalone = !ctx;
+
+  // Unique key for this component instance (used for registry identity)
+  // Using an object reference guarantees uniqueness across all instances
+  const instanceKey = {};
+
+  $: effectiveReadonly = $groupReadonly || readonly;
+  // A read-only `RadioButtonGroup` already describes itself on the
+  // fieldset; only describe the radio when its own `readonly` is the
+  // source, so the state is not announced twice.
+  $: describeReadonly = readonly && !$groupReadonly;
+  $: ({ readonlyId } = buildFieldIds(id));
+
+  // Registry state for standalone mode with name
+  /** @type {import("svelte/store").Writable<{} | undefined> | null} */
+  let registry = null;
+  /** @type {(() => void) | null} */
+  let unregister = null;
+  /** @type {(() => void) | null} */
+  let registryUnsubscribe = null;
+  /** @type {string | undefined} */
+  let prevName = undefined;
+
+  /**
+   * Initialize registry for standalone mode with name.
+   */
+  function initRegistry(radioName) {
+    // Clean up previous registration if any
+    cleanupRegistry();
+
+    if (isStandalone && radioName) {
+      const registration = registerRadioButton(radioName, instanceKey, checked);
+      registry = registration.selectedKey;
+      unregister = registration.unregister;
+
+      // Subscribe to uncheck this radio when a sibling is selected.
+      // Only set checked=false when another instance is selected, not checked=true for self.
+      // This allows parent components (like DataTable) to control the checked state.
+      registryUnsubscribe = registry.subscribe((selectedKey) => {
+        if (selectedKey !== undefined && selectedKey !== instanceKey) {
+          checked = false;
+        }
+      });
+
+      prevName = radioName;
+    }
+  }
+
+  function cleanupRegistry() {
+    if (registryUnsubscribe) {
+      registryUnsubscribe();
+      registryUnsubscribe = null;
+    }
+    if (unregister) {
+      unregister();
+      unregister = null;
+    }
+    registry = null;
+    prevName = undefined;
+  }
+
+  // Handle name prop changes reactively
+  $: if (isStandalone && name !== prevName) {
+    initRegistry(name);
+  }
+
+  if (add) {
+    add({ checked, value });
+  }
+
+  // Only sync checked when inside RadioButtonGroup.
+  // This allows standalone `RadioButton` usage.
+  $: if (add) {
+    checked = $selectedValue === value;
+  }
+
+  // A form reset restores the radio button without a change event. Inside
+  // `RadioButtonGroup`, the group syncs `selected`; standalone, sync
+  // `checked` here.
+  function handleFormReset() {
+    if (!ref || update) return;
+    if (effectiveReadonly) {
+      ref.checked = checked;
+      return;
+    }
+    checked = ref.checked;
+    if (checked && name && registry) {
+      updateGroupSelection(name, instanceKey);
+    }
+  }
+
+  onMount(() => {
+    return () => {
+      cleanupRegistry();
+    };
+  });
+</script>
+
+<div
+  class:bx--radio-button-wrapper={true}
+  class:bx--radio-button-wrapper--label-left={labelPosition === "left"}
+  class:bx--radio-button-wrapper--readonly={effectiveReadonly}
+  {...$$restProps}
+  aria-label={undefined}
+>
+  <input
+    bind:this={ref}
+    use:formReset={handleFormReset}
+    type="radio"
+    {id}
+    name={$groupName ?? (name || fallbackName)}
+    {checked}
+    {disabled}
+    required={$groupRequired ?? required}
+    {value}
+    aria-describedby={joinDescribedBy(
+      describeReadonly ? readonlyId : null,
+      $helperId,
+    )}
+    aria-label={labelText || $$slots.labelChildren
+      ? undefined
+      : $$props["aria-label"] || undefined}
+    class:bx--radio-button={true}
+    on:focus
+    on:blur
+    on:click={(event) => {
+      if (effectiveReadonly) {
+        event.preventDefault();
+        return;
+      }
+      // No `event.preventDefault()` here: canceling the click makes the
+      // browser revert `checked` back to its pre-click value once the event
+      // finishes dispatching, which runs after Svelte's microtask-scheduled
+      // DOM update and silently reselects the radio.
+      if ($allowDeselect && checked && deselect) {
+        deselect();
+      }
+    }}
+    on:change={(event) => {
+      if (effectiveReadonly) {
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (update) {
+        // Inside RadioButtonGroup - use context
+        update(value);
+      } else if (name && registry) {
+        // Standalone with name - update local checked and notify siblings via registry
+        checked = event.currentTarget.checked;
+        updateGroupSelection(name, instanceKey);
+      } else {
+        // Standalone without name - just update local checked
+        checked = event.currentTarget.checked;
+      }
+    }}
+    on:change
+  >
+  <label class:bx--radio-button__label={true} for={id}>
+    <span class:bx--radio-button__appearance={true}></span>
+    {#if labelText || $$slots.labelChildren}
+      <span
+        class:bx--radio-button__label-text={true}
+        class:bx--visually-hidden={hideLabel}
+      >
+        <slot name="labelChildren"> {labelText} </slot>
+      </span>
+    {/if}
+  </label>
+  {#if describeReadonly}
+    <span id={readonlyId} class:bx--visually-hidden={true}>{readonlyText}</span>
+  {/if}
+</div>

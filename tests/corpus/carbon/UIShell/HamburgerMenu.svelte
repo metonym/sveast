@@ -1,0 +1,58 @@
+<script>
+  /**
+   * @template [Icon=any]
+   */
+
+  /**
+   * Specify the ARIA label for the button.
+   * @type {string}
+   */
+  export let ariaLabel = undefined;
+
+  /** Set to `true` to toggle the open state */
+  export let isOpen = false;
+
+  /**
+   * Specify the icon to render for the closed state.
+   * @type {Icon}
+   */
+  export let iconMenu = /** @type {Icon} */ (Menu);
+
+  /**
+   * Specify the icon to render for the opened state.
+   * @type {Icon}
+   */
+  export let iconClose = /** @type {Icon} */ (Close);
+
+  /** Obtain a reference to the HTML button element */
+  export let ref = null;
+
+  import { onMount } from "svelte";
+  import Close from "../icons/Close.svelte";
+  import Menu from "../icons/MenuIcon.svelte";
+  import { hamburgerMenuRef } from "./nav-store.js";
+
+  $: hamburgerMenuRef.set(ref);
+
+  onMount(() => {
+    return () => {
+      hamburgerMenuRef.update((current) => (current === ref ? null : current));
+    };
+  });
+</script>
+
+<button
+  bind:this={ref}
+  type="button"
+  title={ariaLabel}
+  aria-label={ariaLabel}
+  aria-expanded={isOpen}
+  class:bx--header__action={true}
+  class:bx--header__menu-trigger={true}
+  class:bx--header__menu-toggle={true}
+  {...$$restProps}
+  on:click
+  on:click={() => (isOpen = !isOpen)}
+>
+  <svelte:component this={isOpen ? iconClose : iconMenu} size={20} />
+</button>
