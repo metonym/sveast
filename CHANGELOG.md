@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.7.0 — 2026-10-01
+
+**Features**
+
+- `lexImportsExports(source)`, from `sveast/lexer` and `sveast`, returns a
+  module's top-level `import` statements and `export … from` re-exports with
+  their offsets, sources and names, read by hand on top of
+  `parseImportsExports`' scanner instead of parsed by acorn. `dist/lexer.js`
+  and its scanner chunk minify to 3.2 kB gzipped and load neither acorn nor
+  the template parser, so a synchronous preprocessor can import it eagerly.
+  It finds statements the way `parseImportsExports` does with
+  `localExports: false`, and on every statement that accepts, the offsets,
+  sources and names are the same. It doesn't check syntax and never throws:
+  a statement it can't read, including TypeScript's `import a = require("a")`,
+  comes back with `source: null` and no specifiers, ending where it stopped
+  reading. `import type` and `type` before a name are always read. `export
+  let`, `export function` and other exports of the module's own bindings
+  aren't returned. `LexedStatement`, `LexedImport`, `LexedExport`,
+  `LexedImportSpecifier`, `LexedExportSpecifier` and `LexedSource` are
+  exported.
+
+**Performance**
+
+- The import scanner stops after the last `import` or `export` word it would
+  stop at, found up front with a regular expression, so the code after a
+  component's imports is never read. On an 18 kB body with no imports,
+  `parseImportsExports` goes from about 390 µs to 3 µs. Against the previous
+  version, Carbon's scripts with `localExports: false` are 16% faster and
+  the largest script 19% faster.
+- On Carbon's 327 component scripts, `lexImportsExports` takes about 40% of
+  the time `parseImportsExports` with `localExports: false` takes, and on
+  the largest, 63 kB, about an eighth. A fresh Node process imports
+  `sveast/lexer` in 1.4 ms, against 7.0 ms for `parseImportsExports`.
+
 ## 0.6.0 — 2026-10-01
 
 **Features**
