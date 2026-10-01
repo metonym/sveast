@@ -21,8 +21,7 @@ export function isNode(value: unknown): value is Node {
   return (
     typeof value === "object" &&
     value !== null &&
-    "type" in value &&
-    typeof value.type === "string"
+    typeof fieldsOf(value).type === "string"
   );
 }
 
