@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -35,14 +35,22 @@
         "noUselessSwitchCase": "error",
         "noUselessTypeConstraint": "error",
         "useArrowFunction": "error",
-        "useLiteralKeys": "error"
+        "useLiteralKeys": "error",
+        "noImplicitCoercions": "error",
+        "noUselessStringConcat": "error",
+        "noUselessUndefined": "error"
       },
       "suspicious": {
         "noExplicitAny": "error",
         "noFocusedTests": "error",
         "noImportCycles": "error",
         "noSkippedTests": "error",
-        "noTsIgnore": "error"
+        "noTsIgnore": "error",
+        "noEmptyBlockStatements": "error",
+        "noEvolvingTypes": "error",
+        "noMisplacedAssertion": "error",
+        "noShadow": "error",
+        "useArraySortCompare": "error"
       },
       "style": {
         "noCommonJs": "error",
@@ -67,11 +75,38 @@
               }
             }
           }
-        }
+        },
+        "noNestedTernary": "error",
+        "noSubstr": "error",
+        "useConsistentTypeDefinitions": "error",
+        "useErrorCause": "error",
+        "useExplicitLengthCheck": "error",
+        "useShorthandAssign": "error"
+      },
+      "nursery": {
+        "noConditionalExpect": "error",
+        "noMisleadingReturnType": "error",
+        "useNullishCoalescing": "error",
+        "useRegexpExec": "error",
+        "useStringStartsEndsWith": "error"
       }
     }
   },
   "overrides": [
+    {
+      "includes": ["src/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noNodejsModules": "error",
+            "noProcessGlobal": "error"
+          },
+          "suspicious": {
+            "noConsole": "error"
+          }
+        }
+      }
+    },
     {
       "includes": ["src/types/**"],
       "linter": {
