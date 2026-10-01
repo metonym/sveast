@@ -245,9 +245,11 @@ export const visitorKeys = {
   readonly [T in NodeType]: readonly ChildKey<T>[];
 };
 
-const keysByType = new Map<string, readonly string[]>(
-  Object.entries(visitorKeys),
+const keysByType: Partial<Record<string, readonly string[]>> = Object.assign(
+  Object.create(null),
+  visitorKeys,
 );
+const NO_KEYS: readonly string[] = [];
 
 /**
  * Return it from `enter` or `leave` to end the walk: no further `enter` or
@@ -296,7 +298,7 @@ function visit(
   index: number | null,
   visitor: Visitor,
 ): boolean {
-  const keys = keysByType.get(node.type);
+  const keys = keysOf(node);
   if (keys === undefined) throw new Error(`unknown node type: ${node.type}`);
   const entered = visitor.enter?.(node, parent, key, index);
   if (entered === STOP) return true;
@@ -305,7 +307,8 @@ function visit(
       return replace(entered, parent, key, index, visitor);
     }
     const fields = fieldsOf(node);
-    for (const field of keys) {
+    for (let k = 0; k < keys.length; k++) {
+      const field = keys[k];
       const value = fields[field];
       if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
@@ -320,6 +323,18 @@ function visit(
     }
   }
   return visitor.leave?.(node, parent, key, index) === STOP;
+}
+
+function keysOf(node: AST.SvelteNode): readonly string[] | undefined {
+  const type = node.type;
+  if (type === "Identifier") {
+    return node.typeAnnotation === undefined && node.decorators === undefined
+      ? NO_KEYS
+      : visitorKeys.Identifier;
+  }
+  if (type === "Literal") return visitorKeys.Literal;
+  if (type === "Text") return visitorKeys.Text;
+  return keysByType[type];
 }
 
 function replace(
