@@ -11,11 +11,12 @@ import {
   expected_token,
 } from "./errors";
 import { readExpression } from "./expression";
-import { assertType, mapChildren, type TSAsExpression } from "./nodes";
+import { assertType, mapChildren } from "./nodes";
 import { ParseError } from "./parse-error";
 import type { TemplateParserState } from "./state";
 import type { Expression, Node, Pattern } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
+import type { TSAsExpression } from "./types/typescript";
 
 const REGEX_WHITESPACE_THEN_CLOSING_BRACE = /\s*}/y;
 
@@ -260,7 +261,9 @@ function openSnippet(state: TemplateParserState, start: number): void {
     true,
   );
   assertType(node, "ArrowFunctionExpression");
-  const { params: parameters } = node;
+  const parameters = node.params.filter(
+    (param): param is Pattern => param.type !== "TSParameterProperty",
+  );
 
   state.eatClosingBrace();
 

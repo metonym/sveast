@@ -74,8 +74,8 @@ const RELATIVE = /^\.\//;
 
 const reexportEntries: BunPlugin = {
   name: "sveast-reexport-entries",
-  setup(build) {
-    build.onResolve({ filter: RELATIVE }, (args) =>
+  setup(bundler) {
+    bundler.onResolve({ filter: RELATIVE }, (args) =>
       ENTRY.test(args.importer)
         ? { path: `${args.path}.js`, external: true }
         : undefined,

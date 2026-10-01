@@ -1,9 +1,10 @@
 import { parseExpressionAt } from "./acorn-bridge";
 import { matchBracket } from "./bracket";
 import { expected_pattern } from "./errors";
-import { assertType, type TSTypeAnnotation } from "./nodes";
+import { assertType } from "./nodes";
 import type { TemplateParserState } from "./state";
 import type { Pattern } from "./types/estree";
+import type { TSTypeAnnotation } from "./types/typescript";
 
 const REGEX_OPTIONAL_PARAM_COLON = /\?\s*:/g;
 
@@ -28,6 +29,7 @@ export function readPattern(state: TemplateParserState): Pattern {
   );
   assertType(node, "AssignmentExpression");
   const pattern = node.left;
+  assertType(pattern, "ObjectPattern", "ArrayPattern");
   const typeAnnotation = readTypeAnnotation(state);
   pattern.typeAnnotation = typeAnnotation;
   if (typeAnnotation) pattern.end = typeAnnotation.end;

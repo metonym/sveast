@@ -1,46 +1,14 @@
-import type {
-  BaseExpression,
-  BaseNode,
-  Expression,
-  Node,
-} from "./types/estree";
+import type { BaseExpression, Expression, Node } from "./types/estree";
 
 /**
- * acorn puts `start` and `end` on every node, and acorn-typescript adds the
- * TypeScript nodes. svelte's published estree types omit both, so this widens
- * them for use inside the parser only: the module isn't reachable from the
- * public types.
+ * acorn's `preserveParens` option wraps a parenthesized expression in this
+ * node. The parser removes them again, so the public types leave it out and
+ * the module isn't reachable from them.
  */
 declare module "./types/estree" {
-  interface BaseNode {
-    start: number;
-    end: number;
-  }
-
-  interface BasePattern {
-    typeAnnotation?: TSTypeAnnotation;
-  }
-
   interface ExpressionMap {
     ParenthesizedExpression: ParenthesizedExpression;
-    TSAsExpression: TSAsExpression;
   }
-}
-
-/** A TypeScript type, which the parser never looks inside. */
-export interface TSType extends BaseNode {
-  type: string;
-}
-
-export interface TSTypeAnnotation extends BaseNode {
-  type: "TSTypeAnnotation";
-  typeAnnotation: TSType;
-}
-
-export interface TSAsExpression extends BaseExpression {
-  type: "TSAsExpression";
-  expression: Expression;
-  typeAnnotation: TSType;
 }
 
 export interface ParenthesizedExpression extends BaseExpression {
@@ -78,12 +46,12 @@ export function mapChildren(node: object, map: (child: Node) => Node): void {
   }
 }
 
-/** Throws unless `node` is a `type` node. For nodes that parsing a synthetic source guarantees. */
+/** Throws unless `node` is one of `types`. For nodes that parsing a synthetic source guarantees. */
 export function assertType<T extends { type: string }, K extends T["type"]>(
   node: T,
-  type: K,
+  ...types: K[]
 ): asserts node is Extract<T, { type: K }> {
-  if (node.type !== type) {
-    throw new Error(`expected a ${type}, got a ${node.type}`);
+  if (!types.some((type) => type === node.type)) {
+    throw new Error(`expected ${types.join(" or ")}, got ${node.type}`);
   }
 }
