@@ -6,7 +6,8 @@ import {
   unexpected_eof,
   unexpected_reserved_word,
 } from "./errors";
-import { type Location, locate } from "./locator";
+import { locate } from "./locator";
+import type { Identifier, SourceLocation } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
 // biome-ignore format: one word per line reads worse than a packed list
@@ -76,19 +77,6 @@ function isTypeScript(source: string): boolean {
 }
 
 export type StackNode = AST.Root | AST.ElementLike | AST.Block;
-
-export interface SourceLocation {
-  start: Location;
-  end: Location;
-}
-
-export interface Identifier {
-  type: "Identifier";
-  name: string;
-  start: number;
-  end: number;
-  loc?: SourceLocation;
-}
 
 /**
  * Options for {@link parse}. The defaults give svelte's own output, minus

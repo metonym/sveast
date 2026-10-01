@@ -25,13 +25,13 @@ bun run fuzz          # differential fuzzer against svelte/compiler
 3. **Scripts and expressions.** `src/acorn-bridge.ts` sets up acorn, plus `src/ts-plugin.ts` for `lang="ts"`, and turns acorn's errors into `js_parse_error`. `src/comments.ts` attaches comments. acorn starts at the expression's offset in the whole source, so node offsets need no shifting.
 4. **Errors and locations.** Every error goes through a function in `src/errors.ts`, which throws a `ParseError` (`src/parse-error.ts`). `src/locator.ts` turns offsets into lines and columns, for errors and for `loc: true`.
 
-Three files or directories are generated from upstream sources. Don't edit them by hand; re-run the script after upgrading svelte:
+These files are generated from upstream sources. Don't edit them by hand; re-run the script after upgrading svelte:
 
 | File | Generator | From |
 |:---|:---|:---|
 | `src/errors.ts` | `bun scripts/generate-errors.ts` | svelte's `errors.js`, so codes and messages match |
 | `src/entities.ts` | `bun scripts/generate-entities.ts` | The HTML standard's [`entities.json`](https://html.spec.whatwg.org/entities.json), the named character references |
-| `src/types/` | `bun scripts/generate-types.ts` | svelte's published `AST` types and `@types/estree`, so the package has no type dependencies |
+| `src/types/estree.ts`, `src/types/svelte-ast.ts` | `bun scripts/generate-types.ts` | `@types/estree` and svelte's published `AST` types, so the package has no type dependencies. The script patches them to match the parser's output: offsets, the TypeScript nodes from the hand-written `src/types/typescript.ts`, and fields svelte's types miss |
 
 The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` only re-exports, `parse-module.js` holds `parseModule`, `parse.js` the template parser, and a shared chunk acorn, the TypeScript plugin and the code both need. A consumer's bundler can then load `parseModule` without the template parser (`"sideEffects": false` lets it drop the unused re-export). `scripts/shrink-parser.ts` cuts its size: it stubs acorn's regex validator and shortens the TypeScript plugin's `ts*` member names. Both fail the build if the source they rewrite changes shape.
 
@@ -51,6 +51,7 @@ The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` on
 |:---|:---|
 | `tests/parity.test.ts` | Every component in `tests/corpus` against svelte/compiler: the AST with and without `loc`, or the error |
 | `tests/ts-plugin.test.ts` | The TypeScript plugin against acorn-typescript, with and without `locations` |
+| `tests/types.test.ts` | The exported types against the corpus's ASTs and `tests/ts-snippets.ts`: every node `type` and field is declared, and every required field is there |
 | `tests/api.test.ts` | The public API: exports, options, `ParseError`, `parseModule` |
 | `tests/expression-fastpath.test.ts` | Expressions read without acorn match acorn's reading |
 | `tests/parens.test.ts` | Parenthesized expressions |

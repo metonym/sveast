@@ -56,7 +56,18 @@ Parses a JavaScript or TypeScript module, such as a `.ts` file a component impor
 
 ### Types
 
-`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), with `name_loc`, a comment's `loc`, and `Root.instance`/`module` made optional, since they can be absent. `ParseOptions` is exported too.
+`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions` is exported too.
+
+The estree node types are exported as well (`Program`, `Node`, `Statement`, `Expression`, `Identifier`, ...), so you don't need `@types/estree`. They're estree's, plus what the parser adds: `start`/`end` on every node, and the TypeScript plugin's nodes (`TSInterfaceDeclaration`, `TSTypeAnnotation`, `TSTypeReference`, ...; `TSNode` is their union) and fields (`typeAnnotation`, `typeParameters`, `typeArguments`, `returnType`, `importKind`/`exportKind`, ...). The TypeScript nodes are in the `Statement`, `Declaration` and `Expression` unions, so checking `node.type` narrows to them.
+
+```ts
+import { parseModule, type TSInterfaceDeclaration } from "sveast";
+
+const interfaces: TSInterfaceDeclaration[] = [];
+for (const node of parseModule(source, { typescript: true }).body) {
+  if (node.type === "TSInterfaceDeclaration") interfaces.push(node);
+}
+```
 
 ## Recipes
 
