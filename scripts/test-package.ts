@@ -81,7 +81,7 @@ try {
   await writeFile(
     join(dir, "smoke.js"),
     `import assert from "node:assert/strict";
-import { parse, parseModule, walk } from "sveast";
+import { parse, parseModule, STOP, walk } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
 
 const source = \`<script lang="ts">
@@ -107,6 +107,16 @@ walk(parse(source), {
   },
 });
 assert.deepEqual(classes, ["big"]);
+
+let first;
+walk(parse(source), {
+  enter(node) {
+    if (node.type !== "Identifier") return;
+    first = node.name;
+    return STOP;
+  },
+});
+assert.equal(first, "name");
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -127,6 +137,7 @@ assert.deepEqual(classes, ["big"]);
   ParseError,
   parse,
   parseModule,
+  STOP,
   visitorKeys,
   walk,
 } from "sveast";
@@ -182,6 +193,9 @@ const visitor: Visitor = {
       void test;
       return false;
     }
+  },
+  leave(node) {
+    if (node.type === "Fragment") return STOP;
   },
 };
 walk(ast, visitor);

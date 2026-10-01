@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type AST, parse, parseModule, visitorKeys, walk } from "sveast";
+import { type AST, parse, parseModule, STOP, visitorKeys, walk } from "sveast";
 import { byCodeUnit, isRecord } from "../scripts/shared";
 import { SNIPPETS } from "./ts-snippets";
 
@@ -159,6 +159,63 @@ test("enter returning false skips the children, and leave still runs", () => {
     "leave Fragment",
     "leave RegularElement",
     "leave Fragment",
+  ]);
+});
+
+function walkEvents(
+  source: string,
+  stopAt: (event: string) => boolean,
+): string[] {
+  const seen: string[] = [];
+  const record = (event: string) => {
+    seen.push(event);
+    return stopAt(event) ? STOP : undefined;
+  };
+  walk(parse(source).fragment, {
+    enter: (node) => record(`enter ${node.type}`),
+    leave: (node) => record(`leave ${node.type}`),
+  });
+  return seen;
+}
+
+test("enter returning STOP ends the walk", () => {
+  expect(
+    walkEvents("<div><p>{a}{b}</p><i></i></div><span></span>", (event) =>
+      event.endsWith("Identifier"),
+    ),
+  ).toEqual([
+    "enter Fragment",
+    "enter RegularElement",
+    "enter Fragment",
+    "enter RegularElement",
+    "enter Fragment",
+    "enter ExpressionTag",
+    "enter Identifier",
+  ]);
+});
+
+test("leave returning STOP ends the walk", () => {
+  expect(
+    walkEvents(
+      "<div><p>{a}</p><i></i></div><span></span>",
+      (event) => event === "leave ExpressionTag",
+    ),
+  ).toEqual([
+    "enter Fragment",
+    "enter RegularElement",
+    "enter Fragment",
+    "enter RegularElement",
+    "enter Fragment",
+    "enter ExpressionTag",
+    "enter Identifier",
+    "leave Identifier",
+    "leave ExpressionTag",
+  ]);
+});
+
+test("STOP from the node walk was called with skips everything else", () => {
+  expect(walkEvents("<p></p>", (event) => event === "enter Fragment")).toEqual([
+    "enter Fragment",
   ]);
 });
 
