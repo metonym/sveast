@@ -99,6 +99,15 @@ export interface ParseOptions {
    * markup are still parsed. Default `true`.
    */
   script?: boolean;
+  /**
+   * Collect JavaScript comments, in scripts, expressions and tags, into
+   * `comments` and attach them to nodes as `leadingComments` and
+   * `trailingComments`. With `false`, `comments` is empty and no node has
+   * either field, including the HTML comment before a `<script>` that
+   * svelte copies into its `content.leadingComments`; HTML comments in the
+   * markup and CSS comments are kept. Default `true`.
+   */
+  comments?: boolean;
 }
 
 export class TemplateParserState {
@@ -109,6 +118,7 @@ export class TemplateParserState {
   readonly isTypeScript: boolean;
   readonly css: boolean;
   readonly script: boolean;
+  readonly comments: boolean;
   readonly root: AST.Root;
   readonly stack: StackNode[];
   readonly fragments: AST.Fragment[];
@@ -128,6 +138,7 @@ export class TemplateParserState {
     this.isTypeScript = isTypeScript(source);
     this.css = options.css ?? true;
     this.script = options.script ?? true;
+    this.comments = options.comments ?? true;
     this.root = {
       type: "Root",
       start: 0,

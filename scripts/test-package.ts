@@ -142,7 +142,12 @@ assert.equal(first, "name");
   walk,
 } from "sveast";
 
-const options: ParseOptions = { loc: true, css: false, script: false };
+const options: ParseOptions = {
+  loc: true,
+  css: false,
+  script: false,
+  comments: false,
+};
 const ast: AST.Root = parse("<p>{a}</p>", options);
 const first: AST.Fragment["nodes"][number] | undefined = ast.fragment.nodes[0];
 const program = parseModule("let a: number = 1;", { typescript: true });

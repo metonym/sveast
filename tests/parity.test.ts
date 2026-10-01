@@ -12,18 +12,26 @@ files.sort(byCodeUnit);
 
 const WITHOUT_LOC = new Set(["loc", "name_loc"]);
 
-function plain(value: object, dropLoc: boolean): Json {
+function plain(
+  value: object,
+  dropLoc: boolean,
+  drop: ReadonlySet<string> = dropLoc ? WITHOUT_LOC : new Set(),
+): Json {
   return JSON.parse(
     JSON.stringify(value, (key, item) => {
       if (typeof item === "bigint") return `${item}n`;
-      return dropLoc && WITHOUT_LOC.has(key) ? undefined : item;
+      return drop.has(key) ? undefined : item;
     }),
   );
 }
 
-function outcome(run: () => object, dropLoc: boolean) {
+function outcome(
+  run: () => object,
+  dropLoc: boolean,
+  drop?: ReadonlySet<string>,
+) {
   try {
-    return { ast: plain(run(), dropLoc) };
+    return { ast: plain(run(), dropLoc, drop) };
   } catch (thrown) {
     if (!isRecord(thrown)) throw thrown;
     const { code, message, position, start, end, frame } = thrown;
@@ -97,4 +105,37 @@ test("`script: false` gives the AST without the scripts' statements and comments
   }
   expect(mismatched).toEqual([]);
   expect(compared).toBeGreaterThan(700);
+});
+
+const ATTACHED_COMMENTS = new Set(["leadingComments", "trailingComments"]);
+
+test("`comments: false` gives the AST without its JavaScript comments", () => {
+  const mismatched: string[] = [];
+  let compared = 0;
+  let withComments = 0;
+  for (const file of files) {
+    const source = readFileSync(path.join(root, file), "utf8");
+    for (const loc of [false, true]) {
+      const expected = outcome(
+        () => {
+          const full = parse(source, { loc });
+          if (full.comments.length > 0) withComments++;
+          return { ...full, comments: [] };
+        },
+        false,
+        ATTACHED_COMMENTS,
+      );
+      const skipped = outcome(
+        () => parse(source, { loc, comments: false }),
+        false,
+      );
+      if (!Bun.deepEquals(skipped, expected)) {
+        mismatched.push(`${file}${loc ? " (loc)" : ""}`);
+      }
+      compared++;
+    }
+  }
+  expect(mismatched).toEqual([]);
+  expect(compared).toBeGreaterThan(800);
+  expect(withComments).toBeGreaterThan(200);
 });

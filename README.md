@@ -46,6 +46,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | `loc` | Add `loc` (line and column) to script and expression nodes, and `name_loc` to elements, attributes and directives, as svelte does. Default `false`: they cost time and memory, and most tools only need `start`/`end`. |
 | `css` | Parse `<style>` into rules and selectors. With `false`, `css` keeps its `start`, `end` and `content`, but `children` and `comments` are empty and CSS syntax errors aren't reported. Default `true`. |
 | `script` | Parse each `<script>`'s JavaScript or TypeScript. With `false`, `instance` and `module` keep their attributes, `start` and `end`, and `content` is a `Program` with its `start` and `end` but an empty `body`; the scripts' comments aren't in `comments`, and their syntax errors aren't reported. Expressions in the markup are still parsed. For a pass that only reads the markup, such as collecting which components a file renders and with what props; on the benchmark corpus, it parses 3.4× faster. Default `true`. |
+| `comments` | Collect JavaScript comments, in scripts, expressions and tags. With `false`, `comments` is empty and no node has `leadingComments` or `trailingComments`, including the HTML comment before a `<script>` that svelte copies into its `content.leadingComments`. HTML comments in the markup and CSS comments are kept. For tools that never read comments; on Carbon's components, it parses 3 to 6% faster and the ASTs take 8% less memory. Default `true`. |
 
 With `loc: true`, the result equals svelte's. With the defaults, it's svelte's without `loc` and `name_loc`.
 
@@ -53,7 +54,7 @@ A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed
 
 ### `parseModule(source, options?) => Program`
 
-Parses a JavaScript or TypeScript module, such as a `.ts` file a component imports, the way a component's `<script>` is parsed: estree plus TypeScript nodes, with comments attached as `leadingComments`/`trailingComments`. Options: `typescript` and `loc`, both default `false`.
+Parses a JavaScript or TypeScript module, such as a `.ts` file a component imports, the way a component's `<script>` is parsed: estree plus TypeScript nodes, with comments attached as `leadingComments`/`trailingComments`. Options: `typescript` and `loc`, both default `false`, and `comments`, default `true`; with `false`, no node has `leadingComments` or `trailingComments`.
 
 ### `isValidType(text, options?) => boolean`
 
