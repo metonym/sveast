@@ -1,4 +1,5 @@
 import { Parser } from "acorn";
+import { isCommonType } from "./common-type";
 import { tsPlugin } from "./ts-plugin";
 
 // biome-ignore lint/suspicious/noExplicitAny: `parseWholeType` isn't in acorn's published Parser type
@@ -23,9 +24,13 @@ export function isValidType(
     inline?: boolean;
   } = {},
 ): boolean {
+  return isCommonType(text) || parsesAsType(text, options.inline ?? false);
+}
+
+export function parsesAsType(text: string, inline: boolean): boolean {
   let lineCommentAtEnd = false;
   const parser = new TypeParser(
-    options.inline
+    inline
       ? {
           ecmaVersion: 16,
           sourceType: "module",
