@@ -91,6 +91,14 @@ export interface ParseOptions {
    * `comments` are empty and CSS syntax errors aren't reported. Default `true`.
    */
   css?: boolean;
+  /**
+   * Parse each `<script>`'s JavaScript or TypeScript. With `false`, scripts
+   * keep their attributes and bounds, and `content` is a `Program` with its
+   * `start` and `end` but an empty `body`; their comments aren't in
+   * `comments`, and their syntax errors aren't reported. Expressions in the
+   * markup are still parsed. Default `true`.
+   */
+  script?: boolean;
 }
 
 export class TemplateParserState {
@@ -100,6 +108,7 @@ export class TemplateParserState {
   readonly lfOnly: boolean;
   readonly isTypeScript: boolean;
   readonly css: boolean;
+  readonly script: boolean;
   readonly root: AST.Root;
   readonly stack: StackNode[];
   readonly fragments: AST.Fragment[];
@@ -118,6 +127,7 @@ export class TemplateParserState {
     this.lfOnly = this.loc && !REGEX_NON_LF_LINE_BREAK.test(source);
     this.isTypeScript = isTypeScript(source);
     this.css = options.css ?? true;
+    this.script = options.script ?? true;
     this.root = {
       type: "Root",
       start: 0,

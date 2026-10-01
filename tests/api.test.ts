@@ -66,6 +66,29 @@ test("`css: false` skips the stylesheet but keeps its bounds", () => {
   expect(() => parse("<style>.a {</style>", { css: false })).not.toThrow();
 });
 
+test("`script: false` skips the scripts but keeps their bounds", () => {
+  const source =
+    '<script lang="ts">let a: number = 1; // b</script><p>{a /* c */}</p>';
+  const full = parse(source);
+  const skipped = parse(source, { script: false });
+  expect(full.instance?.content.body).toHaveLength(1);
+  expect(skipped.instance).toEqual({
+    ...full.instance,
+    content: {
+      type: "Program",
+      start: 18,
+      end: 41,
+      body: [],
+      sourceType: "module",
+    },
+  });
+  expect(skipped.fragment).toEqual(full.fragment);
+  expect(skipped.comments).toEqual([full.comments[1]]);
+  expect(() => parse("<script>let</script>")).toThrow(ParseError);
+  expect(() => parse("<script>let</script>", { script: false })).not.toThrow();
+  expect(() => parse("<p>{let}</p>", { script: false })).toThrow(ParseError);
+});
+
 test("syntax errors are ParseErrors with svelte's code and position", () => {
   let error: ParseError | undefined;
   try {
