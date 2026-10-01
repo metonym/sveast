@@ -8,6 +8,7 @@ import {
 } from "./errors";
 import { position } from "./locator";
 import type { TemplateParserState } from "./state";
+import type { Program } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
 const REGEX_CLOSING_SCRIPT_TAG = /<\/script\s*>/g;
@@ -33,15 +34,15 @@ export function readScript(
   if (!close) element_unclosed(source.length, "script");
   state.index = close.index + close[0].length;
 
-  const program = parseProgram(
-    state,
-    source.slice(0, close.index),
-    scriptStart,
-  );
+  const program = state.script
+    ? parseProgram(state, source.slice(0, close.index), scriptStart)
+    : skippedProgram(scriptStart, close.index);
   program.start = scriptStart;
   if (program.loc) {
     Object.assign(program.loc.start, position(start));
     Object.assign(program.loc.end, position(state.index));
+  } else if (state.loc) {
+    program.loc = { start: position(start), end: position(state.index) };
   }
 
   let context: "default" | "module" = "default";
@@ -81,4 +82,9 @@ export function readScript(
     content: program,
     attributes,
   };
+}
+
+/** The `Program` of a script `parse(source, { script: false })` doesn't parse: its bounds, no statements. */
+function skippedProgram(start: number, end: number): Program {
+  return { type: "Program", start, end, body: [], sourceType: "module" };
 }
