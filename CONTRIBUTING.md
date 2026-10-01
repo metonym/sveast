@@ -53,7 +53,7 @@ The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` on
 
 | File | Covers |
 |:---|:---|
-| `tests/parity.test.ts` | Every component in `tests/corpus` against svelte/compiler: the AST with and without `loc`, or the error; and `script: false` against the full AST without the scripts' statements and comments |
+| `tests/parity.test.ts` | Every component in `tests/corpus` against svelte/compiler: the AST with and without `loc`, or the error; `script: false` against the full AST without the scripts' statements and comments; and `comments: false` against it without its JavaScript comments |
 | `tests/ts-plugin.test.ts` | The TypeScript plugin against acorn-typescript, with and without `locations` |
 | `tests/walk.test.ts` | `walk` on the corpus's ASTs and `tests/ts-snippets.ts`: it reaches every node once, children in source order, and `parent`, `key` and `index` locate each node |
 | `tests/types.test.ts` | The exported types against the corpus's ASTs and `tests/ts-snippets.ts`: every node `type` and field is declared, and every required field is there |

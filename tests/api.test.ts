@@ -90,6 +90,30 @@ test("`script: false` skips the scripts but keeps their bounds", () => {
   expect(() => parse("<p>{let}</p>", { script: false })).toThrow(ParseError);
 });
 
+test("`comments: false` drops JavaScript comments but keeps HTML and CSS ones", () => {
+  const source =
+    "<!-- doc -->\n<script>// a\nlet a = 1; /* b */</script>\n" +
+    "<p /* c */ {...a}>{a /* d */}</p><!-- e --><style>/* f */</style>";
+  const full = parse(source);
+  const skipped = parse(source, { comments: false });
+  expect(full.comments).toHaveLength(4);
+  expect(hasKey(full, "leadingComments")).toBe(true);
+  expect(skipped.comments).toEqual([]);
+  expect(hasKey(skipped, "leadingComments")).toBe(false);
+  expect(hasKey(skipped, "trailingComments")).toBe(false);
+  expect(skipped.fragment.nodes.map((node) => node.type)).toEqual(
+    full.fragment.nodes.map((node) => node.type),
+  );
+  expect(skipped.css).toEqual(full.css);
+
+  const program = parseModule("// a\nexport const x = 1; // b\n", {
+    comments: false,
+  });
+  expect(program.body).toHaveLength(1);
+  expect(hasKey(program, "leadingComments")).toBe(false);
+  expect(hasKey(program, "trailingComments")).toBe(false);
+});
+
 test("syntax errors are ParseErrors with svelte's code and position", () => {
   let error: ParseError | undefined;
   try {

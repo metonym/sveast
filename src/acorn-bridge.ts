@@ -11,7 +11,9 @@ import {
   attachComments,
   bindOnComment,
   type Comment,
+  lastCommentEnd,
   onComment,
+  skipComment,
 } from "./comments";
 import { js_parse_error, unexpected_eof } from "./errors";
 import { locate } from "./locator";
@@ -118,6 +120,7 @@ const TSParser = extendParser(tsPlugin, tweaks);
 interface ParseContext {
   isTypeScript: boolean;
   loc: boolean;
+  comments: boolean;
   lfOnly?: boolean;
   root: { comments: Comment[] };
 }
@@ -151,7 +154,7 @@ function run(
   const comments = context.root.comments;
   bindOnComment(source, comments);
   const options: ParserOptions = {
-    onComment,
+    onComment: context.comments ? onComment : skipComment,
     sourceType: "module",
     ecmaVersion: 16,
     locations: context.loc,
@@ -211,9 +214,7 @@ export function parseExpressionAt(
     ),
   );
 
-  const lastComment = context.root.comments.at(-1);
-  const end =
-    lastComment && lastComment.end > node.end ? lastComment.end : node.end;
+  const end = Math.max(node.end, lastCommentEnd());
 
   return {
     node: sawParenthesized && !keepParens ? removeParens(node) : node,

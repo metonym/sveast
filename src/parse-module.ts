@@ -19,6 +19,11 @@ export function parseModule(
     typescript?: boolean;
     /** Add `loc` (line/column) to every node. Default `false`. */
     loc?: boolean;
+    /**
+     * Attach comments as `leadingComments`/`trailingComments`. With
+     * `false`, no node has either field. Default `true`.
+     */
+    comments?: boolean;
   } = {},
 ): Program {
   setSource(source);
@@ -26,6 +31,7 @@ export function parseModule(
     {
       isTypeScript: options.typescript ?? false,
       loc: options.loc ?? false,
+      comments: options.comments ?? true,
       root: { comments: [] },
     },
     source,

@@ -373,7 +373,7 @@ function readTopLevelBlock(
   }
 
   const script = readScript(state, start, attributes);
-  if (comment) {
+  if (comment && state.comments) {
     script.content.leadingComments = [{ type: "Line", value: comment.data }];
   }
   const slot = script.context === "module" ? "module" : "instance";
@@ -538,7 +538,7 @@ function readJsComment(state: TemplateParserState): boolean {
   };
   const loc = state.sourceLocation(start, state.index);
   if (loc) comment.loc = loc;
-  state.root.comments.push(comment);
+  if (state.comments) state.root.comments.push(comment);
   return true;
 }
 

@@ -130,7 +130,13 @@ function referenceOutcome(
   loc: boolean,
 ): Outcome {
   setSource(source);
-  const context = { source, isTypeScript, loc, root: { comments: [] } };
+  const context = {
+    source,
+    isTypeScript,
+    loc,
+    comments: true,
+    root: { comments: [] },
+  };
   try {
     const { node, end } = parseExpressionAt(context, source, index);
     return { node: strip(node), end };
