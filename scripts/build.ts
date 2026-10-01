@@ -31,7 +31,7 @@ await Promise.all(
   }),
 );
 
-const SUBPATHS = ["core", "typescript", "entities"];
+const SUBPATHS = ["core", "typescript", "entities", "walk"];
 
 async function emitTypeDeclarations() {
   try {
@@ -105,7 +105,6 @@ async function buildProject() {
       "./src/parse-module.ts",
       "./src/parse-imports-exports.ts",
       "./src/is-valid-type.ts",
-      "./src/walk.ts",
       ...SUBPATHS.map((subpath) => `./src/${subpath}.ts`),
     ],
     root: "./src",

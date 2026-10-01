@@ -112,6 +112,12 @@ It works on any node the parsers return: a component's `Root`, a `Fragment`, an 
 
 `visitorKeys` is the table `walk` reads: the fields of each node type that hold child nodes, in source order, e.g. `visitorKeys.IfBlock` is `["test", "consequent", "alternate"]`. Use it with another walker, or to write your own.
 
+`walk`, `SKIP`, `STOP`, `visitorKeys`, `Visitor` and the types are also exported from `sveast/walk`, which loads neither acorn nor the parser: for code that walks ASTs it gets from elsewhere, such as a cache, and must not pay for loading the parser. They're the same values as `sveast`'s.
+
+```ts
+import { STOP, walk } from "sveast/walk";
+```
+
 ### Types
 
 `AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions`, `ParseModuleOptions` and `ParseImportsExportsOptions` are exported too.
