@@ -72,7 +72,11 @@ export const LARGEST = COMPONENTS.reduce((a, b) =>
 
 const CARBON = join(CORPUS, "carbon");
 
-export const CARBON_LARGEST = read(CARBON, [".svelte"])
+export const CARBON_COMPONENTS = read(CARBON, [".svelte"]).filter(
+  ({ source }) => parses(source),
+);
+
+export const CARBON_LARGEST = [...CARBON_COMPONENTS]
   .sort((a, b) => b.source.length - a.source.length)
   .slice(0, 5);
 
