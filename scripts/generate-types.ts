@@ -249,6 +249,50 @@ for (const header of [
     `${ACORN_TYPESCRIPT_ABSENT("with `typescript: true` unless there's a `with` clause")}    attributes?: ImportAttribute[] | undefined;`,
   );
 }
+estree = patch(
+  estree,
+  "export interface RegExpLiteral extends BaseNode, BaseExpression {",
+  "/** A string `Literal`: a module specifier, an import attribute, or a quoted module export name. */\nexport interface StringLiteral extends SimpleLiteral {\n    value: string;\n}\n\nexport interface RegExpLiteral extends BaseNode, BaseExpression {",
+);
+for (const [header, from, to] of [
+  [
+    "export interface ImportDeclaration extends BaseModuleDeclaration",
+    "    source: Literal;",
+    "    source: StringLiteral;",
+  ],
+  [
+    "export interface ImportSpecifier extends BaseModuleSpecifier",
+    "    imported: Identifier | Literal;",
+    "    imported: Identifier | StringLiteral;",
+  ],
+  [
+    "export interface ImportAttribute extends BaseNode",
+    "    key: Identifier | Literal;\n    value: Literal;",
+    "    key: Identifier | StringLiteral;\n    value: StringLiteral;",
+  ],
+  [
+    "export interface ExportNamedDeclaration extends BaseModuleDeclaration",
+    "    source?: Literal | null | undefined;",
+    "    source?: StringLiteral | null | undefined;",
+  ],
+  [
+    'export interface ExportSpecifier extends Omit<BaseModuleSpecifier, "local">',
+    "    local: Identifier | Literal;\n    exported: Identifier | Literal;",
+    "    local: Identifier | StringLiteral;\n    exported: Identifier | StringLiteral;",
+  ],
+  [
+    "export interface ExportAllDeclaration extends BaseModuleDeclaration",
+    "    exported: Identifier | Literal | null;",
+    "    exported: Identifier | StringLiteral | null;",
+  ],
+  [
+    "export interface ExportAllDeclaration extends BaseModuleDeclaration",
+    "    source: Literal;",
+    "    source: StringLiteral;",
+  ],
+]) {
+  estree = patchMember(estree, header, from, to);
+}
 for (const header of [
   "export interface SimpleCallExpression extends BaseCallExpression",
   "export interface MemberExpression extends BaseExpression, BasePattern",

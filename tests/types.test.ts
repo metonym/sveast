@@ -104,6 +104,42 @@ function mismatches(root: unknown): string[] {
   return [...found];
 }
 
+const STRING_LITERAL_FIELDS: Record<string, string[]> = {
+  ImportDeclaration: ["source"],
+  ImportSpecifier: ["imported"],
+  ImportAttribute: ["key", "value"],
+  ExportNamedDeclaration: ["source"],
+  ExportSpecifier: ["local", "exported"],
+  ExportAllDeclaration: ["exported", "source"],
+  TSImportType: ["argument"],
+  TSEnumMember: ["id"],
+  TSModuleDeclaration: ["id"],
+  TSExternalModuleReference: ["expression"],
+};
+
+function nonStringLiterals(root: unknown, seen: Set<string>): string[] {
+  const found = new Set<string>();
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    const node = value as Record<string, unknown>;
+    const type = String(node.type);
+    for (const field of STRING_LITERAL_FIELDS[type] ?? []) {
+      seen.add(type);
+      const child = node[field] as { type?: unknown; value?: unknown } | null;
+      if (child?.type === "Literal" && typeof child.value !== "string") {
+        found.add(`${type}.${field}`);
+      }
+    }
+    for (const key in node) visit(node[key]);
+  };
+  visit(root);
+  return [...found];
+}
+
 const CORPUS = join(import.meta.dir, "corpus");
 const FILES = readdirSync(CORPUS, { recursive: true, encoding: "utf8" }).sort();
 
@@ -129,4 +165,29 @@ test("the types declare every node and field the corpus's ASTs have", () => {
     check(parseModule(snippet, { typescript: true, loc: true }));
   }
   expect([...found].sort()).toEqual([]);
+});
+
+test("the fields typed StringLiteral hold only string literals", () => {
+  const found = new Set<string>();
+  const seen = new Set<string>();
+  const check = (root: unknown) => {
+    for (const mismatch of nonStringLiterals(root, seen)) found.add(mismatch);
+  };
+  for (const path of FILES) {
+    const source = () => readFileSync(join(CORPUS, path), "utf8");
+    try {
+      if (path.endsWith(".svelte")) {
+        check(parse(source()));
+      } else if (path.endsWith(".js") || path.endsWith(".ts")) {
+        check(parseModule(source(), { typescript: path.endsWith(".ts") }));
+      }
+    } catch {
+      // files neither parser accepts have no AST to check
+    }
+  }
+  for (const snippet of Object.values(SNIPPETS)) {
+    check(parseModule(snippet, { typescript: true }));
+  }
+  expect([...found].sort()).toEqual([]);
+  expect([...seen].sort()).toEqual(Object.keys(STRING_LITERAL_FIELDS).sort());
 });

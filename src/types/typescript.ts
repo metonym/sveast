@@ -10,6 +10,7 @@ import type {
   Pattern,
   RestElement,
   Statement,
+  StringLiteral,
   TemplateElement,
   UnaryExpression,
 } from "./estree";
@@ -248,7 +249,7 @@ export interface TSConstructorType extends BaseNode {
 
 export interface TSImportType extends BaseNode {
   type: "TSImportType";
-  argument: Literal;
+  argument: StringLiteral;
   qualifier?: EntityName;
   typeArguments?: TSTypeParameterInstantiation;
 }
@@ -460,14 +461,14 @@ export interface TSEnumDeclaration extends BaseNode {
 
 export interface TSEnumMember extends BaseNode {
   type: "TSEnumMember";
-  id: Identifier | Literal;
+  id: Identifier | StringLiteral;
   initializer?: Expression;
 }
 
 /** `namespace A {}`, `module "a" {}`, `declare global {}`; `namespace A.B {}` nests through `body`. */
 export interface TSModuleDeclaration extends BaseNode {
   type: "TSModuleDeclaration";
-  id: Identifier | Literal;
+  id: Identifier | StringLiteral;
   /** Absent for `declare module "a";`. */
   body?: TSModuleBlock | TSModuleDeclaration;
   declare?: boolean;
@@ -521,7 +522,7 @@ export interface TSImportEqualsDeclaration extends BaseNode {
 
 export interface TSExternalModuleReference extends BaseNode {
   type: "TSExternalModuleReference";
-  expression: Literal;
+  expression: StringLiteral;
 }
 
 /** `export = a`. */
