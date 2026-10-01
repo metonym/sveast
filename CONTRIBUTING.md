@@ -33,7 +33,7 @@ These files are generated from upstream sources. Don't edit them by hand; re-run
 | `src/entities.ts` | `bun scripts/generate-entities.ts` | The HTML standard's [`entities.json`](https://html.spec.whatwg.org/entities.json), the named character references |
 | `src/types/estree.ts`, `src/types/svelte-ast.ts` | `bun scripts/generate-types.ts` | `@types/estree` and svelte's published `AST` types, so the package has no type dependencies. The script patches them to match the parser's output: offsets, the TypeScript nodes from the hand-written `src/types/typescript.ts`, and fields svelte's types miss |
 
-The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` only re-exports, `parse-module.js` holds `parseModule`, `parse.js` the template parser, and a shared chunk acorn, the TypeScript plugin and the code both need. A consumer's bundler can then load `parseModule` without the template parser (`"sideEffects": false` lets it drop the unused re-export). `scripts/shrink-parser.ts` cuts its size: it stubs acorn's regex validator and shortens the TypeScript plugin's `ts*` member names. Both fail the build if the source they rewrite changes shape.
+The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` only re-exports, `parse-module.js` holds `parseModule`, `parse.js` the template parser, `is-valid-type.js` `isValidType`, and shared chunks acorn, the TypeScript plugin and the code they need. A consumer's bundler can then load `parseModule` or `isValidType` without the template parser (`"sideEffects": false` lets it drop the unused re-export). `scripts/shrink-parser.ts` cuts its size: it stubs acorn's regex validator and shortens the TypeScript plugin's `ts*` member names. Both fail the build if the source they rewrite changes shape.
 
 ## Rules every change must keep
 
@@ -53,6 +53,7 @@ The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` on
 | `tests/ts-plugin.test.ts` | The TypeScript plugin against acorn-typescript, with and without `locations` |
 | `tests/types.test.ts` | The exported types against the corpus's ASTs and `tests/ts-snippets.ts`: every node `type` and field is declared, and every required field is there |
 | `tests/api.test.ts` | The public API: exports, options, `ParseError`, `parseModule` |
+| `tests/is-valid-type.test.ts` | `isValidType`: types it accepts and rejects, text that would smuggle in a statement, and agreement with parsing `type T = text` on mutated types |
 | `tests/expression-fastpath.test.ts` | Expressions read without acorn match acorn's reading |
 | `tests/parens.test.ts` | Parenthesized expressions |
 | `tests/fuzz.test.ts` | The fuzzer reports findings and exits non-zero |

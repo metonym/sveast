@@ -1,3 +1,4 @@
+export { isValidType } from "./is-valid-type";
 export { parse } from "./parse";
 export { ParseError, parseModule } from "./parse-module";
 export type { ParseOptions } from "./state";

@@ -392,6 +392,14 @@ export function tsPlugin(BaseParser: typeof Parser): typeof Parser {
       return this.finishNode(node, "TSThisType");
     }
 
+    parseWholeType(): Node {
+      this.inType = true;
+      this.nextToken();
+      const type = this.tsParseType();
+      if (this.type !== tt.eof) this.unexpected();
+      return type;
+    }
+
     tsParseType(): Node {
       const type = this.tsParseNonConditionalType();
       if (

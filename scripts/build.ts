@@ -85,7 +85,12 @@ const reexportEntries: BunPlugin = {
 
 async function buildProject() {
   const result = await build({
-    entrypoints: ["./src/index.ts", "./src/parse.ts", "./src/parse-module.ts"],
+    entrypoints: [
+      "./src/index.ts",
+      "./src/parse.ts",
+      "./src/parse-module.ts",
+      "./src/is-valid-type.ts",
+    ],
     root: "./src",
     outdir: outDir,
     naming: { entry: "[name].[ext]", chunk: "shared-[hash].[ext]" },

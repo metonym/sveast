@@ -34,7 +34,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename` |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
-| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`) |
+| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `isValidType`) |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
 
 ## API
@@ -53,6 +53,10 @@ A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed
 ### `parseModule(source, options?) => Program`
 
 Parses a JavaScript or TypeScript module, such as a `.ts` file a component imports, the way a component's `<script>` is parsed: estree plus TypeScript nodes, with comments attached as `leadingComments`/`trailingComments`. Options: `typescript` and `loc`, both default `false`.
+
+### `isValidType(text) => boolean`
+
+Whether `text` is exactly one TypeScript type, such as a JSDoc `{"sm" | "lg"}` a tool is about to copy into a `.d.ts`. The text is parsed as a type on its own, not wrapped in a statement, so a `;`, a line break or a `}` in it can't end the type and smuggle in a statement: `string; let x = 1` and `{ a: string } }` are `false`. Whitespace and comments around the type are allowed; a `//` comment runs to the end of the line, so check for one before embedding the text ahead of more code on the same line. Results aren't cached; memoize if you check the same text often.
 
 ### Types
 
