@@ -1,7 +1,7 @@
 import { existsSync, watch } from "node:fs";
 import { cp, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { $, build } from "bun";
+import { $, type BunPlugin, build } from "bun";
 import { bundleDts } from "./bundle-dts";
 import { shrinkParser } from "./shrink-parser";
 
@@ -62,15 +62,32 @@ async function slimPackageManifest() {
   await writeFile(manifestPath, `${JSON.stringify(ordered, null, 2)}\n`);
 }
 
+const ENTRY = /[\\/]src[\\/]index\.ts$/;
+const RELATIVE = /^\.\//;
+
+const reexportEntries: BunPlugin = {
+  name: "sveast-reexport-entries",
+  setup(build) {
+    build.onResolve({ filter: RELATIVE }, (args) =>
+      ENTRY.test(args.importer)
+        ? { path: `${args.path}.js`, external: true }
+        : undefined,
+    );
+  },
+};
+
 async function buildProject() {
   const result = await build({
-    entrypoints: ["./src/index.ts"],
+    entrypoints: ["./src/index.ts", "./src/parse.ts", "./src/parse-module.ts"],
+    root: "./src",
     outdir: outDir,
+    naming: { entry: "[name].[ext]", chunk: "shared-[hash].[ext]" },
     format: "esm",
     target: "browser",
     minify: true,
+    splitting: true,
     packages: "bundle",
-    plugins: [shrinkParser],
+    plugins: [reexportEntries, shrinkParser],
   });
 
   if (!result.success) {
