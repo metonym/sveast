@@ -1,5 +1,87 @@
 # Changelog
 
+## 0.5.0 — 2026-10-01
+
+**Features**
+
+- `walk(node, visitor)` visits a node and its descendants depth-first, in
+  source order, calling `enter(node, parent, key, index)` before a node's
+  children and `leave` after them. `parent[key]` is the node, or
+  `parent[key][index]` when the field is an array; all three are `null` for
+  the node passed to `walk`. Returning `false` from `enter` skips the
+  children; `leave` still runs. Returning `STOP` from `enter` or `leave`
+  ends the walk: no further calls, including `leave` on the node's
+  ancestors. Returning another node from `enter` writes it to `parent[key]`
+  (or `parent[key][index]`), calls `enter` on it and visits its children
+  instead, and `leave` gets the replacement, so `return node.expression` on
+  each `TSAsExpression` unwraps `a as B as C` one layer per `enter`.
+  Replacing the node passed to `walk` throws. It reads only the fields that
+  hold child nodes, so it never descends into `loc`, comments or strings,
+  and throws on a node type it doesn't know. A component's sections are
+  visited in scope order: `module`, `instance`, `fragment`, `css`.
+  `visitorKeys` is the table it reads, exported for other walkers. `walk`
+  ships as its own entry, `walk.js`, which loads neither acorn nor the
+  parser. `Visitor` and `STOP` are exported too.
+- `parse(source, { script: false })` doesn't parse each `<script>`'s
+  JavaScript or TypeScript. `instance` and `module` keep their attributes,
+  `start` and `end`, and `content` is a `Program` with its `start` and `end`
+  but an empty `body`; the scripts' comments aren't in `Root.comments` and
+  their syntax errors aren't reported. Expressions in the markup are still
+  parsed. Default `true`.
+- `comments: false` on `parse` and `parseModule`. JavaScript comments in
+  scripts, expressions and tags aren't collected: `Root.comments` is empty,
+  and no node has `leadingComments` or `trailingComments`, including the
+  HTML comment before a `<script>` that svelte copies into its
+  `content.leadingComments`. HTML comments in the markup and CSS comments
+  are kept. Default `true`. `parseModule`'s options are the exported
+  `ParseModuleOptions`.
+- `createParser(support?)` from `sveast/core` returns `parse` and
+  `parseModule` without the TypeScript plugin or the table of HTML's named
+  character references, which together are about a third of a bundle.
+  `typescript` from `sveast/typescript` and `entities` from `sveast/entities`
+  put them back; with both, the parsers are the same as `sveast`'s.
+  `sveast/core` also exports `ParseError` and the types. Without
+  `typescript`, a component with `<script lang="ts">`, or `parseModule` with
+  `typescript: true`, throws an `Error` rather than a `ParseError`: a
+  missing import, not a syntax error, and it never returns a JavaScript AST
+  of TypeScript. Without `entities`, text and attribute values decode
+  numeric references and `&amp;`, `&apos;`, `&gt;`, `&lt;` and `&quot;`,
+  and leave other names, such as `&copy;`, as written.
+
+**Changes**
+
+- Non-ASCII identifiers are classified with the engine's Unicode data
+  (`\p{ID_Start}` and `\p{ID_Continue}`) instead of acorn's tables. In Bun
+  and Node 24 (Unicode 17) that matches acorn 8.18 on every code point. An
+  engine on another Unicode version differs on the letters added in between.
+
+**Performance**
+
+- `script: false` on the corpus's 400 components, median of 21 runs: 35.4 ms
+  → 10.5 ms in Bun, 42.6 ms → 13.8 ms in Node.
+- `comments: false` on Carbon's 281 components, median of 60 runs: 24.1 ms →
+  22.6 ms in Bun, 38.4 ms → 37.1 ms in Node. The retained ASTs go from
+  15.7 MB to 14.4 MB.
+- `walk` no longer looks up keys for every leaf. Identifiers, literals and
+  text are about 46% of the nodes, and an `Identifier` without a
+  `typeAnnotation` or `decorators` gets no keys. Carbon's module, instance
+  and fragment (123,855 nodes): 5.82 ms → 3.76 ms. Corpus files: 6.15 ms →
+  4.57 ms. The same Carbon nodes, median of 41 interleaved runs: 5.05 ms →
+  3.35 ms, level with sveld's walker.
+- The acorn chunk goes from 129.6 kB / 36.2 kB gzipped to 123.4 kB /
+  31.2 kB with the identifier regexes, and a bundle of `parse` and
+  `parseModule` from 204.6 kB / 63.9 kB to 198.5 kB / 58.7 kB. The entity
+  table stores each name as the characters it shares with the previous one;
+  the 106 legacy names that are also valid without a `;` share one entry
+  with their `;` form. That takes the entity table from 27.4 kB / 10.8 kB
+  gzipped to 20.2 kB / 9.6 kB minified, and the bundle from 198.5 kB /
+  58.7 kB to 191.4 kB / 57.5 kB. 300,000 random strings of entity names,
+  prefixes and numeric references decode the same.
+- `parse` and `parseModule` from `sveast` minify to 192.0 kB / 57.3 kB
+  gzipped. `createParser()` is 138.0 kB / 38.7 kB; with `typescript`,
+  172.1 kB / 47.5 kB; with `entities`, 158.2 kB / 48.7 kB; with both,
+  192.3 kB / 57.4 kB.
+
 ## 0.4.0 — 2026-09-30
 
 **Features**
