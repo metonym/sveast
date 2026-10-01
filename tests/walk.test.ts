@@ -219,6 +219,84 @@ test("STOP from the node walk was called with skips everything else", () => {
   ]);
 });
 
+const CASTS = new Set([
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TSNonNullExpression",
+  "TSTypeAssertion",
+]);
+
+test("enter returning a node replaces this one and walks it instead", () => {
+  const program = parseModule("f(<A>a!, (b as B) satisfies C);", {
+    typescript: true,
+  });
+  const events: string[] = [];
+  walk(program, {
+    enter(node, parent, key, index) {
+      events.push(`enter ${node.type} ${parent?.type}.${key}[${index}]`);
+      if (CASTS.has(node.type) && "expression" in node) return node.expression;
+    },
+    leave(node) {
+      events.push(`leave ${node.type}`);
+    },
+  });
+  expect(events).toEqual([
+    "enter Program undefined.null[null]",
+    "enter ExpressionStatement Program.body[0]",
+    "enter CallExpression ExpressionStatement.expression[null]",
+    "enter Identifier CallExpression.callee[null]",
+    "leave Identifier",
+    "enter TSTypeAssertion CallExpression.arguments[0]",
+    "enter TSNonNullExpression CallExpression.arguments[0]",
+    "enter Identifier CallExpression.arguments[0]",
+    "leave Identifier",
+    "enter TSSatisfiesExpression CallExpression.arguments[1]",
+    "enter TSAsExpression CallExpression.arguments[1]",
+    "enter Identifier CallExpression.arguments[1]",
+    "leave Identifier",
+    "leave CallExpression",
+    "leave ExpressionStatement",
+    "leave Program",
+  ]);
+  const statement = program.body[0];
+  if (
+    statement?.type !== "ExpressionStatement" ||
+    statement.expression.type !== "CallExpression"
+  ) {
+    throw new Error("expected a call");
+  }
+  expect(statement.expression.arguments.map((node) => node.type)).toEqual([
+    "Identifier",
+    "Identifier",
+  ]);
+});
+
+test("enter replaces a node held in a field, not an array", () => {
+  const ast = parse('<script lang="ts">let a = b as C;</script>');
+  const names: string[] = [];
+  walk(ast, {
+    enter(node) {
+      if (node.type === "TSAsExpression") return node.expression;
+      if (node.type === "Identifier") names.push(node.name);
+    },
+  });
+  const declaration = ast.instance?.content.body[0];
+  if (declaration?.type !== "VariableDeclaration") {
+    throw new Error("expected a declaration");
+  }
+  expect(declaration.declarations[0]?.init?.type).toBe("Identifier");
+  expect(names).toEqual(["a", "b"]);
+});
+
+test("walk throws when enter replaces the node it was called with", () => {
+  const program = parseModule("a;");
+  expect(() =>
+    walk(program, {
+      enter: (node) => (node.type === "Program" ? program.body[0] : undefined),
+    }),
+  ).toThrow("walk can't replace the node it was called with");
+});
+
 test("walk visits a component's sections in scope order", () => {
   const ast = parse(
     "<style>p{}</style><p>{a}</p><script>let a;</script><script module>export const b = 1;</script>",

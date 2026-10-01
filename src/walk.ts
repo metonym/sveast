@@ -260,7 +260,9 @@ export interface Visitor {
   /**
    * Called before the node's children. Return `false` to skip them; `leave`
    * is still called, so the two stay paired. Return {@link STOP} to end the
-   * walk.
+   * walk. Return another node to put it in this one's place: `walk` writes it
+   * to `parent[key]` (or `parent[key][index]`), then calls `enter` on it and
+   * visits its children instead.
    */
   enter?(
     node: AST.SvelteNode,
@@ -299,6 +301,9 @@ function visit(
   const entered = visitor.enter?.(node, parent, key, index);
   if (entered === STOP) return true;
   if (entered !== false) {
+    if (entered !== node && isNode(entered)) {
+      return replace(entered, parent, key, index, visitor);
+    }
     const fields = fieldsOf(node);
     for (const field of keys) {
       const value = fields[field];
@@ -315,4 +320,21 @@ function visit(
     }
   }
   return visitor.leave?.(node, parent, key, index) === STOP;
+}
+
+function replace(
+  node: AST.SvelteNode,
+  parent: AST.SvelteNode | null,
+  key: string | null,
+  index: number | null,
+  visitor: Visitor,
+): boolean {
+  if (parent === null || key === null) {
+    throw new Error("walk can't replace the node it was called with");
+  }
+  const fields = fieldsOf(parent);
+  const field = fields[key];
+  if (index === null) fields[key] = node;
+  else if (Array.isArray(field)) field[index] = node;
+  return visit(node, parent, key, index, visitor);
 }
