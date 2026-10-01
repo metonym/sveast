@@ -39,7 +39,7 @@ const REGEX_DOCTYPE_NAME = /^![a-zA-Z]+$/;
 const REGEX_NAMESPACED_NAME =
   /^[a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$/;
 const REGEX_CUSTOM_ELEMENT_NAME =
-  /^[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9.\-_·À-ÖØ-öø-ͽͿ-῿‌-‍‿-⁀⁰-↏Ⰰ-⿯、-퟿豈-﷏ﷰ-�\u{10000}-\u{EFFFF}]*)?$/u;
+  /^[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9.\-_\u00B7\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u037D\u037F-\u1FFF\u200C-\u200D\u203F-\u2040\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u{10000}-\u{EFFFF}]*)?$/u;
 
 // biome-ignore format: kept on one line so the lint suppression below stays adjacent to it
 // biome-ignore lint/suspicious/noMisleadingCharacterClass: ZWNJ and ZWJ are allowed in identifiers on their own
