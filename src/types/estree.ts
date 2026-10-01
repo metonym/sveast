@@ -281,6 +281,8 @@ export interface MaybeNamedFunctionDeclaration
   id: Identifier | null;
   body: BlockStatement;
   expression: false;
+  /** No `TSParameterProperty`: `private x` only parses in a class constructor, a `FunctionExpression`. */
+  params: Pattern[];
 }
 
 export interface FunctionDeclaration extends MaybeNamedFunctionDeclaration {
@@ -602,6 +604,8 @@ export interface ArrowFunctionExpression extends BaseExpression, BaseFunction {
   expression: boolean;
   body: BlockStatement | Expression;
   id: null;
+  /** No `TSParameterProperty`: `private x` only parses in a class constructor, a `FunctionExpression`. */
+  params: Pattern[];
 }
 
 export interface YieldExpression extends BaseExpression {

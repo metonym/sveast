@@ -98,10 +98,14 @@ assert.equal(parseModule("let a: number;", { typescript: true }).body[0].type, "
     join(dir, "consumer.ts"),
     `import {
   type AST,
+  type Function as AnyFunction,
+  isValidType,
   type Node,
   type ParseOptions,
+  type Pattern,
   type Program,
   type TSInterfaceDeclaration,
+  type TSParameterProperty,
   ParseError,
   parse,
   parseModule,
@@ -138,6 +142,16 @@ try {
 }
 void first;
 void kind;
+
+const exported = parseModule("export function f(a) {}").body[0];
+if (exported.type === "ExportNamedDeclaration" && exported.declaration?.type === "FunctionDeclaration") {
+  const params: Pattern[] = exported.declaration.params;
+  void params;
+}
+const paramsOf = (fn: AnyFunction): Array<Pattern | TSParameterProperty> => fn.params;
+void paramsOf;
+const inline: boolean = isValidType("string // a", { inline: true });
+void inline;
 
 // @ts-expect-error: parse takes a string
 parse(1);
