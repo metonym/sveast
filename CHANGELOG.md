@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.0 — 2026-09-30
+
+**Features**
+
+- `isValidType(text, { inline })`. A `//` comment runs to the end of the
+  line, so `string // the size` is a valid type that breaks
+  `CustomEvent<${text}>`. With `inline: true` (default `false`) the call is
+  also `false` unless every `//` comment in the text ends with a line break.
+  It reads the tokenizer's comments rather than parsing a second time: an
+  unterminated line comment is the one that ends at the end of the text.
+  Block comments and `//` inside strings (`"http://a" | "https://b"`) are
+  fine either way.
+- `FunctionDeclaration` and `ArrowFunctionExpression` type `params` as
+  `Pattern[]`. A parameter property (`private x`) only parses in a class
+  constructor, whose value is a `FunctionExpression` or a `TSDeclareMethod`.
+  `BaseFunction` and the `Function` union keep
+  `Pattern | TSParameterProperty`.
+
+**Performance**
+
+- `isValidType` answers the common JSDoc shapes without the TypeScript
+  parser: references with type arguments, literals, unions, intersections,
+  arrays, indexed access, `keyof`, `typeof`, import types, and object, tuple
+  and function types, on one line and without comments. The reader only
+  returns `true`; anything else, including every reserved word, still goes
+  to the parser. A grammar-based fuzz run of 8.4M texts found no text it
+  accepts that the parser rejects.
+- The first 10 calls on typical types, after import, median of 5 processes:
+  1.8 ms → 0.26 ms in Bun, 2.0 ms → 0.22 ms in Node. Warm, those types take
+  0.26 µs per call instead of 0.95 µs. Text the reader leaves to the parser
+  takes 1.68 µs instead of 1.50 µs.
+
+**Breaking**
+
+- Code narrowed to a `FunctionDeclaration` or `ArrowFunctionExpression` that
+  handled `TSParameterProperty` in `params`, or assigned one there, no longer
+  typechecks. The runtime never produced one on those nodes. A `Function` or
+  `BaseFunction` still includes it, for constructors.
+
 ## 0.3.0 — 2026-09-30
 
 **Features**
