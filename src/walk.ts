@@ -249,11 +249,18 @@ const keysByType = new Map<string, readonly string[]>(
   Object.entries(visitorKeys),
 );
 
+/**
+ * Return it from `enter` or `leave` to end the walk: no further `enter` or
+ * `leave` calls, including `leave` on the node's ancestors.
+ */
+export const STOP: unique symbol = Symbol("sveast.walk.stop");
+
 /** The callbacks {@link walk} calls for each node. */
 export interface Visitor {
   /**
    * Called before the node's children. Return `false` to skip them; `leave`
-   * is still called, so the two stay paired.
+   * is still called, so the two stay paired. Return {@link STOP} to end the
+   * walk.
    */
   enter?(
     node: AST.SvelteNode,
@@ -261,13 +268,13 @@ export interface Visitor {
     key: string | null,
     index: number | null,
   ): unknown;
-  /** Called after the node's children. */
+  /** Called after the node's children. Return {@link STOP} to end the walk. */
   leave?(
     node: AST.SvelteNode,
     parent: AST.SvelteNode | null,
     key: string | null,
     index: number | null,
-  ): void;
+  ): unknown;
 }
 
 /**
@@ -286,22 +293,26 @@ function visit(
   key: string | null,
   index: number | null,
   visitor: Visitor,
-): void {
+): boolean {
   const keys = keysByType.get(node.type);
   if (keys === undefined) throw new Error(`unknown node type: ${node.type}`);
-  if (visitor.enter?.(node, parent, key, index) !== false) {
+  const entered = visitor.enter?.(node, parent, key, index);
+  if (entered === STOP) return true;
+  if (entered !== false) {
     const fields = fieldsOf(node);
     for (const field of keys) {
       const value = fields[field];
       if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
           const child: unknown = value[i];
-          if (isNode(child)) visit(child, node, field, i, visitor);
+          if (isNode(child) && visit(child, node, field, i, visitor)) {
+            return true;
+          }
         }
-      } else if (isNode(value)) {
-        visit(value, node, field, null, visitor);
+      } else if (isNode(value) && visit(value, node, field, null, visitor)) {
+        return true;
       }
     }
   }
-  visitor.leave?.(node, parent, key, index);
+  return visitor.leave?.(node, parent, key, index) === STOP;
 }
