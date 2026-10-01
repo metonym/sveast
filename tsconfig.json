@@ -16,5 +16,5 @@
     },
     "types": ["bun", "jest"]
   },
-  "include": ["bench", "scripts", "src", "tests"]
+  "include": ["bench", "examples", "scripts", "src", "tests"]
 }
