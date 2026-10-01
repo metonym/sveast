@@ -96,7 +96,7 @@ bun scripts/compare-ts.ts <dir...>         # .ts/.js modules: the TypeScript plu
 bun scripts/compare-imports.ts <dir...>    # modules and component scripts: parseImportsExports vs parseModule, lexImportsExports vs parseImportsExports
 ```
 
-Both group mismatches by where they first differ and exit non-zero on any. The numbers in the README come from:
+They group mismatches by where they first differ and exit non-zero on any. On the repos below, `compare-imports.ts` finds `parseImportsExports` matches `parseModule` on all 24,354 modules of the TypeScript conformance tests, kit, immich and bits-ui, with an `import` inserted after every top-level statement, and `lexImportsExports` matches `parseImportsExports` on 8,749 files from the Svelte projects. The parity numbers in the README come from:
 
 - `git clone --depth 1` of huntabyte/bits-ui, huntabyte/shadcn-svelte, skeletonlabs/skeleton, themesberg/flowbite-svelte, sveltejs/svelte.dev, immich-app/immich, sveltejs/kit, melt-ui/next-gen, techniq/layerchart and svecosystem/paneforge;
 - svelte's `packages/svelte/tests` at the tag of the svelte version in `bun.lock`;
@@ -113,6 +113,7 @@ Changes to `src/` must not make things slower. `bench/sveast.bench.ts` holds the
 | `bun run bench` | sveast vs svelte/compiler and the options' cost (the README tables), and the TypeScript plugin vs acorn-typescript |
 | `bun run bench:mem` | Heap retained by the corpus's ASTs, fresh process per parser |
 | `bun run bench:cold` | Module load and first-parse latency, fresh process per run |
+| `bun run bench:size` | Gzipped size of `parse` alone, from svelte/compiler, `sveast` and `sveast/core`, bundled for the browser |
 
 Commit first, then run `bun run bench:ab` against the commit before your change. Don't trust numbers from two runs minutes apart: machine load drifts too much.
 
