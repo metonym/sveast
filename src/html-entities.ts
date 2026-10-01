@@ -6,19 +6,23 @@ const WINDOWS_1252 = [
   339, 157, 382, 376,
 ];
 
+const REGEX_ENTITY_SEPARATOR = /[:!]/;
+
 let table: Map<string, number> | undefined;
 let longestName = 0;
 
 function entityTable(): Map<string, number> {
   if (table) return table;
   table = new Map();
+  let name = "";
   for (const entry of ENTITIES.split(" ")) {
-    const colon = entry.indexOf(":");
-    table.set(
-      entry.slice(0, colon),
-      Number.parseInt(entry.slice(colon + 1), 36),
-    );
-    longestName = Math.max(longestName, colon);
+    const separator = entry.search(REGEX_ENTITY_SEPARATOR);
+    name =
+      name.slice(0, Number.parseInt(entry[0], 36)) + entry.slice(1, separator);
+    const code = Number.parseInt(entry.slice(separator + 1), 36);
+    table.set(`${name};`, code);
+    if (entry[separator] === "!") table.set(name, code);
+    longestName = Math.max(longestName, name.length + 1);
   }
   return table;
 }
