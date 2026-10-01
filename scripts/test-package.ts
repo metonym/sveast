@@ -27,15 +27,24 @@ try {
     }
   }
 
-  const reached = new Set(["parse-module.js"]);
-  for (const file of reached) {
-    const code = readFileSync(join(dist, file), "utf8");
-    for (const [, imported] of code.matchAll(RELATIVE_IMPORT)) {
-      reached.add(imported);
+  const reach = (entry: string): Set<string> => {
+    const reached = new Set([entry]);
+    for (const file of reached) {
+      const code = readFileSync(join(dist, file), "utf8");
+      for (const [, imported] of code.matchAll(RELATIVE_IMPORT)) {
+        reached.add(imported);
+      }
     }
-  }
-  if (reached.has("parse.js")) {
+    return reached;
+  };
+  if (reach("parse-module.js").has("parse.js")) {
     throw new Error("dist/parse-module.js imports the template parser");
+  }
+  const acorn = reach("is-valid-type.js");
+  for (const file of reach("walk.js")) {
+    if (file === "parse.js" || acorn.has(file)) {
+      throw new Error(`dist/walk.js imports the parser: ${file}`);
+    }
   }
 
   const types = await readFile(join(root, "dist/index.d.ts"), "utf8");
@@ -72,7 +81,7 @@ try {
   await writeFile(
     join(dir, "smoke.js"),
     `import assert from "node:assert/strict";
-import { parse, parseModule } from "sveast";
+import { parse, parseModule, walk } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
 
 const source = \`<script lang="ts">
@@ -90,6 +99,14 @@ assert.equal(parse(source).instance.content.body[0].type, "VariableDeclaration")
 
 assert.throws(() => parse("{x"), { name: "ParseError", code: "expected_token" });
 assert.equal(parseModule("let a: number;", { typescript: true }).body[0].type, "VariableDeclaration");
+
+const classes = [];
+walk(parse(source), {
+  enter(node) {
+    if (node.type === "ClassDirective") classes.push(node.name);
+  },
+});
+assert.deepEqual(classes, ["big"]);
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -106,9 +123,12 @@ assert.equal(parseModule("let a: number;", { typescript: true }).body[0].type, "
   type Program,
   type TSInterfaceDeclaration,
   type TSParameterProperty,
+  type Visitor,
   ParseError,
   parse,
   parseModule,
+  visitorKeys,
+  walk,
 } from "sveast";
 
 const options: ParseOptions = { loc: true, css: false };
@@ -152,6 +172,19 @@ const paramsOf = (fn: AnyFunction): Array<Pattern | TSParameterProperty> => fn.p
 void paramsOf;
 const inline: boolean = isValidType("string // a", { inline: true });
 void inline;
+
+const ifKeys: readonly ["test", "consequent", "alternate"] = visitorKeys.IfBlock;
+void ifKeys;
+const visitor: Visitor = {
+  enter(node, parent) {
+    if (node.type === "IfBlock" && parent?.type === "Fragment") {
+      const test: Node = node.test;
+      void test;
+      return false;
+    }
+  },
+};
+walk(ast, visitor);
 
 // @ts-expect-error: parse takes a string
 parse(1);
