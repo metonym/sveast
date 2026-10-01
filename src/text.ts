@@ -13,7 +13,7 @@ export function readText(state: TemplateParserState): void {
     start,
     end,
     raw,
-    data: decodeCharacterReferences(raw, false),
+    data: decodeCharacterReferences(raw, false, state.entityNames),
   });
 }
 

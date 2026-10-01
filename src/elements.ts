@@ -514,7 +514,7 @@ function readStaticAttribute(state: TemplateParserState): AST.Attribute | null {
         end - raw.length - quotes,
         end - quotes,
         raw,
-        decodeCharacterReferences(raw, true),
+        decodeCharacterReferences(raw, true, state.entityNames),
       ),
     ];
   }
@@ -758,7 +758,12 @@ function readSequence(
     if (end <= textStart) return;
     const raw = source.slice(textStart, end);
     chunks.push(
-      text(textStart, end, raw, decodeCharacterReferences(raw, true)),
+      text(
+        textStart,
+        end,
+        raw,
+        decodeCharacterReferences(raw, true, state.entityNames),
+      ),
     );
   };
 

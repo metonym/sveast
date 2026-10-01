@@ -1,9 +1,11 @@
 import { parse } from "sveast";
 import type { Json } from "../scripts/shared";
 import { acornExpressionParses, parseExpressionAt } from "../src/acorn-bridge";
+import { htmlEntityNames } from "../src/entity-names";
 import { readExpression } from "../src/expression";
 import { setSource } from "../src/locator";
 import { TemplateParserState } from "../src/state";
+import { TypeScriptParser } from "../src/typescript-parser";
 
 const FAST_PATH_SHAPES = [
   "a",
@@ -133,6 +135,7 @@ function referenceOutcome(
   const context = {
     source,
     isTypeScript,
+    typescript: TypeScriptParser,
     loc,
     comments: true,
     root: { comments: [] },
@@ -147,7 +150,12 @@ function referenceOutcome(
 
 function actualOutcome(source: string, index: number, loc: boolean): Outcome {
   setSource(source);
-  const state = new TemplateParserState(source, source.length, { loc });
+  const state = new TemplateParserState(
+    source,
+    source.length,
+    { typescript: TypeScriptParser, entityNames: htmlEntityNames },
+    { loc },
+  );
   state.index = index;
   try {
     const node = readExpression(state);

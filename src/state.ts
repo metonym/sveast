@@ -1,11 +1,15 @@
 import { isIdentifierChar, isIdentifierStart } from "acorn";
+import type { ParserConstructor } from "./acorn-internals";
 import {
   expected_token,
   expected_whitespace,
   unexpected_eof,
   unexpected_reserved_word,
 } from "./errors";
+import type { EntityNames } from "./html-entities";
 import { locate } from "./locator";
+import type { ParseOptions } from "./options";
+import { missingTypeScript, type Support } from "./support";
 import type { Identifier, SourceLocation } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
@@ -74,48 +78,14 @@ function isTypeScript(source: string): boolean {
 
 export type StackNode = AST.Root | AST.ElementLike | AST.Block;
 
-/**
- * Options for {@link parse}. The defaults give svelte's own output, minus
- * `loc` and `name_loc`.
- */
-export interface ParseOptions {
-  /**
-   * Add `loc` (line/column) to script and expression nodes, and `name_loc`
-   * to elements, attributes and directives, as svelte does. Off by default:
-   * it makes parsing slower and the AST larger.
-   */
-  loc?: boolean;
-  /**
-   * Parse `<style>` into rules and selectors (`css.children`). With `false`,
-   * `css` still has its `start`, `end` and `content`, but `children` and
-   * `comments` are empty and CSS syntax errors aren't reported. Default `true`.
-   */
-  css?: boolean;
-  /**
-   * Parse each `<script>`'s JavaScript or TypeScript. With `false`, scripts
-   * keep their attributes and bounds, and `content` is a `Program` with its
-   * `start` and `end` but an empty `body`; their comments aren't in
-   * `comments`, and their syntax errors aren't reported. Expressions in the
-   * markup are still parsed. Default `true`.
-   */
-  script?: boolean;
-  /**
-   * Collect JavaScript comments, in scripts, expressions and tags, into
-   * `comments` and attach them to nodes as `leadingComments` and
-   * `trailingComments`. With `false`, `comments` is empty and no node has
-   * either field, including the HTML comment before a `<script>` that
-   * svelte copies into its `content.leadingComments`; HTML comments in the
-   * markup and CSS comments are kept. Default `true`.
-   */
-  comments?: boolean;
-}
-
 export class TemplateParserState {
   source: string;
   index = 0;
   readonly loc: boolean;
   readonly lfOnly: boolean;
   readonly isTypeScript: boolean;
+  readonly typescript: ParserConstructor | undefined;
+  readonly entityNames: () => EntityNames;
   readonly css: boolean;
   readonly script: boolean;
   readonly comments: boolean;
@@ -130,12 +100,16 @@ export class TemplateParserState {
   constructor(
     source: string,
     originalLength: number,
+    support: Support,
     options: ParseOptions = {},
   ) {
     this.source = source;
     this.loc = options.loc ?? false;
     this.lfOnly = this.loc && !REGEX_NON_LF_LINE_BREAK.test(source);
     this.isTypeScript = isTypeScript(source);
+    this.typescript = support.typescript;
+    if (this.isTypeScript && !this.typescript) missingTypeScript();
+    this.entityNames = support.entityNames;
     this.css = options.css ?? true;
     this.script = options.script ?? true;
     this.comments = options.comments ?? true;

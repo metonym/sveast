@@ -1,5 +1,3 @@
-import { ENTITIES } from "./entities";
-
 const WINDOWS_1252 = [
   8364, 129, 8218, 402, 8222, 8230, 8224, 8225, 710, 8240, 352, 8249, 338, 141,
   381, 143, 144, 8216, 8217, 8220, 8221, 8226, 8211, 8212, 732, 8482, 353, 8250,
@@ -8,24 +6,40 @@ const WINDOWS_1252 = [
 
 const REGEX_ENTITY_SEPARATOR = /[:!]/;
 
-let table: Map<string, number> | undefined;
-let longestName = 0;
+export interface EntityNames {
+  table: Map<string, number>;
+  longest: number;
+}
 
-function entityTable(): Map<string, number> {
-  if (table) return table;
-  table = new Map();
+/** Decodes the names `scripts/generate-entities.ts` encodes, on the first call. */
+export function lazyEntityNames(encoded: string): () => EntityNames {
+  let names: EntityNames | undefined;
+  return () => {
+    names ??= decodeEntityNames(encoded);
+    return names;
+  };
+}
+
+function decodeEntityNames(encoded: string): EntityNames {
+  const table = new Map<string, number>();
+  let longest = 0;
   let name = "";
-  for (const entry of ENTITIES.split(" ")) {
+  for (const entry of encoded.split(" ")) {
     const separator = entry.search(REGEX_ENTITY_SEPARATOR);
     name =
       name.slice(0, Number.parseInt(entry[0], 36)) + entry.slice(1, separator);
     const code = Number.parseInt(entry.slice(separator + 1), 36);
     table.set(`${name};`, code);
     if (entry[separator] === "!") table.set(name, code);
-    longestName = Math.max(longestName, name.length + 1);
+    longest = Math.max(longest, name.length + 1);
   }
-  return table;
+  return { table, longest };
 }
+
+/** `&amp;`, `&apos;`, `&gt;`, `&lt;` and `&quot;`, and the four that are also valid without the `;`. */
+export const xmlEntityNames = lazyEntityNames(
+  "0amp!12 1pos:13 0gt!1q 0lt!1o 0quot!y",
+);
 
 const isDigit = (code: number) => code >= 48 && code <= 57;
 const isHexDigit = (code: number) =>
@@ -35,7 +49,12 @@ const isAlphanumeric = (code: number) =>
 
 let referenceEnd = 0;
 
-function readReference(html: string, start: number, inAttribute: boolean) {
+function readReference(
+  html: string,
+  start: number,
+  inAttribute: boolean,
+  entityNames: () => EntityNames,
+) {
   if (html.charCodeAt(start) === 35) {
     const hex = (html.charCodeAt(start + 1) | 32) === 120;
     const digitsStart = start + (hex ? 2 : 1);
@@ -51,12 +70,9 @@ function readReference(html: string, start: number, inAttribute: boolean) {
     return Number.parseInt(html.slice(digitsStart, end), hex ? 16 : 10);
   }
 
-  const names = entityTable();
+  const { table: names, longest } = entityNames();
   let runEnd = start;
-  while (
-    runEnd - start < longestName &&
-    isAlphanumeric(html.charCodeAt(runEnd))
-  ) {
+  while (runEnd - start < longest && isAlphanumeric(html.charCodeAt(runEnd))) {
     runEnd++;
   }
   if (html.charCodeAt(runEnd) === 59) {
@@ -93,6 +109,7 @@ function validateCode(code: number, inAttribute: boolean): number {
 export function decodeCharacterReferences(
   html: string,
   inAttribute: boolean,
+  entityNames: () => EntityNames,
 ): string {
   let amp = html.indexOf("&");
   if (amp === -1) return html;
@@ -100,7 +117,7 @@ export function decodeCharacterReferences(
   let out = "";
   let copied = 0;
   while (amp !== -1) {
-    const code = readReference(html, amp + 1, inAttribute);
+    const code = readReference(html, amp + 1, inAttribute, entityNames);
     if (code) {
       out +=
         html.slice(copied, amp) +

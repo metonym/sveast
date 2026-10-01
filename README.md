@@ -57,6 +57,24 @@ A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed
 
 Parses a JavaScript or TypeScript module, such as a `.ts` file a component imports, the way a component's `<script>` is parsed: estree plus TypeScript nodes, with comments attached as `leadingComments`/`trailingComments`. Options: `typescript` and `loc`, both default `false`, and `comments`, default `true`; with `false`, no node has `leadingComments` or `trailingComments`.
 
+### `createParser(support?) => { parse, parseModule }` from `sveast/core`
+
+`parse` and `parseModule` without the two parts most tools can do without: the TypeScript plugin and the table of HTML's named character references. Together they're about a third of a bundle: `parse` and `parseModule` from `sveast` minify to 57.3 kB gzipped, and from `createParser()` to 38.7 kB. Pass back the parts you need; with both, the parsers are the same as `sveast`'s.
+
+```ts
+import { createParser } from "sveast/core";
+import { typescript } from "sveast/typescript";
+
+const { parse, parseModule } = createParser({ typescript });
+```
+
+| Support | Without it |
+|:---|:---|
+| `typescript` from `sveast/typescript` (+8.8 kB gzipped) | A component with `<script lang="ts">`, or `parseModule` with `typescript: true`, throws an `Error`, not a `ParseError`: a missing import, not a syntax error, and never a JavaScript AST of TypeScript |
+| `entities` from `sveast/entities` (+10.0 kB gzipped) | Text and attribute values decode numeric references, such as `&#169;`, and `&amp;`, `&apos;`, `&gt;`, `&lt;` and `&quot;`, but leave other names, such as `&copy;`, as written, so `Text.data` differs from svelte's where the source uses them |
+
+`sveast/core` also exports `ParseError`, the same class as `sveast`'s, and the types.
+
 ### `isValidType(text, options?) => boolean`
 
 Whether `text` is exactly one TypeScript type, such as a JSDoc `{"sm" | "lg"}` a tool is about to copy into a `.d.ts`. The text is parsed as a type on its own, not wrapped in a statement, so a `;`, a line break or a `}` in it can't end the type and smuggle in a statement: `string; let x = 1` and `{ a: string } }` are `false`. Whitespace and comments around the type are allowed. Results aren't cached; memoize if you check the same text often.
@@ -73,7 +91,7 @@ It works on any node the parsers return: a component's `Root`, a `Fragment`, an 
 
 ### Types
 
-`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions` is exported too.
+`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions` and `ParseModuleOptions` are exported too.
 
 The estree node types are exported as well (`Program`, `Node`, `Statement`, `Expression`, `Identifier`, ...), so you don't need `@types/estree`. They're estree's, plus what the parser adds: `start`/`end` on every node, and the TypeScript plugin's nodes (`TSInterfaceDeclaration`, `TSTypeAnnotation`, `TSTypeReference`, ...; `TSNode` is their union) and fields (`typeAnnotation`, `typeParameters`, `typeArguments`, `returnType`, `importKind`/`exportKind`, ...). The TypeScript nodes are in the `Statement`, `Declaration` and `Expression` unions, so checking `node.type` narrows to them. Where the grammar only allows a string, such as an import's `source`, the type is `StringLiteral`, a `Literal` whose `value` is a `string`.
 
