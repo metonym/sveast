@@ -18,14 +18,10 @@ export interface Styles {
  * `lang="scss"` and other preprocessors too.
  */
 export function extractStyles(source: string): Styles | undefined {
-  const css = parse(source, { css: false }).css;
+  const css = parse(source, { css: false, script: false }).css;
   if (!css) return undefined;
   const { start, styles } = css.content;
-  let line = 1;
-  for (let index = source.indexOf("\n"); index !== -1 && index < start; ) {
-    line++;
-    index = source.indexOf("\n", index + 1);
-  }
+  const line = source.slice(0, start).split("\n").length;
   return { styles, lang: lang(css.attributes) ?? "css", line };
 }
 

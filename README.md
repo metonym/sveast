@@ -266,6 +266,8 @@ function unusedClasses(source: string): { unused: string[]; dynamic: boolean } {
 }
 ```
 
+[`examples/unused-classes.ts`](examples/unused-classes.ts) also skips classes under `:global` and in pseudo-class arguments such as `:not(.disabled)`, and reports each one's line.
+
 **Read the props a runes component declares:**
 
 ```ts

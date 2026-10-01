@@ -6,6 +6,7 @@ import { checkSyntax } from "../examples/check-syntax";
 import { componentsUsed } from "../examples/components-used";
 import { extractStyles } from "../examples/extract-styles";
 import { propsOf } from "../examples/props";
+import { unusedClasses } from "../examples/unused-classes";
 
 const APP = `<script lang="ts">
   import Button from "./Button.svelte";
@@ -35,9 +36,31 @@ const BUTTON = `<script lang="ts">
 </style>
 `;
 
+const CARD = `<script>
+  let { active } = $props();
+</script>
+
+<div class="card" class:active>
+  <h2 class="title">Title</h2>
+</div>
+
+<style>
+  .card { padding: 1rem; }
+  .active, .stale { color: red; }
+  .card :global(.child) {}
+  .card:not(.disabled) {}
+  :global { .theme-dark {} }
+  .footer :global .link {}
+  @media (min-width: 40rem) {
+    .wide {}
+  }
+</style>
+`;
+
 const FILES = {
   "App.svelte": APP,
   "Button.svelte": BUTTON,
+  "Card.svelte": CARD,
   "Broken.svelte": "{#if open}\n  <p>Hi</p>\n",
   "store.svelte.ts": "export const count: number = $state(0);\n",
   "broken.ts": "export const count: number = ;\n",
@@ -195,6 +218,37 @@ describe("extract-styles", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toBe(
       "/* Button.svelte:7 (scss) */\n\n  $gap: 4px;\n  button { padding: $gap; }\n\n",
+    );
+  });
+});
+
+describe("unused-classes", () => {
+  test("reports declared classes the markup never uses", () => {
+    expect(unusedClasses(CARD)).toEqual({
+      unused: [
+        { name: "stale", line: 11 },
+        { name: "footer", line: 15 },
+        { name: "wide", line: 17 },
+      ],
+      dynamic: false,
+    });
+    expect(
+      unusedClasses('<p class="a {b}"></p><style>.a {} .c {}</style>'),
+    ).toEqual({ unused: [{ name: "c", line: 1 }], dynamic: true });
+    expect(unusedClasses("<p class={b}></p>")).toEqual({
+      unused: [],
+      dynamic: true,
+    });
+  });
+
+  test("prints each unused class", async () => {
+    const { stdout, exitCode } = await run("unused-classes.ts", [
+      "App.svelte",
+      "Card.svelte",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe(
+      "Card.svelte:11 .stale\nCard.svelte:15 .footer\nCard.svelte:17 .wide\n",
     );
   });
 });

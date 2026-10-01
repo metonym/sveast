@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type AST, parse } from "sveast";
+import { type AST, parse, walk } from "sveast";
 
 /**
  * The components a file renders, each mapped to the module it's imported
@@ -11,21 +11,13 @@ export function componentsUsed(source: string): Record<string, string | null> {
   const ast = parse(source, { css: false });
   const imports = importedNames(ast);
   const used: Record<string, string | null> = {};
-  const visit = (node: object): void => {
-    if (
-      "type" in node &&
-      node.type === "Component" &&
-      "name" in node &&
-      typeof node.name === "string"
-    ) {
+  walk(ast.fragment, {
+    enter(node) {
+      if (node.type !== "Component") return;
       const [binding = node.name] = node.name.split(".");
       used[node.name] = imports.get(binding) ?? null;
-    }
-    for (const child of Object.values(node)) {
-      if (typeof child === "object" && child !== null) visit(child);
-    }
-  };
-  visit(ast.fragment);
+    },
+  });
   return used;
 }
 
