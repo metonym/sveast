@@ -194,6 +194,7 @@ export interface ParserInternals {
   potentialArrowInForAwait: boolean;
 
   parse(): Node;
+  initialContext(): TokContext[];
   skipSpace(): void;
   readWord(): void;
   readWord1(): string;

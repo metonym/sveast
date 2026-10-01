@@ -1,18 +1,21 @@
 import { parseComponent } from "./component";
 import { xmlEntityNames } from "./html-entities";
+import { parseImportsExportsWith } from "./imports-exports";
 import { parseModuleWith } from "./module";
 import type {
   EntitySupport,
+  ParseImportsExportsOptions,
   ParseModuleOptions,
   ParseOptions,
   TypeScriptSupport,
 } from "./options";
 import { entityNamesOf, type Support, typeScriptParser } from "./support";
-import type { Program } from "./types/estree";
+import type { ModuleDeclaration, Program } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
 export type {
   EntitySupport,
+  ParseImportsExportsOptions,
   ParseModuleOptions,
   ParseOptions,
   TypeScriptSupport,
@@ -45,13 +48,19 @@ export interface Parser {
   parse(source: string, options?: ParseOptions): AST.Root;
   /** `parseModule` from `sveast`, with only what the parser was created with. */
   parseModule(source: string, options?: ParseModuleOptions): Program;
+  /** `parseImportsExports` from `sveast`, with only what the parser was created with. */
+  parseImportsExports(
+    source: string,
+    options?: ParseImportsExportsOptions,
+  ): ModuleDeclaration[];
 }
 
 /**
- * Creates `parse` and `parseModule` that bundle only what's passed in:
- * the TypeScript plugin and the table of HTML's named character
- * references are about a third of sveast's size, and a bundler leaves
- * out whichever isn't imported. With both, they're the same as `sveast`'s.
+ * Creates `parse`, `parseModule` and `parseImportsExports` that bundle
+ * only what's passed in: the TypeScript plugin and the table of HTML's
+ * named character references are about a third of sveast's size, and a
+ * bundler leaves out whichever isn't imported. With both, they're the
+ * same as `sveast`'s.
  *
  * ```ts
  * import { createParser } from "sveast/core";
@@ -70,5 +79,7 @@ export function createParser(support: ParserSupport = {}): Parser {
     parse: (source, options) => parseComponent(source, options, internal),
     parseModule: (source, options = {}) =>
       parseModuleWith(source, options, typescript),
+    parseImportsExports: (source, options = {}) =>
+      parseImportsExportsWith(source, options, typescript),
   };
 }

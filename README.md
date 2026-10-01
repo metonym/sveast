@@ -34,7 +34,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
-| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `isValidType`), and walking the AST (`walk`, `visitorKeys`) |
+| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `parseImportsExports`, `isValidType`), and walking the AST (`walk`, `visitorKeys`) |
 | Non-ASCII identifiers | acorn's tables, Unicode 17 | The engine's own Unicode data, which is smaller to ship: the same as acorn's in Node 24 and Bun; an engine on another Unicode version differs on the letters added in between |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
 
@@ -57,20 +57,43 @@ A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed
 
 Parses a JavaScript or TypeScript module, such as a `.ts` file a component imports, the way a component's `<script>` is parsed: estree plus TypeScript nodes, with comments attached as `leadingComments`/`trailingComments`. Options: `typescript` and `loc`, both default `false`, and `comments`, default `true`; with `false`, no node has `leadingComments` or `trailingComments`.
 
-### `createParser(support?) => { parse, parseModule }` from `sveast/core`
+### `parseImportsExports(source, options?) => ModuleDeclaration[]`
 
-`parse` and `parseModule` without the two parts most tools can do without: the TypeScript plugin and the table of HTML's named character references. Together they're about a third of a bundle: `parse` and `parseModule` from `sveast` minify to 57.3 kB gzipped, and from `createParser()` to 38.7 kB. Pass back the parts you need; with both, the parsers are the same as `sveast`'s.
+A module's top-level `import` and `export` statements, without parsing the rest, e.g. to rewrite a component's imports or follow a module graph. Each node is the one `parseModule(source, { comments: false })` has for that statement, so `start`, `end`, `specifiers` (with `imported`, `local` and `importKind`) and `source` are all there: `ImportDeclaration`, `ExportNamedDeclaration`, `ExportDefaultDeclaration` and `ExportAllDeclaration`, and, in TypeScript, `TSImportEqualsDeclaration`, `TSExportAssignment` and `TSNamespaceExportDeclaration`. `import(...)` and `import.meta` are expressions, so they aren't returned. Unlike a regex, it never matches an `import` in a comment, a string, a template or a nested block such as `declare module "a" { ... }`.
+
+The rest is skipped by a tokenizer that only tracks strings, comments, templates, regular expressions and brackets, and only the statements it finds are parsed. A syntax error in one of them throws `parseModule`'s `ParseError`, including a name exported twice; errors elsewhere aren't reported.
+
+| Option | Description |
+|:---|:---|
+| `typescript` | Parse TypeScript: `import type`, `export type`, `import a = require("a")`. Default `false`. |
+| `localExports` | Return the exports of the module's own bindings, such as `export let a`, `export function b() {}`, `export { c }` and `export default d`, which are parsed in full. With `false`, only imports and the exports that have a `from` (`export * from "e"`, `export { f } from "f"`, `export import`) are returned, and the rest is skipped. Default `true`. |
+
+On Carbon's 327 component scripts, mostly JSDoc-documented `export let` props, it takes 10.7 ms against `parseModule`'s 33.8 ms, and 4.5 ms with `localExports: false`; the largest script, 63 kB, takes 0.37 ms against 2.7 ms. It checks the TypeScript conformance tests, kit, immich and bits-ui against `parseModule`, with an `import` inserted after every top-level statement: the same nodes on all 24,354 modules.
+
+```ts
+import { parseImportsExports } from "sveast";
+
+function dependencies(source: string, typescript = false): string[] {
+  return parseImportsExports(source, { typescript, localExports: false }).flatMap(
+    (node) => ("source" in node && node.source ? [node.source.value] : []),
+  );
+}
+```
+
+### `createParser(support?) => { parse, parseModule, parseImportsExports }` from `sveast/core`
+
+`parse`, `parseModule` and `parseImportsExports` without the two parts most tools can do without: the TypeScript plugin and the table of HTML's named character references. Together they're about a third of a bundle: `parse` and `parseModule` from `sveast` minify to 57.3 kB gzipped, and from `createParser()` to 40.3 kB. Pass back the parts you need; with both, the parsers are the same as `sveast`'s.
 
 ```ts
 import { createParser } from "sveast/core";
 import { typescript } from "sveast/typescript";
 
-const { parse, parseModule } = createParser({ typescript });
+const { parse, parseModule, parseImportsExports } = createParser({ typescript });
 ```
 
 | Support | Without it |
 |:---|:---|
-| `typescript` from `sveast/typescript` (+8.8 kB gzipped) | A component with `<script lang="ts">`, or `parseModule` with `typescript: true`, throws an `Error`, not a `ParseError`: a missing import, not a syntax error, and never a JavaScript AST of TypeScript |
+| `typescript` from `sveast/typescript` (+8.8 kB gzipped) | A component with `<script lang="ts">`, or `parseModule` or `parseImportsExports` with `typescript: true`, throws an `Error`, not a `ParseError`: a missing import, not a syntax error, and never a JavaScript AST of TypeScript |
 | `entities` from `sveast/entities` (+10.0 kB gzipped) | Text and attribute values decode numeric references, such as `&#169;`, and `&amp;`, `&apos;`, `&gt;`, `&lt;` and `&quot;`, but leave other names, such as `&copy;`, as written, so `Text.data` differs from svelte's where the source uses them |
 
 `sveast/core` also exports `ParseError`, the same class as `sveast`'s, and the types.
@@ -91,7 +114,7 @@ It works on any node the parsers return: a component's `Root`, a `Fragment`, an 
 
 ### Types
 
-`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions` and `ParseModuleOptions` are exported too.
+`AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions`, `ParseModuleOptions` and `ParseImportsExportsOptions` are exported too.
 
 The estree node types are exported as well (`Program`, `Node`, `Statement`, `Expression`, `Identifier`, ...), so you don't need `@types/estree`. They're estree's, plus what the parser adds: `start`/`end` on every node, and the TypeScript plugin's nodes (`TSInterfaceDeclaration`, `TSTypeAnnotation`, `TSTypeReference`, ...; `TSNode` is their union) and fields (`typeAnnotation`, `typeParameters`, `typeArguments`, `returnType`, `importKind`/`exportKind`, ...). The TypeScript nodes are in the `Statement`, `Declaration` and `Expression` unions, so checking `node.type` narrows to them. Where the grammar only allows a string, such as an import's `source`, the type is `StringLiteral`, a `Literal` whose `value` is a `string`.
 
@@ -204,7 +227,7 @@ const css = parse(source, { css: false }).css?.content.styles ?? "";
 - **TypeScript without acorn-typescript.** The built-in plugin produces the same AST as `@sveltejs/acorn-typescript`, key order and `loc` included, on 6,604 real-world modules and on all but 2 of the 9,586 TypeScript conformance tests that acorn-typescript parses. It rejects the same redeclarations, and supports decorators.
 - **About 2.4× faster than svelte/compiler** (2.2–3.0× depending on the input), and its ASTs retain 47% less memory without `loc`.
 - **Fast to load.** A fresh process imports sveast in about 5 ms, against about 45 ms for `svelte/compiler`.
-- **Zero dependencies,** types included. 64 kB gzipped, acorn included.
+- **Zero dependencies,** types included. 67 kB gzipped, acorn included.
 
 ## Benchmarks
 
