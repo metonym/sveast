@@ -34,7 +34,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
-| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `parseImportsExports`, `isValidType`), and walking the AST (`walk`, `visitorKeys`) |
+| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `parseImportsExports`, `isValidType`), walking the AST (`walk`, `visitorKeys`), and finding references (`isReference`) |
 | Non-ASCII identifiers | acorn's tables, Unicode 17 | The engine's own Unicode data, which is smaller to ship: the same as acorn's in Node 24 and Bun; an engine on another Unicode version differs on the letters added in between |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
 
@@ -112,7 +112,27 @@ It works on any node the parsers return: a component's `Root`, a `Fragment`, an 
 
 `visitorKeys` is the table `walk` reads: the fields of each node type that hold child nodes, in source order, e.g. `visitorKeys.IfBlock` is `["test", "consequent", "alternate"]`. Use it with another walker, or to write your own.
 
-`walk`, `SKIP`, `STOP`, `visitorKeys`, `Visitor` and the types are also exported from `sveast/walk`, which loads neither acorn nor the parser: for code that walks ASTs it gets from elsewhere, such as a cache, and must not pay for loading the parser. They're the same values as `sveast`'s.
+### `isReference(node, parent) => boolean`
+
+Whether `node` is an `Identifier` that names a variable, function, class, import or other binding, where it's declared or where it's used, given the `parent` `walk` passes. It's the check svelte's analyzer makes, from the [`is-reference`](https://github.com/Rich-Harris/is-reference) package: `false` for a property or method name (`b` in `a.b`, `{ b: a }` and `class { b() {} }`, unless computed), the renamed side of an import or export (`b` in `import { b as a }` and `export { a as b }`), and labels. Unlike `is-reference`, it's also `false` for `import` and `new` in `import.meta` and `new.target`, an import attribute's key, and `b` in `export * as b from`, and for any node that isn't an `Identifier`.
+
+TypeScript nodes hold types, so an `Identifier` whose parent is a TypeScript node isn't a reference (`B` in `let a: B`, `typeof b` in a type, interface and type alias names), except where it's a value: the expression of `as`, `satisfies`, `<T>a`, `a!`, `a<T>` and `export =`, an enum member's initializer, a parameter property (`a` in `constructor(private a)`), an enum's name, and the name and target of `import a = b`. Names of namespaces and of functions without a body (overloads, `declare function`) aren't references.
+
+acorn shares one `Identifier` between both names of `import { a }` and `export { a }`, and `walk` visits it twice, so it's a reference on both visits.
+
+```ts
+import { isReference, parseModule, walk } from "sveast";
+
+const used = new Set<string>();
+walk(parseModule("const a = b.c({ d: e });"), {
+  enter(node, parent) {
+    if (node.type === "Identifier" && isReference(node, parent)) used.add(node.name);
+  },
+});
+used; // Set { "a", "b", "e" }
+```
+
+`walk`, `SKIP`, `STOP`, `visitorKeys`, `Visitor`, `isReference` and the types are also exported from `sveast/walk`, which loads neither acorn nor the parser: for code that walks ASTs it gets from elsewhere, such as a cache, and must not pay for loading the parser. They're the same values as `sveast`'s.
 
 ```ts
 import { STOP, walk } from "sveast/walk";
