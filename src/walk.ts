@@ -1,6 +1,7 @@
 import { fieldsOf, isNode } from "./nodes";
 import type { AST } from "./types/svelte-ast";
 
+export { isReference } from "./is-reference";
 export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";

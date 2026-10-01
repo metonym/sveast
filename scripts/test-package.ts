@@ -177,6 +177,13 @@ assert.equal(walker.walk, walk);
 assert.equal(walker.STOP, STOP);
 assert.equal(walker.SKIP, SKIP);
 assert.deepEqual(walker.visitorKeys.IfBlock, ["test", "consequent", "alternate"]);
+const references = [];
+walk(parse(source), {
+  enter(node, parent) {
+    if (node.type === "Identifier" && walker.isReference(node, parent)) references.push(node.name);
+  },
+});
+assert.deepEqual(references, ["name", "$props", "name", "name", "name"]);
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -215,6 +222,7 @@ import { entities } from "sveast/entities";
 import { typescript } from "sveast/typescript";
 import {
   type AST as WalkAST,
+  isReference,
   type Node as WalkNode,
   STOP as WALK_STOP,
   type Visitor as WalkVisitor,
@@ -311,8 +319,8 @@ const walkRoot: WalkAST.Root = ast;
 const walkVisitor: WalkVisitor = visitor;
 const identifiers: WalkNode[] = [];
 walkOnly(walkRoot, {
-  enter(node) {
-    if (node.type === "Identifier") identifiers.push(node);
+  enter(node, parent) {
+    if (node.type === "Identifier" && isReference(node, parent)) identifiers.push(node);
     if (identifiers.length > 1) return WALK_STOP;
   },
 });
