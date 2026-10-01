@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { type AST, parse, walk } from "sveast";
+import { type AST, parse, SKIP, walk } from "sveast";
 
 const WHITESPACE = /\s+/;
 
@@ -68,7 +68,7 @@ function declaredClasses(ast: AST.Root): AST.CSS.ClassSelector[] {
           }
         }
       }
-      return global ? false : undefined;
+      return global ? SKIP : undefined;
     },
   });
   return declared;
