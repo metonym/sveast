@@ -261,9 +261,6 @@ function openSnippet(state: TemplateParserState, start: number): void {
     true,
   );
   assertType(node, "ArrowFunctionExpression");
-  const parameters = node.params.filter(
-    (param): param is Pattern => param.type !== "TSParameterProperty",
-  );
 
   state.eatClosingBrace();
 
@@ -275,7 +272,7 @@ function openSnippet(state: TemplateParserState, start: number): void {
       end: -1,
       expression: id,
       typeParams,
-      parameters,
+      parameters: node.params,
       body,
     },
     body,
