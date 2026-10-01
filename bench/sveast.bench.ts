@@ -1,6 +1,7 @@
 import { group, task } from "ostia";
 import {
   type AST,
+  lexImportsExports,
   ParseError,
   type ParseOptions,
   parse,
@@ -201,6 +202,35 @@ group("parseImportsExports", () => {
     "largest carbon script",
     [largest],
     false,
+    `${Math.round(largest.length / 1000)} kB`,
+  );
+});
+
+group("lexImportsExports", () => {
+  const lexTask = (name: string, inputs: string[], description: string) => {
+    const run = () => inputs.map(lexImportsExports);
+    task(
+      name,
+      lean(run, (lists) => lists.length),
+      { description },
+    );
+  };
+
+  const sources = (modules: Component[]) => modules.map((m) => flat(m.source));
+  lexTask("carbon .js", sources(CARBON_JS), kb(CARBON_JS));
+  lexTask("carbon .d.ts", sources(CARBON_TS), kb(CARBON_TS));
+  const scripts = CARBON_COMPONENTS.flatMap(({ source }) =>
+    scriptTexts(source).map(flat),
+  );
+  lexTask(
+    "carbon scripts",
+    scripts,
+    `${scripts.length} scripts, ${Math.round(scripts.join("").length / 1000)} kB`,
+  );
+  const largest = scripts.reduce((a, b) => (b.length > a.length ? b : a));
+  lexTask(
+    "largest carbon script",
+    [largest],
     `${Math.round(largest.length / 1000)} kB`,
   );
 });
