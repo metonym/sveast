@@ -103,6 +103,7 @@ async function buildProject() {
       "./src/index.ts",
       "./src/parse.ts",
       "./src/parse-module.ts",
+      "./src/parse-imports-exports.ts",
       "./src/is-valid-type.ts",
       "./src/walk.ts",
       ...SUBPATHS.map((subpath) => `./src/${subpath}.ts`),

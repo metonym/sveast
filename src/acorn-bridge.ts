@@ -1,6 +1,7 @@
 import {
   type Node as AcornNode,
   definePlugin,
+  type ExportedNames,
   extendParser,
   type ForInit,
   type ParserConstructor,
@@ -19,7 +20,13 @@ import { js_parse_error, unexpected_eof } from "./errors";
 import { locate } from "./locator";
 import { mapChildren } from "./nodes";
 import { missingTypeScript } from "./support";
-import type { Expression, Node, Program, Statement } from "./types/estree";
+import type {
+  Expression,
+  ModuleDeclaration,
+  Node,
+  Program,
+  Statement,
+} from "./types/estree";
 
 let sawParenthesized = false;
 
@@ -243,6 +250,36 @@ export function parseStatementAt(
       }
     }),
   );
+}
+
+/**
+ * Parses the top-level statement at each offset `find` passes to
+ * `parseAt`, with one parser, so a name exported or imported twice is an
+ * error as in a whole module. `parseAt` returns the statement's end.
+ */
+export function parseStatementsAt(
+  context: ParseContext,
+  source: string,
+  find: (parseAt: (index: number) => number) => void,
+): Array<Statement | ModuleDeclaration> {
+  const program = run(context, source, 0, false, (ParserClass, options) => {
+    const parser = new ParserClass(options, source, 0);
+    const node = parser.startNode();
+    const body: AcornNode[] = [];
+    const exports: ExportedNames = Object.create(null);
+    find((index) => {
+      parser.pos = index;
+      parser.context = parser.initialContext();
+      parser.exprAllowed = true;
+      parser.nextToken();
+      const statement = parser.parseStatement(null, true, exports);
+      body.push(statement);
+      return statement.end;
+    });
+    node.body = body;
+    return parser.finishNode(node, "Program");
+  });
+  return estree<Program>(program).body as Array<Statement | ModuleDeclaration>;
 }
 
 function removeParens<T extends Node>(node: T): T;

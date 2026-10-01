@@ -4,6 +4,7 @@ import {
   ParseError,
   type ParseOptions,
   parse,
+  parseImportsExports,
   parseModule,
   walk,
 } from "sveast";
@@ -158,6 +159,49 @@ group("parseModule", () => {
     scripts,
     { typescript: true },
     `${scripts.length} scripts`,
+  );
+});
+
+group("parseImportsExports", () => {
+  const importsTask = (
+    name: string,
+    inputs: string[],
+    typescript: boolean,
+    description: string,
+    localExports = true,
+  ) => {
+    const options = { typescript, localExports };
+    mustParse(name, inputs, (source) => parseImportsExports(source, options));
+    const run = () =>
+      inputs.map((source) => parseImportsExports(source, options));
+    task(
+      name,
+      lean(run, (lists) => lists.length),
+      { description },
+    );
+  };
+
+  const sources = (modules: Component[]) => modules.map((m) => flat(m.source));
+  importsTask("carbon .js", sources(CARBON_JS), false, kb(CARBON_JS));
+  importsTask("carbon .d.ts", sources(CARBON_TS), true, kb(CARBON_TS));
+  const scripts = CARBON_COMPONENTS.flatMap(({ source }) =>
+    scriptTexts(source).map(flat),
+  );
+  const scriptsKb = `${scripts.length} scripts, ${Math.round(scripts.join("").length / 1000)} kB`;
+  importsTask("carbon scripts", scripts, false, scriptsKb);
+  importsTask(
+    "carbon scripts, localExports: false",
+    scripts,
+    false,
+    scriptsKb,
+    false,
+  );
+  const largest = scripts.reduce((a, b) => (b.length > a.length ? b : a));
+  importsTask(
+    "largest carbon script",
+    [largest],
+    false,
+    `${Math.round(largest.length / 1000)} kB`,
   );
 });
 

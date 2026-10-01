@@ -38,8 +38,10 @@ try {
     }
     return reached;
   };
-  if (reach("parse-module.js").has("parse.js")) {
-    throw new Error("dist/parse-module.js imports the template parser");
+  for (const entry of ["parse-module.js", "parse-imports-exports.js"]) {
+    if (reach(entry).has("parse.js")) {
+      throw new Error(`dist/${entry} imports the template parser`);
+    }
   }
   const acorn = reach("is-valid-type.js");
   for (const file of reach("walk.js")) {
@@ -104,7 +106,7 @@ try {
   await writeFile(
     join(dir, "smoke.js"),
     `import assert from "node:assert/strict";
-import { parse, parseModule, SKIP, STOP, walk } from "sveast";
+import { parse, parseImportsExports, parseModule, SKIP, STOP, walk } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
 
 const source = \`<script lang="ts">
@@ -122,6 +124,13 @@ assert.equal(parse(source).instance.content.body[0].type, "VariableDeclaration")
 
 assert.throws(() => parse("{x"), { name: "ParseError", code: "expected_token" });
 assert.equal(parseModule("let a: number;", { typescript: true }).body[0].type, "VariableDeclaration");
+assert.deepEqual(
+  parseImportsExports('import { type A, b } from "c"; export let d; export * from "e";', {
+    typescript: true,
+    localExports: false,
+  }).map((node) => node.source.value),
+  ["c", "e"],
+);
 
 const classes = [];
 walk(parse(source), {
@@ -160,6 +169,8 @@ const js = core.createParser();
 assert.throws(() => js.parse(source), (error) => !(error instanceof core.ParseError));
 assert.equal(js.parse("<p>&copy; &amp;</p>").fragment.nodes[0].fragment.nodes[0].data, "&copy; &");
 assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
+assert.equal(js.parseImportsExports('import a from "a";')[0].type, "ImportDeclaration");
+assert.throws(() => js.parseImportsExports('import type A from "a";', { typescript: true }), (error) => !(error instanceof core.ParseError));
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -170,7 +181,9 @@ assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
   type AST,
   type Function as AnyFunction,
   isValidType,
+  type ModuleDeclaration,
   type Node,
+  type ParseImportsExportsOptions,
   type ParseOptions,
   type Pattern,
   type Program,
@@ -179,6 +192,7 @@ assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
   type Visitor,
   ParseError,
   parse,
+  parseImportsExports,
   parseModule,
   SKIP,
   STOP,
@@ -265,6 +279,14 @@ parse(1);
 const parser: Parser = createParser({ typescript, entities });
 const coreAst: CoreRoot = parser.parse("<p>{a}</p>", { comments: false });
 const coreProgram: CoreProgram = parser.parseModule("let a;", { typescript: true });
+const importsOptions: ParseImportsExportsOptions = { typescript: true, localExports: false };
+const declarations: ModuleDeclaration[] = parseImportsExports("export * from 'a';", importsOptions);
+const [declaration] = parser.parseImportsExports("import a from 'a';");
+if (declaration?.type === "ImportDeclaration") {
+  const from: string = declaration.source.value;
+  void from;
+}
+void declarations;
 const fromSveast: AST.Root = coreAst;
 void coreProgram;
 void fromSveast;

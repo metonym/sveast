@@ -47,6 +47,25 @@ export interface ParseModuleOptions {
   comments?: boolean;
 }
 
+/** Options for {@link parseImportsExports}. */
+export interface ParseImportsExportsOptions {
+  /**
+   * Parse TypeScript, e.g. `import type`, `export type` and
+   * `import a = require("a")`. Default `false`.
+   */
+  typescript?: boolean;
+  /**
+   * Return the `export` statements that export the module's own bindings,
+   * such as `export let a`, `export function b() {}`, `export { c }` and
+   * `export default d`. With `false`, only imports and the exports that
+   * have a `from`, such as `export * from "e"` and `export { f } from "f"`,
+   * are returned, and the rest is skipped like other code, which is faster
+   * when most statements are exported, as in a component's props.
+   * Default `true`.
+   */
+  localExports?: boolean;
+}
+
 /** TypeScript support for {@link createParser}, from `sveast/typescript`. */
 export interface TypeScriptSupport {
   readonly support: "typescript";
