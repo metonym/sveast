@@ -1,12 +1,24 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "sveast";
 import { checkSyntax } from "../examples/check-syntax";
 import { componentsUsed } from "../examples/components-used";
 import { extractStyles } from "../examples/extract-styles";
+import { importsOf, moduleGraph } from "../examples/module-graph";
+import { declaration, propTypes } from "../examples/prop-types";
 import { propsOf } from "../examples/props";
+import { svelteMode } from "../examples/svelte-mode";
+import { unusedBindings } from "../examples/unused-bindings";
 import { unusedClasses } from "../examples/unused-classes";
+
+const CARBON = join(import.meta.dir, "corpus/carbon");
 
 const APP = `<script lang="ts">
   import Button from "./Button.svelte";
@@ -57,6 +69,56 @@ const CARD = `<script>
 </style>
 `;
 
+const PANEL = `<script lang="ts">
+  import { onMount, tick } from "svelte";
+  import { fade } from "svelte/transition";
+  import Icon from "./Icon.svelte";
+  import * as Menu from "./menu";
+  import { open, type Item } from "./util";
+
+  let { items }: { items: Item[] } = $props();
+  let [first, second] = $derived(items);
+  function toggle() {
+    $open = !$open;
+  }
+  function unused(value: number) {
+    return value;
+  }
+  function tooltip(node: HTMLElement) {}
+  onMount(() => {});
+</script>
+
+<Menu.Root>
+  <button onclick={toggle} use:tooltip>{first.label}</button>
+  {#if $open}<div transition:fade><Icon /></div>{/if}
+</Menu.Root>
+`;
+
+const LEGACY = `<script>
+  /**
+   * The button's kind.
+   * Defaults to the primary style.
+   * @type {"primary" | "ghost"}
+   */
+  export let kind = "primary";
+
+  /**
+   * The text.
+   * @type {string; alert(1)}
+   */
+  export let label;
+
+  /** @type {{ id: string } | null} */
+  export let item = null;
+
+  export let disabled = false;
+
+  $: classes = \`btn btn--\${kind}\`;
+</script>
+
+<button class={classes} {disabled}>{label}</button>
+`;
+
 const FILES = {
   "App.svelte": APP,
   "Button.svelte": BUTTON,
@@ -64,6 +126,12 @@ const FILES = {
   "Broken.svelte": "{#if open}\n  <p>Hi</p>\n",
   "store.svelte.ts": "export const count: number = $state(0);\n",
   "broken.ts": "export const count: number = ;\n",
+  "Panel.svelte": PANEL,
+  "Legacy.svelte": LEGACY,
+  "index.ts":
+    'export { default as Panel } from "./Panel.svelte";\nexport * from "./util";\nexport { tick } from "svelte";\n',
+  "util.ts":
+    'import { writable } from "svelte/store";\nexport interface Item { label: string }\nexport const open = writable(false);\n',
 };
 
 let dir = "";
@@ -249,6 +317,186 @@ describe("unused-classes", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toBe(
       "Card.svelte:11 .stale\nCard.svelte:15 .footer\nCard.svelte:17 .wide\n",
+    );
+  });
+});
+
+describe("module-graph", () => {
+  test("reads a component's imports without parsing its scripts", () => {
+    expect(importsOf("Panel.svelte", PANEL)).toEqual([
+      "svelte",
+      "svelte/transition",
+      "./Icon.svelte",
+      "./menu",
+      "./util",
+    ]);
+    expect(importsOf("index.ts", FILES["index.ts"])).toEqual([
+      "./Panel.svelte",
+      "./util",
+      "svelte",
+    ]);
+  });
+
+  test("follows Carbon's Button through its components and modules", async () => {
+    const graph = await moduleGraph([join(CARBON, "Button/index.js")]);
+    expect(graph.files[join(CARBON, "Button/index.js")]).toEqual([
+      join(CARBON, "Button/Button.svelte"),
+      join(CARBON, "Button/ButtonSet.svelte"),
+      join(CARBON, "Button/ButtonSkeleton.svelte"),
+    ]);
+    expect(graph.files[join(CARBON, "Portal/FloatingPortal.svelte")]).toContain(
+      join(CARBON, "Portal/Portal.svelte"),
+    );
+    expect(Object.keys(graph.files)).toHaveLength(22);
+    expect(graph.missing).toEqual([]);
+    expect(graph.packages).toEqual(["svelte", "svelte/store"]);
+  });
+
+  test("prints the graph with missing files and packages", async () => {
+    const { stdout, exitCode } = await run("module-graph.ts", ["index.ts"]);
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stdout)).toEqual({
+      files: {
+        "index.ts": ["Panel.svelte", "util.ts"],
+        "Panel.svelte": ["util.ts"],
+        "util.ts": [],
+      },
+      missing: ["Panel.svelte: ./Icon.svelte", "Panel.svelte: ./menu"],
+      packages: ["svelte", "svelte/transition", "svelte/store"],
+    });
+  });
+});
+
+describe("unused-bindings", () => {
+  test("reports top-level bindings neither the script nor the markup uses", () => {
+    expect(unusedBindings(PANEL)).toEqual([
+      { name: "tick", line: 2 },
+      { name: "second", line: 9 },
+      { name: "unused", line: 13 },
+    ]);
+    expect(unusedBindings(LEGACY)).toEqual([]);
+  });
+
+  test("finds nothing unused in Carbon", () => {
+    const files = readdirSync(CARBON, { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".svelte"))
+      .map((file) => join(CARBON, file));
+    expect(files.length).toBeGreaterThan(300);
+    const unused = files.flatMap((file) =>
+      unusedBindings(readFileSync(file, "utf8")),
+    );
+    expect(unused).toEqual([]);
+  });
+
+  test("prints each unused binding", async () => {
+    const { stdout, exitCode } = await run("unused-bindings.ts", [
+      "Panel.svelte",
+      "Legacy.svelte",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe(
+      "Panel.svelte:2 tick\nPanel.svelte:9 second\nPanel.svelte:13 unused\n",
+    );
+  });
+});
+
+describe("svelte-mode", () => {
+  test("stops at the first rune, else reports the first legacy syntax", () => {
+    expect(svelteMode(PANEL)).toEqual({
+      mode: "runes",
+      reason: "$props",
+      line: 8,
+    });
+    expect(svelteMode(LEGACY)).toEqual({
+      mode: "legacy",
+      reason: "export let",
+      line: 7,
+    });
+    expect(svelteMode("<p>{$$props.title}</p>")).toEqual({
+      mode: "legacy",
+      reason: "$$props",
+      line: 1,
+    });
+    expect(svelteMode("<svelte:options runes={false} />")).toEqual({
+      mode: "legacy",
+      reason: "<svelte:options runes={false}>",
+      line: 1,
+    });
+    expect(svelteMode(APP)).toEqual({
+      mode: "runes",
+      reason: "$props",
+      line: 6,
+    });
+    expect(svelteMode("<p>{count}</p>")).toEqual({ mode: "either" });
+  });
+
+  test("prints each component's mode", async () => {
+    const { stdout, exitCode } = await run("svelte-mode.ts", [
+      "Panel.svelte",
+      "Legacy.svelte",
+      "Card.svelte",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe(
+      "Panel.svelte: runes ($props, line 8)\nLegacy.svelte: legacy (export let, line 7)\nCard.svelte: runes ($props, line 2)\n",
+    );
+  });
+});
+
+describe("prop-types", () => {
+  test("types props from JSDoc, rejecting what isn't one type", () => {
+    expect(propTypes(LEGACY)).toEqual({
+      props: [
+        {
+          name: "kind",
+          type: '"primary" | "ghost"',
+          optional: true,
+          description: "The button's kind.\nDefaults to the primary style.",
+        },
+        {
+          name: "label",
+          type: "any",
+          optional: false,
+          description: "The text.",
+        },
+        {
+          name: "item",
+          type: "{ id: string } | null",
+          optional: true,
+          description: "",
+        },
+        { name: "disabled", type: "boolean", optional: true, description: "" },
+      ],
+      invalid: [{ name: "label", type: "string; alert(1)" }],
+    });
+    expect(
+      propTypes('<script lang="ts">export let size: "sm" | "lg";</script>')
+        .props,
+    ).toEqual([
+      { name: "size", type: '"sm" | "lg"', optional: false, description: "" },
+    ]);
+  });
+
+  test("declares Carbon's Button props", () => {
+    const { props, invalid } = propTypes(
+      readFileSync(join(CARBON, "Button/Button.svelte"), "utf8"),
+    );
+    expect(invalid).toEqual([]);
+    expect(declaration("Button", props)).toContain(
+      '  /** Specify the kind of button. */\n  kind?: "primary" | "secondary" | "tertiary" | "ghost" | "danger" | "danger-tertiary" | "danger-ghost";\n',
+    );
+  });
+
+  test("prints a declaration per component", async () => {
+    const { stdout, stderr, exitCode } = await run("prop-types.ts", [
+      "Legacy.svelte",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe(
+      "Legacy.svelte: label's @type {string; alert(1)} isn't one type\n",
+    );
+    expect(stdout).toBe(
+      'export interface LegacyProps {\n  /**\n   * The button\'s kind.\n   * Defaults to the primary style.\n   */\n  kind?: "primary" | "ghost";\n  /** The text. */\n  label: any;\n  item?: { id: string } | null;\n  disabled?: boolean;\n}\n\n',
     );
   });
 });

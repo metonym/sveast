@@ -215,7 +215,7 @@ for (const node of parseModule(source, { typescript: true }).body) {
 
 ## Recipes
 
-Each recipe has a fuller, runnable version in [`examples/`](examples), a CLI you can point at your own components.
+Each recipe has a fuller, runnable version in [`examples/`](examples), a CLI you can point at your own components. It also has tools for the rest of the API: a module graph with `parseImportsExports`, unused imports and variables with `isReference` and `extractIdentifiers`, runes-or-legacy detection with `walk`'s `STOP`, and `.d.ts` props from JSDoc with `isValidType`.
 
 **List the components a file renders**, e.g. to build a dependency graph:
 
