@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.3.0 — 2026-09-30
+
+**Features**
+
+- `isValidType(text)` reports whether `text` is exactly one TypeScript type,
+  such as a JSDoc `{"sm" | "lg"}` a tool is about to copy into a `.d.ts`.
+  The text is parsed from the TypeScript plugin's type entry point and must
+  consume the input, rather than being wrapped in `type T = ...;`, so a
+  `;`, a line break, a `}` or a comment terminator in the text can't end the
+  type and start a statement. `string; let x = 1` and `{ a: string } }` are
+  `false`. Whitespace and comments around the type are allowed; a `//`
+  comment runs to the end of the line, so a caller that embeds `text` before
+  more code on the same line should check for one. Results aren't cached.
+  It ships as its own entry, `is-valid-type.js`, which imports only the chunk
+  with acorn and the TypeScript plugin, not the template parser.
+- `ParseError.reason` is the message without svelte's link to the error's
+  docs, e.g. `"Unexpected token"`. `message` is unchanged: always `reason`,
+  a line break, then `https://svelte.dev/e/${code}`. A tool that prints a
+  one-line error no longer has to split `message` on a line break.
+- Module specifiers are typed as `StringLiteral`, a `SimpleLiteral` whose
+  `value` is a `string`. The grammar only allows a string there, and the
+  parser only ever produces one: an import or export `source`, an import
+  attribute, a quoted module export name, `declare module "a"`,
+  `import a = require("a")`, `import("a")` in a type
+  (`TSImportType.argument`), and a quoted enum member name. Consumers don't
+  have to narrow `value`.
+
+**Breaking**
+
+- Those specifier fields were `Literal` (`value: string | boolean | number |
+  null`). They're `StringLiteral` now, so a general `Literal` is no longer
+  assignable to an import's `source`, an export name,
+  `TSImportType.argument`, `TSExternalModuleReference.expression`, or a
+  quoted `TSEnumMember` / `TSModuleDeclaration` id. The runtime nodes are
+  unchanged.
+
 ## 0.2.0 — 2026-09-30
 
 **Features**
