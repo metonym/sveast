@@ -9,6 +9,35 @@ Parser.prototype.validateRegExpFlags = function () {};
 Parser.prototype.validateRegExpPattern = function () {};
 `;
 
+const ACORN_IDENTIFIER_TABLES =
+  /^var (?:astralIdentifierCodes|astralIdentifierStartCodes|nonASCIIidentifierChars|nonASCIIidentifierStartChars) = .*;$/gm;
+const ACORN_IDENTIFIER_START = "var nonASCIIidentifierStart = new RegExp(";
+const ACORN_IDENTIFIER_END = "// ## Token types";
+const ACORN_IDENTIFIER_STUB = `var nonASCIIidentifierStart = /\\p{ID_Start}/u;
+var nonASCIIidentifier = /[\\p{ID_Continue}\\u200c\\u200d]/u;
+
+function isIdentifierStart(code, astral) {
+  if (code < 65) { return code === 36 }
+  if (code < 91) { return true }
+  if (code < 97) { return code === 95 }
+  if (code < 123) { return true }
+  if (code > 0xffff && astral === false) { return false }
+  return code >= 0xaa && nonASCIIidentifierStart.test(String.fromCodePoint(code))
+}
+
+function isIdentifierChar(code, astral) {
+  if (code < 48) { return code === 36 }
+  if (code < 58) { return true }
+  if (code < 65) { return false }
+  if (code < 91) { return true }
+  if (code < 97) { return code === 95 }
+  if (code < 123) { return true }
+  if (code > 0xffff && astral === false) { return false }
+  return code >= 0xaa && nonASCIIidentifier.test(String.fromCodePoint(code))
+}
+
+`;
+
 const TS_MEMBER = /\bts[A-Z]\w*\b/g;
 const TS_PLUGIN_EXPORT = "tsPlugin";
 const SHORTENED_NAME = /\$\d/;
@@ -24,6 +53,33 @@ function stripAcornRegExpValidation(source: string): string {
     );
   }
   return source.slice(0, start) + ACORN_REGEXP_STUB + source.slice(end);
+}
+
+function replaceAcornIdentifierTables(source: string): string {
+  const tables = source.match(ACORN_IDENTIFIER_TABLES) ?? [];
+  const start = source.indexOf(ACORN_IDENTIFIER_START);
+  const end = source.indexOf(ACORN_IDENTIFIER_END, start);
+  if (tables.length !== 4 || start === -1 || end === -1) {
+    throw new Error(
+      "shrink-parser: acorn's identifier tables moved; update the markers in scripts/shrink-parser.ts",
+    );
+  }
+  const rest =
+    source.slice(0, start) + ACORN_IDENTIFIER_STUB + source.slice(end);
+  const stripped = rest.replace(ACORN_IDENTIFIER_TABLES, "");
+  for (const name of [
+    "isInAstralSet",
+    "astralIdentifier",
+    "nonASCIIidentifierChars",
+    "nonASCIIidentifierStartChars",
+  ]) {
+    if (stripped.includes(name)) {
+      throw new Error(
+        `shrink-parser: acorn uses ${name} outside its identifier tests; update scripts/shrink-parser.ts`,
+      );
+    }
+  }
+  return stripped;
 }
 
 function shortenTsMembers(source: string): string {
@@ -51,7 +107,9 @@ export const shrinkParser: BunPlugin = {
   name: "sveast-shrink-parser",
   setup(build) {
     build.onLoad({ filter: ACORN_FILE }, async (args) => ({
-      contents: stripAcornRegExpValidation(await Bun.file(args.path).text()),
+      contents: replaceAcornIdentifierTables(
+        stripAcornRegExpValidation(await Bun.file(args.path).text()),
+      ),
       loader: "js",
     }));
     build.onLoad({ filter: TS_PLUGIN_FILE }, async (args) => ({
