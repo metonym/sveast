@@ -6,4 +6,4 @@ export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";
 export type { Visitor } from "./walk";
-export { STOP, visitorKeys, walk } from "./walk";
+export { SKIP, STOP, visitorKeys, walk } from "./walk";
