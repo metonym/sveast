@@ -10,18 +10,40 @@ const TypeParser: any = Parser.extend(tsPlugin);
  * `type T = ...`, with nothing before or after it but whitespace and
  * comments. Parsed on its own, not wrapped in a statement, so a `;`, a line
  * break or a `}` in `text` can't end the type and start something else.
- *
- * A `//` comment runs to the end of the line: a caller that embeds `text`
- * before more code on the same line should check it for one.
  */
-export function isValidType(text: string): boolean {
+export function isValidType(
+  text: string,
+  options: {
+    /**
+     * `text` will be embedded before more code on the same line, e.g.
+     * `CustomEvent<${text}>`: also require every `//` comment in it to end
+     * with a line break, so it can't comment out what follows. Default
+     * `false`.
+     */
+    inline?: boolean;
+  } = {},
+): boolean {
+  let lineCommentAtEnd = false;
   const parser = new TypeParser(
-    { ecmaVersion: 16, sourceType: "module" },
+    options.inline
+      ? {
+          ecmaVersion: 16,
+          sourceType: "module",
+          onComment: (
+            block: boolean,
+            _text: string,
+            _start: number,
+            end: number,
+          ) => {
+            if (!block && end === text.length) lineCommentAtEnd = true;
+          },
+        }
+      : { ecmaVersion: 16, sourceType: "module" },
     text,
   );
   try {
     parser.parseWholeType();
-    return true;
+    return !lineCommentAtEnd;
   } catch (error) {
     if (error instanceof SyntaxError) return false;
     throw error;
