@@ -4,7 +4,6 @@ import { declaration_tag_invalid_type } from "./errors";
 import { readExpression } from "./expression";
 import { readSpecialTag } from "./special-tags";
 import type { TemplateParserState } from "./state";
-import type { VariableDeclaration } from "./types/estree";
 
 const REGEX_UNSUPPORTED_DECLARATION = /(?:var|interface|enum)\b/y;
 const REGEX_MAYBE_DECLARATION = /(?:let|const|type)\b/y;
@@ -45,18 +44,16 @@ function readDeclarationTag(
   if (!state.matchRegex(REGEX_MAYBE_DECLARATION)) return false;
 
   const commentsBefore = state.root.comments.length;
-  const statement = parseStatementAt(state, state.source, start) as unknown as {
-    type: string;
-    kind?: string;
-    start: number;
-    end: number;
-  };
+  const statement = parseStatementAt(state, state.source, start);
 
   if (statement.type === "ExpressionStatement") {
     state.root.comments.length = commentsBefore;
     return false;
   }
-  if (statement.kind !== "let" && statement.kind !== "const") {
+  if (
+    statement.type !== "VariableDeclaration" ||
+    (statement.kind !== "let" && statement.kind !== "const")
+  ) {
     declaration_tag_invalid_type(statement);
   }
 
@@ -66,7 +63,7 @@ function readDeclarationTag(
     type: "DeclarationTag",
     start: tagStart,
     end: state.index,
-    declaration: statement as unknown as VariableDeclaration,
+    declaration: statement,
   });
   return true;
 }

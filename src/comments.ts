@@ -1,3 +1,6 @@
+import { fieldsOf, isNode } from "./nodes";
+import type { Node } from "./types/estree";
+
 export interface Comment {
   type: "Line" | "Block";
   value: string;
@@ -7,15 +10,6 @@ export interface Comment {
     start: { line: number; column: number };
     end: { line: number; column: number };
   };
-}
-
-interface Node {
-  type: string;
-  start: number;
-  end: number;
-  leadingComments?: Comment[];
-  trailingComments?: Comment[];
-  [key: string]: unknown;
 }
 
 let commentSource = "";
@@ -38,13 +32,15 @@ export function onComment(
 
   if (block && value.includes("\n")) {
     const lineStart = commentSource.lastIndexOf("\n", start - 1) + 1;
-    let end = lineStart;
-    let code = commentSource.charCodeAt(end);
-    while (code === 32 || code === 9) code = commentSource.charCodeAt(++end);
-    if (end > lineStart) {
+    let indentEnd = lineStart;
+    let code = commentSource.charCodeAt(indentEnd);
+    while (code === 32 || code === 9) {
+      code = commentSource.charCodeAt(++indentEnd);
+    }
+    if (indentEnd > lineStart) {
       value = stripLeadingIndentation(
         value,
-        commentSource.slice(lineStart, end),
+        commentSource.slice(lineStart, indentEnd),
       );
     }
   }
@@ -133,24 +129,24 @@ function visit(
 
   const upcoming = queue[next].start;
   if (upcoming < node.end || !gapBlocked(node.end, upcoming)) {
+    const fields = fieldsOf(node);
     const listKey = LIST_KEYS.get(node.type);
-    const listEmpty =
-      listKey !== undefined && (node[listKey] as unknown[]).length === 0;
-    for (const key in node) {
+    const list = listKey === undefined ? undefined : fields[listKey];
+    const listEmpty = Array.isArray(list) && list.length === 0;
+    for (const key in fields) {
       if (next >= queue.length) return;
       if (key === "type") continue;
-      const value = node[key];
-      if (!value || typeof value !== "object") continue;
+      const value = fields[key];
       if (Array.isArray(value)) {
         const inList = key === listKey;
         for (let i = 0; i < value.length; i++) {
           const child = value[i];
-          if (child && typeof child === "object" && child.type) {
+          if (isNode(child)) {
             visit(child, node, inList ? i === value.length - 1 : listEmpty);
           }
         }
-      } else if ((value as Node).type) {
-        visit(value as Node, node, listEmpty);
+      } else if (isNode(value)) {
+        visit(value, node, listEmpty);
       }
     }
     if (next >= queue.length) return;
