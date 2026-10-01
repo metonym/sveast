@@ -90,6 +90,7 @@ async function buildProject() {
       "./src/parse.ts",
       "./src/parse-module.ts",
       "./src/is-valid-type.ts",
+      "./src/walk.ts",
     ],
     root: "./src",
     outdir: outDir,

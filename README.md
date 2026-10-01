@@ -34,7 +34,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
-| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `isValidType`) |
+| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `isValidType`), and walking the AST (`walk`, `visitorKeys`) |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
 
 ## API
@@ -60,6 +60,14 @@ Whether `text` is exactly one TypeScript type, such as a JSDoc `{"sm" | "lg"}` a
 
 A `//` comment runs to the end of the line, so `string // the size` is a valid type but breaks `CustomEvent<${text}>`. Pass `inline: true` when the text goes before more code on the same line: it's then also `false` unless every `//` comment in the text ends with a line break. Block comments and `//` inside strings, as in `"http://a" | "https://b"`, are fine either way.
 
+### `walk(node, visitor) => void`
+
+Visits `node` and every node under it, depth-first and in source order, calling `visitor.enter(node, parent, key, index)` before a node's children and `visitor.leave(node, parent, key, index)` after them. `parent[key]` is the node, or `parent[key][index]` when the field is an array; all three are `null` for the node you pass. Return `false` from `enter` to skip the node's children; `leave` is still called, so a stack you push in `enter` and pop in `leave` stays balanced. Checking `node.type` narrows `node`.
+
+It works on any node the parsers return: a component's `Root`, a `Fragment`, an expression, a `parseModule` program, a `<style>`'s rules. It only reads the fields that hold child nodes, so it never descends into `loc`, comments or strings, and it throws on a node type it doesn't know. Two exceptions to source order: a component's sections are visited in scope order, `module`, `instance`, `fragment`, then `css`; and a template literal's `quasis` come before its `expressions`. `Root.options` isn't a node, so `<svelte:options>`'s attributes aren't visited; read them from `ast.options?.attributes`. acorn shares one `Identifier` between both names of `import { a }`, so it's visited once as `imported` and once as `local`, and likewise as `local` and `exported` in `export { a }`.
+
+`visitorKeys` is the table `walk` reads: the fields of each node type that hold child nodes, in source order, e.g. `visitorKeys.IfBlock` is `["test", "consequent", "alternate"]`. Use it with another walker, or to write your own.
+
 ### Types
 
 `AST` is svelte's `AST` namespace (`AST.Root`, `AST.RegularElement`, `AST.CSS.Rule`, ...), corrected to match what the parser returns: `name_loc` and a comment's `loc` are optional, `Root.instance`/`module` are absent rather than `null` when there's no such `<script>`, `Root.js` is declared, and every directive has `modifiers`. `ParseOptions` is exported too.
@@ -80,25 +88,47 @@ for (const node of parseModule(source, { typescript: true }).body) {
 **List the components a file renders**, e.g. to build a dependency graph:
 
 ```ts
-import { parse } from "sveast";
+import { parse, walk } from "sveast";
 
 function componentsUsed(source: string): string[] {
   const names = new Set<string>();
-  const visit = (node: object): void => {
-    if (
-      "type" in node &&
-      node.type === "Component" &&
-      "name" in node &&
-      typeof node.name === "string"
-    ) {
-      names.add(node.name);
-    }
-    for (const child of Object.values(node)) {
-      if (typeof child === "object" && child !== null) visit(child);
-    }
-  };
-  visit(parse(source, { css: false }).fragment);
+  walk(parse(source, { css: false }).fragment, {
+    enter(node) {
+      if (node.type === "Component") names.add(node.name);
+    },
+  });
   return [...names]; // ["Button", "Modal.Root"]
+}
+```
+
+**Find the classes a component's styles declare but its markup never uses**, e.g. to report dead CSS. A `class={...}` expression is reported as `dynamic` rather than guessed at:
+
+```ts
+import { parse, walk } from "sveast";
+
+function unusedClasses(source: string): { unused: string[]; dynamic: boolean } {
+  const ast = parse(source);
+  const declared = new Set<string>();
+  const used = new Set<string>();
+  let dynamic = false;
+  if (ast.css) {
+    walk(ast.css, {
+      enter(node) {
+        if (node.type === "ClassSelector") declared.add(node.name);
+      },
+    });
+  }
+  walk(ast.fragment, {
+    enter(node) {
+      if (node.type === "ClassDirective") used.add(node.name);
+      if (node.type !== "Attribute" || node.name !== "class") return;
+      for (const part of node.value === true ? [] : [node.value].flat()) {
+        if (part.type === "ExpressionTag") dynamic = true;
+        else for (const name of part.data.split(/\s+/)) if (name) used.add(name);
+      }
+    },
+  });
+  return { unused: [...declared].filter((name) => !used.has(name)), dynamic };
 }
 ```
 
