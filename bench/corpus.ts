@@ -1,15 +1,37 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseModule } from "sveast";
+import { parseModule, parse as sveastParse } from "sveast";
 import { parse } from "svelte/compiler";
 
-export type Component = { path: string; source: string };
+export interface Component {
+  path: string;
+  source: string;
+}
 
 const ROOT = existsSync(join(process.cwd(), "tests/corpus"))
   ? process.cwd()
   : join(import.meta.dir, "..");
 const CORPUS = join(ROOT, "tests/corpus");
 export const LANG_TS = /<script[^>]*\blang=["']?ts\b/;
+
+/**
+ * The text of each `<script>`'s program in a component. sveast sets `start`
+ * and `end` on the program, but the estree types don't declare them.
+ */
+export function scriptTexts(source: string): string[] {
+  const { instance, module } = sveastParse(source);
+  return [instance, module].flatMap((script) => {
+    if (!script) return [];
+    const { content } = script;
+    if (
+      !("start" in content && typeof content.start === "number") ||
+      !("end" in content && typeof content.end === "number")
+    ) {
+      throw new Error("a script's program has no start and end");
+    }
+    return [source.slice(content.start, content.end)];
+  });
+}
 
 const parses = (source: string) => {
   try {

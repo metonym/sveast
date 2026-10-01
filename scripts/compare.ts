@@ -3,7 +3,13 @@ import { relative } from "node:path";
 import { parseArgs } from "node:util";
 import { parse } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
-import { collectFiles, firstDifference } from "./shared";
+import {
+  collectFiles,
+  errorCode,
+  errorMessage,
+  firstDifference,
+  isRecord,
+} from "./shared";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -33,12 +39,11 @@ const at = (value: unknown, path: string) =>
     .split(".")
     .slice(1)
     .reduce<unknown>(
-      (node, key) => (node as Record<string, unknown> | undefined)?.[key],
+      (node, key) => (isRecord(node) ? node[key] : undefined),
       value,
     );
 
-const errorCode = (error: unknown) =>
-  (error as { code?: string }).code ?? "(no code)";
+const codeOf = (error: unknown) => errorCode(error) ?? "(no code)";
 
 let matched = 0;
 const mismatches = new Map<string, string[]>();
@@ -52,7 +57,7 @@ for (const file of files) {
   const source = readFileSync(file, "utf8");
   const name = relative(process.cwd(), file);
 
-  let expected: unknown;
+  let expected: object | undefined;
   let expectedError: unknown;
   try {
     expected = svelteParse(source, { modern: true });
@@ -60,7 +65,7 @@ for (const file of files) {
     expectedError = error;
   }
 
-  let actual: unknown;
+  let actual: object | undefined;
   let actualError: unknown;
   try {
     actual = parse(source, values.loc ? { loc: true } : undefined);
@@ -69,23 +74,23 @@ for (const file of files) {
   }
 
   if (expectedError && actualError) {
-    if (errorCode(expectedError) === errorCode(actualError)) {
+    if (codeOf(expectedError) === codeOf(actualError)) {
       sameCode.push(name);
     } else {
       differentCode.push(
-        `${name}: svelte ${errorCode(expectedError)}, sveast ${errorCode(actualError)} (${(actualError as Error).message.split("\n")[0]})`,
+        `${name}: svelte ${codeOf(expectedError)}, sveast ${codeOf(actualError)} (${errorMessage(actualError).split("\n")[0]})`,
       );
     }
     continue;
   }
   if (actualError) {
     onlySveastRejects.push(
-      `${name}: ${(actualError as Error).message.split("\n")[0]}`,
+      `${name}: ${errorMessage(actualError).split("\n")[0]}`,
     );
     continue;
   }
   if (expectedError) {
-    onlySvelteRejects.push(`${name}: ${errorCode(expectedError)}`);
+    onlySvelteRejects.push(`${name}: ${codeOf(expectedError)}`);
     continue;
   }
 
@@ -102,7 +107,7 @@ for (const file of files) {
     const replacer = (_: string, value: unknown) =>
       typeof value === "bigint" ? `${value}n` : value;
     const shorten = (value: unknown) =>
-      JSON.stringify(value, replacer)?.slice(0, 400);
+      String(JSON.stringify(value, replacer)).slice(0, 400);
     examples.push(
       `${name} at ${difference}\n  sveast: ${shorten(at(actual, difference))}\n  svelte: ${shorten(at(expected, difference))}`,
     );

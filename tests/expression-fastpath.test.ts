@@ -1,4 +1,5 @@
 import { parse } from "sveast";
+import type { Json } from "../scripts/shared";
 import { acornExpressionParses, parseExpressionAt } from "../src/acorn-bridge";
 import { readExpression } from "../src/expression";
 import { setSource } from "../src/locator";
@@ -68,8 +69,8 @@ const FALLBACK_SHAPES = [
   "(a) => a + 1",
   "[a, b]",
   "{ a: 1 }",
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal is exactly what this shape tests
-  "`t${a}`",
+  // a template literal; split so it isn't mistaken for a placeholder in a plain string
+  ["`t$", "{a}`"].join(""),
   "new X()",
   "a.b[c]",
   "a[b]",
@@ -112,9 +113,9 @@ const TS_FAST_PATH_SHAPES = ["a", "a.b", 'size === "sm"', "!flag", '"str"'];
 
 const TS_PREFIX = '<script lang="ts"></script>';
 
-type Outcome = { node: unknown; end: number } | { throws: true };
+type Outcome = { node: Json; end: number } | { throws: true };
 
-function strip(node: unknown): unknown {
+function strip(node: object): Json {
   return JSON.parse(
     JSON.stringify(node, (_, value) =>
       typeof value === "bigint" ? `bigint:${value}` : value,
@@ -156,38 +157,49 @@ function runShape(expression: string, useTsPrefix: boolean) {
   const index = prefix.length + 1;
 
   let acornCalls = 0;
+  const actual: Outcome[] = [];
+  const reference: Outcome[] = [];
   for (const loc of [true, false]) {
-    const reference = referenceOutcome(source, index, useTsPrefix, loc);
+    reference.push(referenceOutcome(source, index, useTsPrefix, loc));
     const before = acornExpressionParses.count;
-    const actual = actualOutcome(source, index, loc);
+    actual.push(actualOutcome(source, index, loc));
     if (!loc) acornCalls = acornExpressionParses.count - before;
-    expect(actual).toEqual(reference);
   }
-  return acornCalls;
+  return { acornCalls, actual, reference };
 }
 
 describe("expression fast path matches acorn", () => {
   test.each(FAST_PATH_SHAPES)("fast path, no acorn: %s", (expression) => {
-    expect(runShape(expression, false)).toBe(0);
+    const run = runShape(expression, false);
+    expect(run.actual).toEqual(run.reference);
+    expect(run.acornCalls).toBe(0);
   });
 
   test.each(FALLBACK_SHAPES)("falls back to acorn: %s", (expression) => {
-    expect(runShape(expression, false)).toBeGreaterThan(0);
+    const run = runShape(expression, false);
+    expect(run.actual).toEqual(run.reference);
+    expect(run.acornCalls).toBeGreaterThan(0);
   });
 
   test.each(ERROR_SHAPES)("rejected by both: %s", (expression) => {
-    expect(runShape(expression, false)).toBeGreaterThan(0);
+    const run = runShape(expression, false);
+    expect(run.actual).toEqual(run.reference);
+    expect(run.acornCalls).toBeGreaterThan(0);
   });
 
   test.each(TS_FAST_PATH_SHAPES)(
     "fast path under lang=ts: %s",
     (expression) => {
-      expect(runShape(expression, true)).toBe(0);
+      const run = runShape(expression, true);
+      expect(run.actual).toEqual(run.reference);
+      expect(run.acornCalls).toBe(0);
     },
   );
 
   test.each(TS_FALLBACK_SHAPES)("falls back to TS acorn: %s", (expression) => {
-    expect(runShape(expression, true)).toBeGreaterThan(0);
+    const run = runShape(expression, true);
+    expect(run.actual).toEqual(run.reference);
+    expect(run.acornCalls).toBeGreaterThan(0);
   });
 });
 

@@ -1,13 +1,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tsPlugin as acornTypeScript } from "@sveltejs/acorn-typescript";
-import { Parser } from "acorn";
+import { type Comment, Parser } from "acorn";
+import { errorMessage } from "../scripts/shared";
 import { tsPlugin } from "../src/ts-plugin";
 import { SNIPPETS } from "./ts-snippets";
 
 const Ours = Parser.extend(tsPlugin);
-// biome-ignore lint/suspicious/noExplicitAny: acorn-typescript's plugin type doesn't line up with acorn's extend()
-const Theirs = Parser.extend(acornTypeScript() as any);
+const Theirs = Parser.extend(acornTypeScript());
 
 const OPTIONS = { sourceType: "module", ecmaVersion: 16 } as const;
 
@@ -17,19 +17,16 @@ function parse(
   locations: boolean,
   keepLoc: boolean,
 ) {
-  const comments: unknown[] = [];
+  const comments: Comment[] = [];
   const ast = ParserClass.parse(source, {
     ...OPTIONS,
     locations,
-    onComment: comments as never,
+    onComment: comments,
   });
-  return JSON.stringify({ ast, comments }, (key, value) =>
-    key === "loc" && !keepLoc
-      ? undefined
-      : typeof value === "bigint"
-        ? `${value}n`
-        : value,
-  );
+  return JSON.stringify({ ast, comments }, (key, value) => {
+    if (key === "loc" && !keepLoc) return;
+    return typeof value === "bigint" ? `${value}n` : value;
+  });
 }
 
 describe("ts-plugin matches @sveltejs/acorn-typescript", () => {
@@ -72,7 +69,7 @@ describe("ts-plugin", () => {
         ParserClass.parse(source, { ...OPTIONS, locations: true });
         return "ok";
       } catch (error) {
-        return (error as Error).message;
+        return errorMessage(error);
       }
     };
     expect(outcome(Ours)).toBe(outcome(Theirs));
@@ -99,7 +96,7 @@ describe("ts-plugin matches acorn-typescript on Carbon's modules", () => {
       try {
         return parse(ParserClass, source, true, true);
       } catch (error) {
-        return (error as Error).message;
+        return errorMessage(error);
       }
     };
     expect(outcome(Ours)).toBe(outcome(Theirs));

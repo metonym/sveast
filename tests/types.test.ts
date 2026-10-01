@@ -121,7 +121,9 @@ test("the types declare every node and field the corpus's ASTs have", () => {
       } else if (path.endsWith(".js") || path.endsWith(".ts")) {
         check(parseModule(source(), { typescript: path.endsWith(".ts") }));
       }
-    } catch {}
+    } catch {
+      // files neither parser accepts have no AST to check
+    }
   }
   for (const snippet of Object.values(SNIPPETS)) {
     check(parseModule(snippet, { typescript: true, loc: true }));

@@ -1,11 +1,12 @@
 import { ParseError, parse, parseModule } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
+import { byCodeUnit } from "../scripts/shared";
 
-const hasKey = (value: unknown, key: string): boolean =>
+const hasKey = (value: object, key: string): boolean =>
   JSON.stringify(value).includes(`"${key}":`);
 
 test("exports parse, parseModule and ParseError", async () => {
-  expect(Object.keys(await import("sveast")).sort()).toEqual([
+  expect(Object.keys(await import("sveast")).sort(byCodeUnit)).toEqual([
     "ParseError",
     "parse",
     "parseModule",
@@ -18,7 +19,7 @@ test("parseModule parses a module like a component's script", () => {
   const script = svelteParse(`<script lang="ts">${source}</script>`, {
     modern: true,
   }).instance?.content;
-  const plain = (value: unknown) =>
+  const plain = (value: object | undefined) =>
     JSON.parse(
       JSON.stringify(value, (key, item) =>
         key === "loc" ||
@@ -43,7 +44,8 @@ test("loc and name_loc only with `loc: true`", () => {
     start: { line: 1, column: 0 },
     end: { line: 1, column: 27 },
   });
-  const div = ast.fragment.nodes[1] as { name_loc: unknown };
+  const div = ast.fragment.nodes[1];
+  if (div?.type !== "RegularElement") throw new Error("expected the <div>");
   expect(div.name_loc).toEqual({
     start: { line: 2, column: 1, character: 29 },
     end: { line: 2, column: 4, character: 32 },
@@ -62,11 +64,11 @@ test("`css: false` skips the stylesheet but keeps its bounds", () => {
 });
 
 test("syntax errors are ParseErrors with svelte's code and position", () => {
-  let error: unknown;
+  let error: ParseError | undefined;
   try {
     parse("<div>\n  {#if x}\n</div>");
   } catch (thrown) {
-    error = thrown;
+    if (thrown instanceof ParseError) error = thrown;
   }
   expect(error).toBeInstanceOf(ParseError);
   expect(error).toBeInstanceOf(Error);
@@ -79,9 +81,7 @@ test("syntax errors are ParseErrors with svelte's code and position", () => {
     start: { line: 3, column: 0, character: 16 },
     end: { line: 3, column: 0, character: 16 },
   });
-  expect((error as ParseError).frame).toBe(
-    "1: <div>\n2:   {#if x}\n3: </div>\n   ^",
-  );
+  expect(error?.frame).toBe("1: <div>\n2:   {#if x}\n3: </div>\n   ^");
 });
 
 test.each([

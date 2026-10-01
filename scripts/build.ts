@@ -3,7 +3,14 @@ import { cp, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { $, type BunPlugin, build } from "bun";
 import { bundleDts } from "./bundle-dts";
+import type { Json } from "./shared";
 import { shrinkParser } from "./shrink-parser";
+
+interface PackageManifest {
+  main: string;
+  types: string;
+  [field: string]: Json;
+}
 
 const STRIP_PKG_FIELDS = new Set(["devDependencies", "scripts"]);
 const DIST_PREFIX = /^\.\/dist\//;
@@ -41,7 +48,7 @@ async function emitTypeDeclarations() {
 
 async function slimPackageManifest() {
   const manifestPath = resolve(outDir, "package.json");
-  const pkg = await Bun.file(manifestPath).json();
+  const pkg: PackageManifest = await Bun.file(manifestPath).json();
 
   for (const key of STRIP_PKG_FIELDS) {
     delete pkg[key];
@@ -53,7 +60,7 @@ async function slimPackageManifest() {
     ".": { types: pkg.types, import: pkg.main, default: pkg.main },
   };
 
-  const ordered: Record<string, unknown> = {};
+  const ordered: Record<string, Json> = {};
   for (const [key, value] of Object.entries(pkg)) {
     ordered[key] = value;
     if (key === "types") ordered.exports = exports;
@@ -67,8 +74,8 @@ const RELATIVE = /^\.\//;
 
 const reexportEntries: BunPlugin = {
   name: "sveast-reexport-entries",
-  setup(build) {
-    build.onResolve({ filter: RELATIVE }, (args) =>
+  setup(bundler) {
+    bundler.onResolve({ filter: RELATIVE }, (args) =>
       ENTRY.test(args.importer)
         ? { path: `${args.path}.js`, external: true }
         : undefined,
@@ -133,7 +140,9 @@ if (isWatchMode) {
     },
   );
 
-  setInterval(() => {}, 1000);
+  setInterval(() => {
+    // keeps the process alive while watching
+  }, 1000);
 
   process.on("SIGINT", () => {
     console.log("\nStopping watch mode...");
