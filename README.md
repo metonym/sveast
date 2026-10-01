@@ -35,6 +35,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
 | Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `isValidType`), and walking the AST (`walk`, `visitorKeys`) |
+| Non-ASCII identifiers | acorn's tables, Unicode 17 | The engine's own Unicode data, which is smaller to ship: the same as acorn's in Node 24 and Bun; an engine on another Unicode version differs on the letters added in between |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
 
 ## API
