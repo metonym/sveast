@@ -34,7 +34,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
-| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `parseImportsExports`, `isValidType`), walking the AST (`walk`, `visitorKeys`), and finding references (`isReference`) |
+| Scope | Parsing, `parseCss`, analysis, compilation | Parsing (`parse`, `parseModule`, `parseImportsExports`, `isValidType`), walking the AST (`walk`, `visitorKeys`), and finding references and bindings (`isReference`, `extractIdentifiers`) |
 | Non-ASCII identifiers | acorn's tables, Unicode 17 | The engine's own Unicode data, which is smaller to ship: the same as acorn's in Node 24 and Bun; an engine on another Unicode version differs on the letters added in between |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: 108 of the 2,449 TypeScript conformance tests acorn-typescript rejects still parse |
 
@@ -132,7 +132,22 @@ walk(parseModule("const a = b.c({ d: e });"), {
 used; // Set { "a", "b", "e" }
 ```
 
-`walk`, `SKIP`, `STOP`, `visitorKeys`, `Visitor`, `isReference` and the types are also exported from `sveast/walk`, which loads neither acorn nor the parser: for code that walks ASTs it gets from elsewhere, such as a cache, and must not pay for loading the parser. They're the same values as `sveast`'s.
+### `extractIdentifiers(pattern) => Identifier[]`
+
+The `Identifier` nodes a pattern binds, in source order, as svelte's `extract_identifiers` returns them: `a`, `c`, `d`, `e` and `f` in `let { a, b: [c, ...d], e = 1, ...f } = x`. Property keys, defaults and type annotations aren't included. It returns nodes rather than names, so you keep their positions; `.map((node) => node.name)` for the names.
+
+It takes any binding or assignment target: a declarator's `id`, a function's params, including a parameter property (`a` in `constructor(private a)`), a catch clause's `param`, an each block's `context`, a snippet's `parameters`, or an assignment's `left`. A member expression binds nothing, so `[a.b, c] = x` yields only `c`, as in svelte. On an assignment's `left`, `a!`, `a as T`, `a satisfies T` and `<T>a` yield `a`.
+
+```ts
+import { extractIdentifiers, parseModule } from "sveast";
+
+const [declaration] = parseModule("let { a, b: [c] } = x;").body;
+if (declaration.type === "VariableDeclaration") {
+  declaration.declarations.flatMap((d) => extractIdentifiers(d.id)).map((node) => node.name); // ["a", "c"]
+}
+```
+
+`walk`, `SKIP`, `STOP`, `visitorKeys`, `Visitor`, `isReference`, `extractIdentifiers` and the types are also exported from `sveast/walk`, which loads neither acorn nor the parser: for code that walks ASTs it gets from elsewhere, such as a cache, and must not pay for loading the parser. They're the same values as `sveast`'s.
 
 ```ts
 import { STOP, walk } from "sveast/walk";

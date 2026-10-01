@@ -5,11 +5,12 @@ import { byCodeUnit } from "../scripts/shared";
 const hasKey = (value: object, key: string): boolean =>
   JSON.stringify(value).includes(`"${key}":`);
 
-test("exports parse, parseModule, parseImportsExports, isValidType, walk, visitorKeys, SKIP, STOP, isReference and ParseError", async () => {
+test("exports the parsers, walk and its helpers, and ParseError", async () => {
   expect(Object.keys(await import("sveast")).sort(byCodeUnit)).toEqual([
     "ParseError",
     "SKIP",
     "STOP",
+    "extractIdentifiers",
     "isReference",
     "isValidType",
     "parse",
