@@ -1,6 +1,14 @@
 import { group, task } from "ostia";
-import { ParseError, type ParseOptions, parse, parseModule } from "sveast";
 import {
+  type AST,
+  ParseError,
+  type ParseOptions,
+  parse,
+  parseModule,
+  walk,
+} from "sveast";
+import {
+  CARBON_COMPONENTS,
   CARBON_JS,
   CARBON_LARGEST,
   CARBON_TS,
@@ -175,6 +183,35 @@ group("svelte:options", () => {
   parseTask(
     "100 small components",
     SVELTE_OPTIONS_COMPONENTS.map((source, i) => ({ path: `${i}`, source })),
+  );
+});
+
+group("walk", () => {
+  const walkTask = (name: string, nodes: AST.SvelteNode[]) => {
+    let count = 0;
+    const visitor = {
+      enter() {
+        count++;
+      },
+    };
+    const run = () => {
+      count = 0;
+      for (const node of nodes) walk(node, visitor);
+      return count;
+    };
+    task(name, run, { description: `${run()} nodes` });
+  };
+
+  const carbon = CARBON_COMPONENTS.map(({ source }) => parse(flat(source)));
+  walkTask(
+    "carbon module, instance and fragment",
+    carbon.flatMap(({ module, instance, fragment }) =>
+      [module, instance, fragment].filter((node) => node !== undefined),
+    ),
+  );
+  walkTask(
+    "corpus files",
+    COMPONENTS.map(({ source }) => parse(flat(source))),
   );
 });
 
