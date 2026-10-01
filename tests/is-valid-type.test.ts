@@ -55,8 +55,8 @@ function asTypeAlias(text: string): boolean {
   }
 }
 
-const verdicts = (texts: string[]) =>
-  texts.map((text) => [text, isValidType(text)]);
+const verdicts = (texts: string[], options?: { inline: boolean }) =>
+  texts.map((text) => [text, isValidType(text, options)]);
 
 test("accepts common JSDoc types", () => {
   expect(verdicts(VALID)).toEqual(VALID.map((text) => [text, true]));
@@ -114,6 +114,54 @@ test("agrees with parsing `type T = text` on mutated types", () => {
   const disagreements: string[] = [];
   const check = (text: string) => {
     if (isValidType(text) !== asTypeAlias(text)) disagreements.push(text);
+  };
+  for (const text of VALID) {
+    for (let i = 0; i <= text.length; i++) {
+      check(text.slice(0, i) + text.slice(i + 1));
+      for (const insert of INSERTS) {
+        check(text.slice(0, i) + insert + text.slice(i));
+      }
+    }
+  }
+  expect(disagreements).toEqual([]);
+});
+
+test("inline: rejects a `//` comment that would comment out what follows", () => {
+  const texts = [
+    "string // the size",
+    "A | B // c",
+    "string /* a */ // b",
+    "string\n// c",
+    "{\n  a: string; // first\n  b: number } // last",
+  ];
+  expect(verdicts(texts, { inline: true })).toEqual(
+    texts.map((text) => [text, false]),
+  );
+  expect(verdicts(texts)).toEqual(texts.map((text) => [text, true]));
+});
+
+test("inline: accepts block comments, `//` in strings and `//` ended by a line break", () => {
+  const texts = [
+    "string /* the size */",
+    "/* a */ string",
+    '"http://a" | "https://b"',
+    "{ a: string; // first\n b: number }",
+    "string // c\n",
+    "string // c\r",
+    "string // c\u2028",
+  ];
+  expect(verdicts(texts, { inline: true })).toEqual(
+    texts.map((text) => [text, true]),
+  );
+});
+
+test("inline: agrees with also parsing `(text)` on mutated types", () => {
+  const disagreements: string[] = [];
+  const check = (text: string) => {
+    const parenthesized = isValidType(text) && isValidType(`(${text})`);
+    if (isValidType(text, { inline: true }) !== parenthesized) {
+      disagreements.push(text);
+    }
   };
   for (const text of VALID) {
     for (let i = 0; i <= text.length; i++) {

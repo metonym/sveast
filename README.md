@@ -54,9 +54,11 @@ A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed
 
 Parses a JavaScript or TypeScript module, such as a `.ts` file a component imports, the way a component's `<script>` is parsed: estree plus TypeScript nodes, with comments attached as `leadingComments`/`trailingComments`. Options: `typescript` and `loc`, both default `false`.
 
-### `isValidType(text) => boolean`
+### `isValidType(text, options?) => boolean`
 
-Whether `text` is exactly one TypeScript type, such as a JSDoc `{"sm" | "lg"}` a tool is about to copy into a `.d.ts`. The text is parsed as a type on its own, not wrapped in a statement, so a `;`, a line break or a `}` in it can't end the type and smuggle in a statement: `string; let x = 1` and `{ a: string } }` are `false`. Whitespace and comments around the type are allowed; a `//` comment runs to the end of the line, so check for one before embedding the text ahead of more code on the same line. Results aren't cached; memoize if you check the same text often.
+Whether `text` is exactly one TypeScript type, such as a JSDoc `{"sm" | "lg"}` a tool is about to copy into a `.d.ts`. The text is parsed as a type on its own, not wrapped in a statement, so a `;`, a line break or a `}` in it can't end the type and smuggle in a statement: `string; let x = 1` and `{ a: string } }` are `false`. Whitespace and comments around the type are allowed. Results aren't cached; memoize if you check the same text often.
+
+A `//` comment runs to the end of the line, so `string // the size` is a valid type but breaks `CustomEvent<${text}>`. Pass `inline: true` when the text goes before more code on the same line: it's then also `false` unless every `//` comment in the text ends with a line break. Block comments and `//` inside strings, as in `"http://a" | "https://b"`, are fine either way.
 
 ### Types
 
