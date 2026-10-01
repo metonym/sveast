@@ -69,7 +69,7 @@ test("accepts the types a recognizer would leave to a parser", () => {
     "T extends string ? A : B",
     "{ readonly [K in keyof T]?: T[K] }",
     // split so it isn't read as a placeholder
-    "`a-$" + "{B}`",
+    ["`a-$", "{B}`"].join(""),
     "<T>(a: T) => T",
     "new () => T",
     "string /* why */",
