@@ -184,6 +184,8 @@ walk(parse(source), {
   },
 });
 assert.deepEqual(references, ["name", "$props", "name", "name", "name"]);
+const [declarator] = parseModule("let { a, b: [c, ...d], e = 1, ...f } = x;").body[0].declarations;
+assert.deepEqual(walker.extractIdentifiers(declarator.id).map((node) => node.name), ["a", "c", "d", "e", "f"]);
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -222,6 +224,7 @@ import { entities } from "sveast/entities";
 import { typescript } from "sveast/typescript";
 import {
   type AST as WalkAST,
+  extractIdentifiers,
   isReference,
   type Node as WalkNode,
   STOP as WALK_STOP,
@@ -325,6 +328,8 @@ walkOnly(walkRoot, {
   },
 });
 const eachKeys: readonly string[] = walkVisitorKeys.EachBlock;
+const bindingsOf = (fn: AnyFunction): WalkNode[] => fn.params.flatMap(extractIdentifiers);
+void bindingsOf;
 void walkVisitor;
 void eachKeys;
 `,
