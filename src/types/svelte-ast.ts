@@ -41,11 +41,13 @@ export declare namespace AST {
     /** The parsed `<style>` element, if exists */
     css: AST.CSS.StyleSheet | null;
     /** The parsed `<script>` element, if exists */
-    instance?: Script | null;
+    instance?: Script;
     /** The parsed `<script module>` element, if exists */
-    module?: Script | null;
+    module?: Script;
     /** Comments found in <script> and {expressions} */
     comments: JSComment[];
+    /** Always empty, as in svelte. */
+    js: [];
   }
 
   export interface SvelteOptions {
@@ -151,6 +153,8 @@ export declare namespace AST {
     name: string;
     /** The y in `animate:x={y}` */
     expression: null | Expression;
+    /** Parsed for every directive, e.g. `use:x|y`; svelte's types declare it only on some. */
+    modifiers: string[];
   }
 
   /** A `bind:` directive */
@@ -160,6 +164,8 @@ export declare namespace AST {
     name: string;
     /** The y in `bind:x={y}` */
     expression: Identifier | MemberExpression | SequenceExpression;
+    /** Parsed for every directive, e.g. `use:x|y`; svelte's types declare it only on some. */
+    modifiers: string[];
   }
 
   /** A `class:` directive */
@@ -169,6 +175,8 @@ export declare namespace AST {
     name: "class";
     /** The 'y' in `class:x={y}`, or the `x` in `class:x` */
     expression: Expression;
+    /** Parsed for every directive, e.g. `use:x|y`; svelte's types declare it only on some. */
+    modifiers: string[];
   }
 
   /** A `let:` directive */
@@ -178,6 +186,8 @@ export declare namespace AST {
     name: string;
     /** The 'y' in `let:x={y}` */
     expression: null | Identifier | ArrayExpression | ObjectExpression;
+    /** Parsed for every directive, e.g. `use:x|y`; svelte's types declare it only on some. */
+    modifiers: string[];
   }
 
   /** An `on:` directive */
@@ -232,6 +242,8 @@ export declare namespace AST {
     name: string;
     /** The 'y' in `use:x={y}` */
     expression: null | Expression;
+    /** Parsed for every directive, e.g. `use:x|y`; svelte's types declare it only on some. */
+    modifiers: string[];
   }
 
   export interface BaseElement extends BaseNode {

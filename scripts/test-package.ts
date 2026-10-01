@@ -96,13 +96,36 @@ assert.equal(parseModule("let a: number;", { typescript: true }).body[0].type, "
 
   await writeFile(
     join(dir, "consumer.ts"),
-    `import { type AST, type ParseOptions, ParseError, parse, parseModule } from "sveast";
+    `import {
+  type AST,
+  type Node,
+  type ParseOptions,
+  type Program,
+  type TSInterfaceDeclaration,
+  ParseError,
+  parse,
+  parseModule,
+} from "sveast";
 
 const options: ParseOptions = { loc: true, css: false };
 const ast: AST.Root = parse("<p>{a}</p>", options);
 const first: AST.Fragment["nodes"][number] | undefined = ast.fragment.nodes[0];
 const program = parseModule("let a: number = 1;", { typescript: true });
 const kind: string = program.body[0].type;
+const empty: [] = ast.js;
+const scriptStart: number | undefined = ast.instance?.content.start;
+const module: Program = parseModule("interface A extends B<C> {}", { typescript: true });
+const statement = module.body[0];
+if (statement.type === "TSInterfaceDeclaration") {
+  const declaration: TSInterfaceDeclaration = statement;
+  const argument: string | undefined = declaration.extends?.[0].typeParameters?.params[0].type;
+  void argument;
+}
+const node: Node = module;
+const span: number = node.end - node.start;
+void empty;
+void scriptStart;
+void span;
 try {
   parse("{");
 } catch (error) {
