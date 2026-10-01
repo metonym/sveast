@@ -31,13 +31,19 @@ await Promise.all(
   }),
 );
 
+const SUBPATHS = ["core", "typescript", "entities"];
+
 async function emitTypeDeclarations() {
   try {
-    await bundleDts({
-      root,
-      source: resolve(root, "src/index.ts"),
-      outFile: resolve(outDir, "index.d.ts"),
-    });
+    await Promise.all(
+      ["index", ...SUBPATHS].map((entry) =>
+        bundleDts({
+          root,
+          source: resolve(root, `src/${entry}.ts`),
+          outFile: resolve(outDir, `${entry}.d.ts`),
+        }),
+      ),
+    );
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     if (!isWatchMode) {
@@ -56,9 +62,17 @@ async function slimPackageManifest() {
 
   pkg.main = pkg.main.replace(DIST_PREFIX, "./");
   pkg.types = pkg.types.replace(DIST_PREFIX, "./");
-  const exports = {
+  const exports: Record<string, Json> = {
     ".": { types: pkg.types, import: pkg.main, default: pkg.main },
   };
+  for (const subpath of SUBPATHS) {
+    const js = `./${subpath}.js`;
+    exports[`./${subpath}`] = {
+      types: `./${subpath}.d.ts`,
+      import: js,
+      default: js,
+    };
+  }
 
   const ordered: Record<string, Json> = {};
   for (const [key, value] of Object.entries(pkg)) {
@@ -91,6 +105,7 @@ async function buildProject() {
       "./src/parse-module.ts",
       "./src/is-valid-type.ts",
       "./src/walk.ts",
+      ...SUBPATHS.map((subpath) => `./src/${subpath}.ts`),
     ],
     root: "./src",
     outdir: outDir,

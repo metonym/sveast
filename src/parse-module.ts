@@ -1,6 +1,7 @@
-import { parseProgram } from "./acorn-bridge";
-import { setSource } from "./locator";
+import { parseModuleWith } from "./module";
+import type { ParseModuleOptions } from "./options";
 import type { Program } from "./types/estree";
+import { TypeScriptParser } from "./typescript-parser";
 
 export { ParseError } from "./parse-error";
 
@@ -14,26 +15,7 @@ export { ParseError } from "./parse-error";
  */
 export function parseModule(
   source: string,
-  options: {
-    /** Parse TypeScript. Default `false`. */
-    typescript?: boolean;
-    /** Add `loc` (line/column) to every node. Default `false`. */
-    loc?: boolean;
-    /**
-     * Attach comments as `leadingComments`/`trailingComments`. With
-     * `false`, no node has either field. Default `true`.
-     */
-    comments?: boolean;
-  } = {},
+  options: ParseModuleOptions = {},
 ): Program {
-  setSource(source);
-  return parseProgram(
-    {
-      isTypeScript: options.typescript ?? false,
-      loc: options.loc ?? false,
-      comments: options.comments ?? true,
-      root: { comments: [] },
-    },
-    source,
-  );
+  return parseModuleWith(source, options, TypeScriptParser);
 }

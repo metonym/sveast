@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { $ } from "bun";
 
+const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
 const RELATIVE_IMPORT = /["']\.\/([^"']+\.js)["']/g;
 
 const root = resolve(import.meta.dir, "..");
@@ -47,9 +48,31 @@ try {
     }
   }
 
-  const types = await readFile(join(root, "dist/index.d.ts"), "utf8");
-  if (/^import |\bfrom ["']/m.test(types)) {
-    throw new Error("dist/index.d.ts imports another package");
+  const holding = (marker: string) =>
+    bundles.filter((file) =>
+      readFileSync(join(dist, file), "utf8").includes(marker),
+    );
+  const optional = {
+    "the TypeScript plugin": holding('"satisfies"'),
+    "the entity table": holding("AElig"),
+  };
+  for (const [part, files] of Object.entries(optional)) {
+    if (files.length !== 1) {
+      throw new Error(`expected one dist file with ${part}: ${files}`);
+    }
+    if (reach("core.js").has(files[0])) {
+      throw new Error(`dist/core.js imports ${part}: ${files[0]}`);
+    }
+  }
+
+  for (const entry of ["index", "core", "typescript", "entities"]) {
+    const types = readFileSync(
+      join(root, `dist/${entry}.d.ts`),
+      "utf8",
+    ).replace(BLOCK_COMMENT, "");
+    if (/^import |\bfrom ["']/m.test(types)) {
+      throw new Error(`dist/${entry}.d.ts imports another package`);
+    }
   }
   const manifest = JSON.parse(
     await readFile(join(root, "dist/package.json"), "utf8"),
@@ -117,6 +140,17 @@ walk(parse(source), {
   },
 });
 assert.equal(first, "name");
+
+const core = await import("sveast/core");
+const { typescript } = await import("sveast/typescript");
+const { entities } = await import("sveast/entities");
+assert.equal(core.ParseError, (await import("sveast")).ParseError);
+const full = core.createParser({ typescript, entities });
+assert.deepEqual(plain(full.parse(source)), plain(parse(source)));
+const js = core.createParser();
+assert.throws(() => js.parse(source), (error) => !(error instanceof core.ParseError));
+assert.equal(js.parse("<p>&copy; &amp;</p>").fragment.nodes[0].fragment.nodes[0].data, "&copy; &");
+assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -141,6 +175,16 @@ assert.equal(first, "name");
   visitorKeys,
   walk,
 } from "sveast";
+import {
+  type AST as CoreAST,
+  createParser,
+  type Parser,
+  type Program as CoreProgram,
+} from "sveast/core";
+import { entities } from "sveast/entities";
+import { typescript } from "sveast/typescript";
+
+type CoreRoot = CoreAST.Root;
 
 const options: ParseOptions = {
   loc: true,
@@ -207,6 +251,15 @@ walk(ast, visitor);
 
 // @ts-expect-error: parse takes a string
 parse(1);
+
+const parser: Parser = createParser({ typescript, entities });
+const coreAst: CoreRoot = parser.parse("<p>{a}</p>", { comments: false });
+const coreProgram: CoreProgram = parser.parseModule("let a;", { typescript: true });
+const fromSveast: AST.Root = coreAst;
+void coreProgram;
+void fromSveast;
+// @ts-expect-error: typescript comes from sveast/typescript
+createParser({ typescript: true });
 `,
   );
   const tsc = join(root, "node_modules/.bin/tsc");

@@ -11,7 +11,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
-      "sveast": ["./src/index.ts"]
+      "sveast": ["./src/index.ts"],
+      "sveast/*": ["./src/*.ts"]
     },
     "types": ["bun", "jest"]
   },

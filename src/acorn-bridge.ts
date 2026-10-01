@@ -18,7 +18,7 @@ import {
 import { js_parse_error, unexpected_eof } from "./errors";
 import { locate } from "./locator";
 import { mapChildren } from "./nodes";
-import { tsPlugin } from "./ts-plugin";
+import { missingTypeScript } from "./support";
 import type { Expression, Node, Program, Statement } from "./types/estree";
 
 let sawParenthesized = false;
@@ -37,7 +37,7 @@ function wordTester(words: WordTester): WordTester {
 }
 
 // svelte's own acorn.js subclasses the same way
-const tweaks = definePlugin((Base) => {
+export const tweaks = definePlugin((Base) => {
   const { keywordTypes, tokTypes } = Base.acorn;
   const keywordTokens = new Map(
     "break case catch continue debugger default do else finally for function if return switch throw try var while with null true false instanceof typeof void delete new in this const class extends export import super"
@@ -115,10 +115,10 @@ const tweaks = definePlugin((Base) => {
 });
 
 const JSParser = extendParser(tweaks);
-const TSParser = extendParser(tsPlugin, tweaks);
 
 interface ParseContext {
   isTypeScript: boolean;
+  typescript: ParserConstructor | undefined;
   loc: boolean;
   comments: boolean;
   lfOnly?: boolean;
@@ -161,9 +161,11 @@ function run(
     preserveParens,
   };
   if (context.lfOnly) options.startLocation = locate(start);
+  const ParserClass = context.isTypeScript ? context.typescript : JSParser;
+  if (!ParserClass) missingTypeScript();
   let node: AcornNode;
   try {
-    node = parse(context.isTypeScript ? TSParser : JSParser, options);
+    node = parse(ParserClass, options);
   } catch (error) {
     if (!isSyntaxErrorAt(error)) throw error;
     js_parse_error(error.pos, error.message.replace(REGEX_POSITION_SUFFIX, ""));
