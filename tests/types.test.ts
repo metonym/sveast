@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "@typescript/typescript6";
 import { parse, parseModule } from "sveast";
+import { byCodeUnit } from "../scripts/shared";
 import { SNIPPETS } from "./ts-snippets";
 
 interface Shape {
@@ -164,7 +165,7 @@ test("the types declare every node and field the corpus's ASTs have", () => {
   for (const snippet of Object.values(SNIPPETS)) {
     check(parseModule(snippet, { typescript: true, loc: true }));
   }
-  expect([...found].sort()).toEqual([]);
+  expect([...found].sort(byCodeUnit)).toEqual([]);
 });
 
 test("the fields typed StringLiteral hold only string literals", () => {
@@ -188,6 +189,8 @@ test("the fields typed StringLiteral hold only string literals", () => {
   for (const snippet of Object.values(SNIPPETS)) {
     check(parseModule(snippet, { typescript: true }));
   }
-  expect([...found].sort()).toEqual([]);
-  expect([...seen].sort()).toEqual(Object.keys(STRING_LITERAL_FIELDS).sort());
+  expect([...found].sort(byCodeUnit)).toEqual([]);
+  expect([...seen].sort(byCodeUnit)).toEqual(
+    Object.keys(STRING_LITERAL_FIELDS).sort(byCodeUnit),
+  );
 });
