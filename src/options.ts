@@ -66,7 +66,7 @@ export interface ParseImportsExportsOptions {
   localExports?: boolean;
 }
 
-/** TypeScript support for {@link createParser}, from `sveast/typescript`. */
+/** TypeScript support for {@link createParser} and {@link createModuleParser}, from `sveast/typescript`. */
 export interface TypeScriptSupport {
   readonly support: "typescript";
 }

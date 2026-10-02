@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+**Features**
+
+- `createModuleParser(support?)`, from `sveast/module`, returns `parseModule`
+  and `parseImportsExports` without the template parser, for tools that read
+  `.js` and `.ts` files but never components. `createParser()` returns its
+  parsers together, so a bundle that only uses its `parseModule` still has
+  the template and CSS parsers: 40.3 kB gzipped. `createModuleParser()`
+  minifies to 26.4 kB, and 34.9 kB with `typescript` from
+  `sveast/typescript`. With it, the parsers are the same as `sveast`'s.
+  `ModuleParser` and `ModuleParserSupport` are exported.
+
 ## 0.7.0 — 2026-10-01
 
 **Features**
