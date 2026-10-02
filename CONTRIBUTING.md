@@ -70,6 +70,7 @@ The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` on
 | `tests/common-type.test.ts` | `isValidType`'s fast path never accepts text the parser rejects, on mutated types |
 | `tests/expression-fastpath.test.ts` | Expressions read without acorn match acorn's reading |
 | `tests/parens.test.ts` | Parenthesized expressions |
+| `tests/examples.test.ts` | `examples/`: each example's functions and CLI, on fixtures and on Carbon's components |
 | `tests/fuzz.test.ts` | The fuzzer reports findings and exits non-zero |
 | `scripts/test-package.ts` | `bun run test:package`: packs `dist/`, checks it has no dependencies (types included), installs it into a scratch project, runs it in Node, and type-checks a consumer against the published types |
 

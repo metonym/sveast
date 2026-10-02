@@ -4,13 +4,15 @@
     "src/{index,parse,parse-module,parse-imports-exports,is-valid-type,core,typescript,entities,walk,lexer}.ts",
     "scripts/*.ts",
     "bench/*.ts",
+    "examples/*.ts",
     "tests/*.ts"
   ],
   "project": [
     "src/**/*.ts",
     "tests/**/*.ts",
     "scripts/**/*.ts",
-    "bench/**/*.ts"
+    "bench/**/*.ts",
+    "examples/**/*.ts"
   ],
   "ignoreDependencies": ["@types/estree"]
 }

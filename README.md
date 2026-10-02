@@ -215,6 +215,8 @@ for (const node of parseModule(source, { typescript: true }).body) {
 
 ## Recipes
 
+Each recipe has a fuller, runnable version in [`examples/`](examples), a CLI you can point at your own components. It also has tools for the rest of the API: a module graph with `parseImportsExports`, unused imports and variables with `isReference` and `extractIdentifiers`, runes-or-legacy detection with `walk`'s `STOP`, and `.d.ts` props from JSDoc with `isValidType`.
+
 **List the components a file renders**, e.g. to build a dependency graph:
 
 ```ts
@@ -230,6 +232,8 @@ function componentsUsed(source: string): string[] {
   return [...names]; // ["Button", "Modal.Root"]
 }
 ```
+
+[`examples/components-used.ts`](examples/components-used.ts) also maps each component to the file it's imported from.
 
 **Find the classes a component's styles declare but its markup never uses**, e.g. to report dead CSS. A `class={...}` expression is reported as `dynamic` rather than guessed at:
 
@@ -262,6 +266,8 @@ function unusedClasses(source: string): { unused: string[]; dynamic: boolean } {
 }
 ```
 
+[`examples/unused-classes.ts`](examples/unused-classes.ts) also skips classes under `:global` and in pseudo-class arguments such as `:not(.disabled)`, and reports each one's line.
+
 **Read the props a runes component declares:**
 
 ```ts
@@ -286,6 +292,8 @@ function propNames(source: string): string[] {
 }
 ```
 
+[`examples/props.ts`](examples/props.ts) also reads defaults, quoted names and `...rest`.
+
 **Report syntax errors**, e.g. in a pre-commit check, with svelte's own messages:
 
 ```ts
@@ -299,6 +307,8 @@ try {
 }
 ```
 
+[`examples/check-syntax.ts`](examples/check-syntax.ts) checks `.ts` and `.js` modules too, and exits non-zero on any error.
+
 **Get a component's styles without parsing them:**
 
 ```ts
@@ -306,6 +316,8 @@ import { parse } from "sveast";
 
 const css = parse(source, { css: false }).css?.content.styles ?? "";
 ```
+
+`css: false` also keeps `<style lang="scss">` from failing to parse as CSS. [`examples/extract-styles.ts`](examples/extract-styles.ts) also reads `lang` and the line the styles start on.
 
 ## Features
 
