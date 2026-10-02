@@ -75,6 +75,32 @@ describe("ts-plugin", () => {
     expect(outcome(Ours)).toBe(outcome(Theirs));
   });
 
+  test.each([
+    "function f(); declare function g(); export default function ();",
+    "class A { m(); get x(); m() {} } abstract class B { abstract m(); }",
+    "x = function f();",
+    "({ m() });",
+    "({ m(): void });",
+    "({ get x() });",
+    "({ m<T>() });",
+    "class A { m() { return { n() }; } }",
+    "class A { p = { n() } }",
+    "function f(a = { n() });",
+  ])(
+    "only declared functions and class methods may have no body: %s",
+    (source) => {
+      const outcome = (ParserClass: typeof Parser) => {
+        try {
+          ParserClass.parse(source, { ...OPTIONS, locations: true });
+          return "ok";
+        } catch (error) {
+          return errorMessage(error);
+        }
+      };
+      expect(outcome(Ours)).toBe(outcome(Theirs));
+    },
+  );
+
   test("rejects invalid types", () => {
     for (const text of ['"a" |', "{ a: }", "Array<", "(a: ) => void"]) {
       expect(() => Ours.parse(`type T = ${text}\n;`, OPTIONS)).toThrow(
