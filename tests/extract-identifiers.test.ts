@@ -42,7 +42,8 @@ function bindingsIn(ast: AST.SvelteNode): Binding[] {
           if (node.error) patterns.push(node.error);
           break;
         case "SnippetBlock":
-          patterns.push(...node.parameters);
+          // undefined where TypeScript reads the snippet's signature as a type assertion, as in svelte
+          patterns.push(...(node.parameters ?? []));
           break;
         case "AssignmentExpression":
           patterns.push(node.left);
