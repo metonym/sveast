@@ -106,6 +106,7 @@ export const tsPlugin = definePlugin((Base) => {
     tsDecoratorStack: Node[][] = [[]];
     tsSpeculating = 0;
     tsCommentEnd = 0;
+    tsBodilessAt = -1;
 
     constructor(options: ParserOptions, input: string, startPos?: number) {
       super(options, input, startPos);
@@ -1377,7 +1378,10 @@ export const tsPlugin = definePlugin((Base) => {
       forInit?: ForInit,
     ) {
       const isDeclaration = statement & FUNC_STATEMENT;
-      if (isDeclaration) this.tsDeferredFunction = node;
+      if (isDeclaration) {
+        this.tsDeferredFunction = node;
+        this.tsBodilessAt = node.start;
+      }
       super.parseFunction(
         node,
         statement,
@@ -1424,7 +1428,12 @@ export const tsPlugin = definePlugin((Base) => {
     ) {
       if (isMethod && this.type === tt.colon)
         node.returnType = this.tsParseTypeAnnotation(true);
-      if (isArrowFunction || this.type === tt.braceL) {
+      // a function may have no body, as an overload, only if it starts at `tsBodilessAt`: a declaration or a class method
+      if (
+        isArrowFunction ||
+        this.type === tt.braceL ||
+        node.start !== this.tsBodilessAt
+      ) {
         super.parseFunctionBody(node, isArrowFunction, isMethod, forInit);
         return;
       }
@@ -1846,6 +1855,7 @@ export const tsPlugin = definePlugin((Base) => {
         node.kind = isConstructor ? "constructor" : kind;
         if (this.tsIsLt()) node.typeParameters = this.tsParseTypeParameters();
         this.tsConstructorParams = isConstructor;
+        this.tsBodilessAt = this.start;
         this.parseClassMethod(
           node,
           isGenerator,
