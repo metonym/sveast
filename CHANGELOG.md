@@ -1,9 +1,55 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-10-02
 
 **Features**
 
+- `lexComponent(source)`, from `sveast/lexer` and `sveast`, finds a
+  component's top-level `<script>`s, `<style>` and `<svelte:options>`, with
+  their attributes and the offsets of their tags and content, without a
+  parser. It skips the markup by tracking tags, blocks, attribute values and
+  the brackets of each `{…}` expression, so a `<script>` in `<svelte:head>`,
+  a block, an attribute or a comment isn't one, and it stops after the last
+  such tag. Where `parse` accepts the component, the sections are its
+  `instance`, `module`, `css` and `options`, with the same offsets, into the
+  source without a leading byte order mark. It doesn't check syntax and
+  never throws. An attribute's `value` is as written, without its quotes;
+  an attribute without a value has `true`. `typescript` is whether `parse`
+  reads the component as TypeScript, from the first `<script>` with a
+  `lang`. `LexedComponent`, `LexedScript`, `LexedStyle`, `LexedOptions`,
+  `LexedAttribute` and `LexedContent` are exported.
+- `parseSections(source, options?)` parses those sections as `parse` does
+  and skips the markup between them. `fragment.nodes` is empty, `comments`
+  has only the scripts' comments, and the markup's syntax errors aren't
+  reported; the rest is `parse`'s, offsets and the HTML comment before a
+  `<script>` included. It takes `parse`'s options. It's a separate export so
+  a bundle with only `parse` doesn't carry the lexer; `createParser` doesn't
+  return it.
+- `isRunesMode(source)` is whether svelte compiles the component in runes
+  mode, as `compile(source).metadata.runes` says: `<svelte:options runes>`
+  if it has one, otherwise a rune such as `$state` or `$props`, or `await`
+  outside a function in the instance script or markup. A `$state` that
+  subscribes to a store named `state`, or that a function declares, isn't a
+  rune. Most components are decided without parsing: `<svelte:options>` is
+  read with `lexComponent`, a component without a rune's name or `await`
+  isn't in runes mode, and one whose scripts call a rune in a way that can't
+  be a declaration, a method, a type or a store is. The rest is parsed,
+  without the markup unless a rune's name or `await` is in it, and a syntax
+  error there throws a `ParseError`.
+- `createLocator(source)`, from `sveast` and `sveast/walk`, returns a
+  function from an offset to `{ line, column }`, line from 1 and column from
+  0, as `loc: true` gives them, for tools that parse without `loc`. Lines
+  are found on the first call, and each lookup starts at the line found
+  last. Lines end at `\n`, as in the markup's `loc` and `ParseError`; acorn's
+  `loc` in scripts and modules also ends them at a lone `\r`, U+2028 and
+  U+2029. `parse` drops a leading byte order mark, so pass the source
+  without one.
+- `walk(node, visitor, keys?)` takes a keys table. `markupVisitorKeys` visits
+  only the markup: `Root`'s `fragment`, elements' attributes and fragments,
+  attribute values and blocks' fragments, but no script, style or expression.
+  A node whose type the table has no entry for throws. `VisitorKeys` is
+  exported. `sveast/walk` also exports `markupVisitorKeys` and
+  `createLocator`.
 - `createModuleParser(support?)`, from `sveast/module`, returns `parseModule`
   and `parseImportsExports` without the template parser, for tools that read
   `.js` and `.ts` files but never components. `createParser()` returns its
@@ -12,6 +58,16 @@
   minifies to 26.4 kB, and 34.9 kB with `typescript` from
   `sveast/typescript`. With it, the parsers are the same as `sveast`'s.
   `ModuleParser` and `ModuleParserSupport` are exported.
+
+**Performance**
+
+- `lexComponent` is about 50× faster than `parse` on the benchmark corpus.
+  `parseSections` is 1.5× faster there, where most of what's left is the
+  scripts. `markupVisitorKeys` is 4.8× faster than the full walk on that
+  corpus. On 12,808 components from other Svelte projects, `isRunesMode`
+  takes a twelfth of the time parsing them does. `lexComponent` and
+  `parseSections` match `parse` on 12,809 components, and `isRunesMode`
+  matches `compile` on 12,167.
 
 ## 0.7.0 — 2026-10-01
 
