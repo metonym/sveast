@@ -127,6 +127,22 @@ export const tsPlugin = definePlugin((Base) => {
       }
     }
 
+    // the fields above as a new parser has them; acorn-bridge's tweaks reset acorn's
+    reset() {
+      this.inType = false;
+      this.tsNoConditional = false;
+      this.tsAmbient = false;
+      this.tsArrowReturn = null;
+      this.tsMethodTypeParams = null;
+      this.tsConstructorParams = false;
+      this.tsAsyncArguments = false;
+      this.tsDeferredFunction = null;
+      this.tsDecoratorStack = [[]];
+      this.tsSpeculating = 0;
+      this.tsCommentEnd = 0;
+      this.tsBodilessAt = -1;
+    }
+
     getTokenFromCode(code: number) {
       if (code === 64) {
         ++this.pos;
