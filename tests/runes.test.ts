@@ -100,3 +100,12 @@ test("reads <svelte:options runes> without parsing the rest", () => {
 test("doesn't parse a component without a rune's name or await", () => {
   expect(isRunesMode("<script>let a = 1;</script>{#if}")).toBe(false);
 });
+
+test("reads a snippet whose signature TypeScript takes for a type assertion", () => {
+  // svelte's `compile` throws on it: the snippet has no `parameters`
+  expect(
+    isRunesMode(
+      '<script lang="ts">let a = 1;</script>{#snippet s<T<U>>(x)}{$state.snapshot(a)}{/snippet}',
+    ),
+  ).toBe(true);
+});

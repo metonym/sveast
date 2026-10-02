@@ -11,7 +11,7 @@ import {
   expected_token,
 } from "./errors";
 import { readExpression } from "./expression";
-import { assertType, mapChildren } from "./nodes";
+import { mapChildren } from "./nodes";
 import { ParseError } from "./parse-error";
 import type { TemplateParserState } from "./state";
 import type { Expression, Node, Pattern } from "./types/estree";
@@ -260,7 +260,6 @@ function openSnippet(state: TemplateParserState, start: number): void {
     paramsStart,
     true,
   );
-  assertType(node, "ArrowFunctionExpression");
 
   state.eatClosingBrace();
 
@@ -272,7 +271,11 @@ function openSnippet(state: TemplateParserState, start: number): void {
       end: -1,
       expression: id,
       typeParams,
-      parameters: node.params,
+      // svelte reads `params` off whatever parsed, and a type parameter list
+      // TypeScript can't take, such as `<T<U>>`, makes a type assertion without them
+      parameters: (node.type === "ArrowFunctionExpression"
+        ? node.params
+        : undefined) as Pattern[],
       body,
     },
     body,

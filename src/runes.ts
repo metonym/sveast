@@ -335,7 +335,8 @@ function declaredIn(
   } else if (node.type === "CatchClause" && node.param) {
     patterns.push(node.param);
   } else if (node.type === "SnippetBlock") {
-    patterns.push(...node.parameters);
+    // undefined where TypeScript reads the signature as a type assertion
+    patterns.push(...(node.parameters ?? []));
   } else if (node.type === "EachBlock" && node.context) {
     patterns.push(node.context);
   }
