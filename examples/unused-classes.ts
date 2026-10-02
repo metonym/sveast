@@ -1,5 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { type AST, parse, SKIP, walk } from "sveast";
+import {
+  type AST,
+  createLocator,
+  markupVisitorKeys,
+  parse,
+  SKIP,
+  walk,
+} from "sveast";
 
 const WHITESPACE = /\s+/;
 
@@ -29,26 +36,28 @@ export function unusedClasses(source: string): UnusedClasses {
   const ast = parse(source, { script: false });
   const used = new Set<string>();
   let dynamic = false;
-  walk(ast.fragment, {
-    enter(node) {
-      if (node.type === "ClassDirective") used.add(node.name);
-      if (node.type !== "Attribute" || node.name !== "class") return;
-      for (const part of node.value === true ? [] : [node.value].flat()) {
-        if (part.type === "ExpressionTag") dynamic = true;
-        else {
-          for (const name of part.data.split(WHITESPACE)) {
-            if (name) used.add(name);
+  walk(
+    ast.fragment,
+    {
+      enter(node) {
+        if (node.type === "ClassDirective") used.add(node.name);
+        if (node.type !== "Attribute" || node.name !== "class") return;
+        for (const part of node.value === true ? [] : [node.value].flat()) {
+          if (part.type === "ExpressionTag") dynamic = true;
+          else {
+            for (const name of part.data.split(WHITESPACE)) {
+              if (name) used.add(name);
+            }
           }
         }
-      }
+      },
     },
-  });
+    markupVisitorKeys,
+  );
+  const locate = createLocator(source);
   const unused = declaredClasses(ast)
     .filter(({ name }) => !used.has(name))
-    .map(({ name, start }) => ({
-      name,
-      line: source.slice(0, start).split("\n").length,
-    }));
+    .map(({ name, start }) => ({ name, line: locate(start).line }));
   return { unused, dynamic };
 }
 

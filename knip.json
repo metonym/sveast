@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
-    "src/{index,parse,parse-module,parse-imports-exports,is-valid-type,core,typescript,entities,walk,lexer}.ts",
+    "src/{index,parse,parse-module,parse-imports-exports,parse-sections,is-valid-type,runes,core,typescript,entities,walk,lexer}.ts",
     "scripts/*.ts",
     "bench/*.ts",
     "examples/*.ts",

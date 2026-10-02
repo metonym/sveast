@@ -1,5 +1,15 @@
 import { isDigit, isWordAt, isWordCode, scan, skipTrivia } from "./scan";
 
+export type {
+  LexedAttribute,
+  LexedComponent,
+  LexedContent,
+  LexedOptions,
+  LexedScript,
+  LexedStyle,
+} from "./component-lexer";
+export { lexComponent } from "./component-lexer";
+
 /** A module specifier: the string after `from`, or after `import` in `import "a"`. */
 export interface LexedSource {
   /** The string's value, with escapes decoded. */

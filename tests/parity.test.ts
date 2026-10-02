@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Glob } from "bun";
-import { type AST, parse } from "sveast";
+import { type AST, parse, parseSections } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
+import { withoutMarkup } from "../scripts/lexed-component";
 import { byCodeUnit, isRecord, type Json } from "../scripts/shared";
 
 const root = path.join(import.meta.dir, "corpus");
@@ -105,6 +106,93 @@ test("`script: false` gives the AST without the scripts' statements and comments
   }
   expect(mismatched).toEqual([]);
   expect(compared).toBeGreaterThan(700);
+});
+
+/** Whether `parseSections(source)` gives `parse(source)` without its markup; `undefined` if `parse` throws. */
+function matchesWithoutMarkup(
+  source: string,
+  options: { loc: boolean; script?: boolean },
+): boolean | undefined {
+  let full: AST.Root;
+  try {
+    full = parse(source, options);
+  } catch {
+    return undefined;
+  }
+  const skipped = outcome(() => parseSections(source, options), false);
+  return Bun.deepEquals(skipped, { ast: plain(withoutMarkup(full), false) });
+}
+
+test("parseSections gives the AST without the markup and its comments", () => {
+  const mismatched: string[] = [];
+  let compared = 0;
+  for (const file of files) {
+    const source = readFileSync(path.join(root, file), "utf8");
+    for (const options of [
+      { loc: false },
+      { loc: true },
+      { loc: false, script: false },
+    ]) {
+      const matches = matchesWithoutMarkup(source, options);
+      if (matches === undefined) continue;
+      if (!matches) mismatched.push(`${file} ${JSON.stringify(options)}`);
+      compared++;
+    }
+  }
+  expect(mismatched).toEqual([]);
+  expect(compared).toBeGreaterThan(1000);
+});
+
+const MARKUP_EDITS = [
+  "<script>",
+  "</script>",
+  "<script module>",
+  "<style>",
+  "</style>",
+  "<svelte:options runes />",
+  "<svelte:head>",
+  "<div>",
+  "</div>",
+  "<p>",
+  "<!--",
+  "-->",
+  "<!-- a -->",
+  "{",
+  "}",
+  "{#if a}",
+  "{/if}",
+  '"',
+  "`",
+  "//",
+  "\n",
+];
+
+test("parseSections gives the AST without the markup on mutated components", () => {
+  const sources = files.map((file) =>
+    readFileSync(path.join(root, file), "utf8"),
+  );
+  let seed = 1;
+  const random = (n: number) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  const mismatched: string[] = [];
+  let compared = 0;
+  for (let trial = 0; trial < 6000; trial++) {
+    let source = sources[random(sources.length)].slice(0, 4000);
+    for (let edits = 1 + random(3); edits > 0; edits--) {
+      const at = random(source.length + 1);
+      const edit = MARKUP_EDITS[random(MARKUP_EDITS.length)];
+      const removed = random(3) === 0 ? 0 : 1 + random(5);
+      source = source.slice(0, at) + edit + source.slice(at + removed);
+    }
+    const matches = matchesWithoutMarkup(source, { loc: false });
+    if (matches === undefined) continue;
+    if (!matches) mismatched.push(source);
+    compared++;
+  }
+  expect(mismatched).toEqual([]);
+  expect(compared).toBeGreaterThan(800);
 });
 
 const ATTACHED_COMMENTS = new Set(["leadingComments", "trailingComments"]);

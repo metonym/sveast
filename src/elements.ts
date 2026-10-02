@@ -24,13 +24,16 @@ import {
 } from "./errors";
 import { readExpression } from "./expression";
 import { decodeCharacterReferences } from "./html-entities";
+import {
+  endsUnquotedValue,
+  isQuote,
+  isVoid,
+  isWhitespace,
+  nameEnd,
+} from "./markup";
 import { ParseError } from "./parse-error";
 import { readScript } from "./script";
-import {
-  isWhitespace,
-  type StackNode,
-  type TemplateParserState,
-} from "./state";
+import type { StackNode, TemplateParserState } from "./state";
 import { readStyle } from "./style";
 import type { Expression, SourceLocation } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
@@ -47,12 +50,6 @@ const ID_JOINERS = "\\u200C\\u200D";
 const REGEX_COMPONENT_NAME = new RegExp(
   `^(?:\\p{Lu}[$${ID_JOINERS}\\p{ID_Continue}.]*|\\p{ID_Start}[$${ID_JOINERS}\\p{ID_Continue}]*(?:\\.[$${ID_JOINERS}\\p{ID_Continue}]+)+)$`,
   "u",
-);
-
-const VOID_ELEMENTS = new Set(
-  "area base br col command embed hr img input keygen link meta param source track wbr".split(
-    " ",
-  ),
 );
 
 const DIRECTIVES = new Map<string, AST.Directive["type"]>([
@@ -92,26 +89,8 @@ const META_TAGS = new Map<string, [type: ElementType, rootOnly: boolean]>([
 const META_TAG_NAMES = [...META_TAGS.keys()];
 const META_TAG_LIST = `${META_TAG_NAMES.slice(0, -1).join(", ")} or ${META_TAG_NAMES.at(-1)}`;
 
-const SLASH = 47;
 const GT = 62;
-const EQUALS = 61;
-const DOUBLE_QUOTE = 34;
-const SINGLE_QUOTE = 39;
 const BRACE = 123;
-
-const isQuote = (code: number) =>
-  code === DOUBLE_QUOTE || code === SINGLE_QUOTE;
-
-/** End of a tag or attribute name: stops at whitespace, `/` and `>`, and for attributes at quotes and `=`. */
-function nameEnd(source: string, from: number, isAttribute: boolean): number {
-  let i = from;
-  for (; i < source.length; i++) {
-    const code = source.charCodeAt(i);
-    if (isWhitespace(code) || code === SLASH || code === GT) break;
-    if (isAttribute && (isQuote(code) || code === EQUALS)) break;
-  }
-  return i;
-}
 
 function readName(state: TemplateParserState, isAttribute: boolean) {
   const start = state.index;
@@ -132,13 +111,6 @@ const text = (
   raw: string,
   data = raw,
 ): AST.Text => ({ start, end, type: "Text", raw, data });
-
-function isVoid(name: string): boolean {
-  return (
-    VOID_ELEMENTS.has(name) ||
-    (name.charCodeAt(0) === 33 && name.toLowerCase() === "!doctype")
-  );
-}
 
 function isComponentName(name: string): boolean {
   const first = name.charCodeAt(0);
@@ -725,19 +697,6 @@ function readAttributeValue(
   return quoted || value.length > 1 || value[0].type === "Text"
     ? value
     : value[0];
-}
-
-function endsUnquotedValue(source: string, i: number): boolean {
-  const code = source.charCodeAt(i);
-  return (
-    isWhitespace(code) ||
-    isQuote(code) ||
-    code === EQUALS ||
-    code === 60 ||
-    code === GT ||
-    code === 96 ||
-    (code === SLASH && source.charCodeAt(i + 1) === GT)
-  );
 }
 
 /**

@@ -5,14 +5,14 @@ Small tools built on sveast, one task each. Each file exports its functions and,
 | Example | Uses | Does |
 |:---|:---|:---|
 | [`components-used.ts`](components-used.ts) | `parse`, `walk` | Maps the components each file renders to where they're imported from |
-| [`module-graph.ts`](module-graph.ts) | `parseImportsExports`, `parse` with `script: false` | Follows relative imports from entry files through components and modules; lists packages and imports that resolve to no file |
-| [`unused-bindings.ts`](unused-bindings.ts) | `walk`, `isReference`, `extractIdentifiers` | Reports imports, variables and functions that neither the script nor the markup uses |
-| [`svelte-mode.ts`](svelte-mode.ts) | `walk` with `STOP`, `isReference` | Tells runes components from Svelte 4 ones, and why, to track a migration |
+| [`module-graph.ts`](module-graph.ts) | `parseImportsExports`, `lexComponent` | Follows relative imports from entry files through components and modules; lists packages and imports that resolve to no file |
+| [`unused-bindings.ts`](unused-bindings.ts) | `walk`, `isReference`, `extractIdentifiers`, `createLocator` | Reports imports, variables and functions that neither the script nor the markup uses |
+| [`svelte-mode.ts`](svelte-mode.ts) | `walk` with `STOP`, `isReference`, `createLocator` | Tells runes components from Svelte 4 ones, and why, to track a migration; `isRunesMode` gives svelte's yes or no alone |
 | [`prop-types.ts`](prop-types.ts) | `isValidType`, comments | Generates a `.d.ts` props interface from `export let` and its JSDoc `@type` |
 | [`props.ts`](props.ts) | `parse` | Reads the props `$props()` declares, with defaults and `...rest` |
-| [`unused-classes.ts`](unused-classes.ts) | `parse`, `walk` with `SKIP` | Reports classes the styles declare but the markup never uses |
+| [`unused-classes.ts`](unused-classes.ts) | `parse`, `walk` with `SKIP` and `markupVisitorKeys`, `createLocator` | Reports classes the styles declare but the markup never uses |
 | [`check-syntax.ts`](check-syntax.ts) | `ParseError`, `parseModule` | Reports syntax errors in components and modules with svelte's messages; exits 1 on any |
-| [`extract-styles.ts`](extract-styles.ts) | `parse` with `css: false` | Prints each `<style>` unparsed, with its line and `lang` |
+| [`extract-styles.ts`](extract-styles.ts) | `lexComponent`, `createLocator` | Prints each `<style>` unparsed, with its line and `lang` |
 
 ```sh
 bun examples/module-graph.ts tests/corpus/carbon/Button/index.js

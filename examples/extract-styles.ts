@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { type AST, parse } from "sveast";
+import { createLocator, type LexedAttribute, lexComponent } from "sveast";
 
 export interface Styles {
   /** The text between `<style>` and `</style>`. */
@@ -14,24 +14,24 @@ export interface Styles {
 }
 
 /**
- * A component's `<style>`, without parsing it as CSS, so it works for
- * `lang="scss"` and other preprocessors too.
+ * A component's `<style>`, found by `lexComponent` without parsing the
+ * component, so it works for `lang="scss"` and other preprocessors too.
  */
 export function extractStyles(source: string): Styles | undefined {
-  const css = parse(source, { css: false, script: false }).css;
+  const { css } = lexComponent(source);
   if (!css) return undefined;
-  const { start, styles } = css.content;
-  const line = source.slice(0, start).split("\n").length;
-  return { styles, lang: lang(css.attributes) ?? "css", line };
+  const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+  const { start, end } = css.content;
+  return {
+    styles: text.slice(start, end),
+    lang: lang(css.attributes) ?? "css",
+    line: createLocator(text)(start).line,
+  };
 }
 
-function lang(attributes: AST.Attribute[]): string | undefined {
-  for (const { name, value } of attributes) {
-    if (name !== "lang" || !Array.isArray(value)) continue;
-    const [text] = value;
-    if (text?.type === "Text") return text.data;
-  }
-  return undefined;
+function lang(attributes: LexedAttribute[]): string | undefined {
+  const value = attributes.find(({ name }) => name === "lang")?.value;
+  return typeof value === "string" ? value : undefined;
 }
 
 if (import.meta.main) {
