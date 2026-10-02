@@ -1,7 +1,6 @@
 import { parseComponent } from "./component";
 import { xmlEntityNames } from "./html-entities";
 import { parseImportsExportsWith } from "./imports-exports";
-import { parseModuleWith } from "./module";
 import type {
   EntitySupport,
   ParseImportsExportsOptions,
@@ -9,6 +8,7 @@ import type {
   ParseOptions,
   TypeScriptSupport,
 } from "./options";
+import { parseModuleWith } from "./parse-module-with";
 import { entityNamesOf, type Support, typeScriptParser } from "./support";
 import type { ModuleDeclaration, Program } from "./types/estree";
 import type { AST } from "./types/svelte-ast";

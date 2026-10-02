@@ -130,6 +130,19 @@ const { parse, parseModule, parseImportsExports } = createParser({ typescript })
 
 `sveast/core` also exports `ParseError`, the same class as `sveast`'s, and the types.
 
+### `createModuleParser(support?) => { parseModule, parseImportsExports }` from `sveast/module`
+
+`parseModule` and `parseImportsExports` without the template parser, for tools that read `.js` and `.ts` files but never components, such as a bundler plugin following a module graph. `createParser()`'s parsers come together, so a bundle that only uses its `parseModule` still has the template and CSS parsers: 40.3 kB gzipped. `createModuleParser()` minifies to 26.4 kB, and 34.9 kB with `typescript`. With `typescript`, the parsers are the same as `sveast`'s; without it, `typescript: true` throws an `Error`, as with `createParser`.
+
+```ts
+import { createModuleParser } from "sveast/module";
+import { typescript } from "sveast/typescript";
+
+const { parseModule, parseImportsExports } = createModuleParser({ typescript });
+```
+
+`sveast/module` also exports `ParseError`, the same class as `sveast`'s, and the estree and TypeScript node types.
+
 ### `isValidType(text, options?) => boolean`
 
 Whether `text` is exactly one TypeScript type, such as a JSDoc `{"sm" | "lg"}` a tool is about to copy into a `.d.ts`. The text is parsed as a type on its own, not wrapped in a statement, so a `;`, a line break or a `}` in it can't end the type and smuggle in a statement: `string; let x = 1` and `{ a: string } }` are `false`. Whitespace and comments around the type are allowed. Results aren't cached; memoize if you check the same text often.

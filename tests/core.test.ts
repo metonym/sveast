@@ -1,9 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Glob } from "bun";
-import { ParseError, parse, parseModule } from "sveast";
+import { ParseError, parse, parseImportsExports, parseModule } from "sveast";
 import { ParseError as CoreParseError, createParser } from "sveast/core";
 import { entities } from "sveast/entities";
+import {
+  createModuleParser,
+  ParseError as ModuleParseError,
+} from "sveast/module";
 import { typescript } from "sveast/typescript";
 import { byCodeUnit } from "../scripts/shared";
 
@@ -45,16 +49,21 @@ function sameAsSveast(
   );
 }
 
-test("sveast/core, sveast/typescript and sveast/entities export only their parts", async () => {
+test("sveast/core, sveast/module, sveast/typescript and sveast/entities export only their parts", async () => {
   expect(Object.keys(await import("sveast/core")).sort(byCodeUnit)).toEqual([
     "ParseError",
     "createParser",
+  ]);
+  expect(Object.keys(await import("sveast/module")).sort(byCodeUnit)).toEqual([
+    "ParseError",
+    "createModuleParser",
   ]);
   expect(Object.keys(await import("sveast/typescript"))).toEqual([
     "typescript",
   ]);
   expect(Object.keys(await import("sveast/entities"))).toEqual(["entities"]);
   expect(CoreParseError).toBe(ParseError);
+  expect(ModuleParseError).toBe(ParseError);
 });
 
 test("createParser with typescript and entities parses like sveast", () => {
@@ -89,6 +98,45 @@ test("without typescript, TypeScript throws an Error, not a ParseError", () => {
   expect(createParser({ typescript }).parse(source).instance).toEqual(
     parse(source).instance,
   );
+});
+
+test("createModuleParser with typescript parses modules like sveast", () => {
+  const { parseModule: parseModuleOnly, parseImportsExports: importsOnly } =
+    createModuleParser({ typescript });
+  const modules = files.filter((file) => !file.endsWith(".svelte"));
+  const differ = modules.filter((file) => {
+    const source = readFileSync(path.join(root, file), "utf8");
+    const options = { typescript: file.endsWith(".ts") };
+    return (
+      !Bun.deepEquals(
+        outcome(() => parseModuleOnly(source, options)),
+        outcome(() => parseModule(source, options)),
+      ) ||
+      !Bun.deepEquals(
+        outcome(() => importsOnly(source, options)),
+        outcome(() => parseImportsExports(source, options)),
+      )
+    );
+  });
+  expect(differ).toEqual([]);
+  expect(modules.length).toBeGreaterThan(300);
+});
+
+test("createModuleParser without typescript throws an Error on TypeScript, not a ParseError", () => {
+  const { parseModule: parseModuleJs, parseImportsExports: importsJs } =
+    createModuleParser();
+  for (const run of [
+    () => parseModuleJs("let a: number;", { typescript: true }),
+    () => importsJs('import type A from "a";', { typescript: true }),
+  ]) {
+    expect(run).toThrow("createModuleParser({ typescript })");
+    expect(run).not.toThrow(ParseError);
+  }
+  expect(parseModuleJs("let a = 1;").body).toHaveLength(1);
+  expect(importsJs('import a from "a"; let b;')).toEqual(
+    parseImportsExports('import a from "a"; let b;'),
+  );
+  expect(() => parseModuleJs("let a = ;")).toThrow(ParseError);
 });
 
 test("without entities, only numeric and XML references are decoded", () => {

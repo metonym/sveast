@@ -1,5 +1,5 @@
-import { parseModuleWith } from "./module";
 import type { ParseModuleOptions } from "./options";
+import { parseModuleWith } from "./parse-module-with";
 import type { Program } from "./types/estree";
 import { TypeScriptParser } from "./typescript-parser";
 

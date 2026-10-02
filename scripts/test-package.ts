@@ -38,7 +38,11 @@ try {
     }
     return reached;
   };
-  for (const entry of ["parse-module.js", "parse-imports-exports.js"]) {
+  for (const entry of [
+    "parse-module.js",
+    "parse-imports-exports.js",
+    "module.js",
+  ]) {
     if (reach(entry).has("parse.js")) {
       throw new Error(`dist/${entry} imports the template parser`);
     }
@@ -64,14 +68,17 @@ try {
     if (files.length !== 1) {
       throw new Error(`expected one dist file with ${part}: ${files}`);
     }
-    if (reach("core.js").has(files[0])) {
-      throw new Error(`dist/core.js imports ${part}: ${files[0]}`);
+    for (const entry of ["core.js", "module.js"]) {
+      if (reach(entry).has(files[0])) {
+        throw new Error(`dist/${entry} imports ${part}: ${files[0]}`);
+      }
     }
   }
 
   for (const entry of [
     "index",
     "core",
+    "module",
     "typescript",
     "entities",
     "walk",
@@ -181,6 +188,15 @@ assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
 assert.equal(js.parseImportsExports('import a from "a";')[0].type, "ImportDeclaration");
 assert.throws(() => js.parseImportsExports('import type A from "a";', { typescript: true }), (error) => !(error instanceof core.ParseError));
 
+const modules = await import("sveast/module");
+assert.equal(modules.ParseError, core.ParseError);
+const tsModules = modules.createModuleParser({ typescript });
+assert.deepEqual(plain(tsModules.parseModule("let a: number;", { typescript: true })), plain(parseModule("let a: number;", { typescript: true })));
+assert.deepEqual(plain(tsModules.parseImportsExports('import type A from "a";', { typescript: true })), plain(parseImportsExports('import type A from "a";', { typescript: true })));
+const jsModules = modules.createModuleParser();
+assert.equal(jsModules.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
+assert.throws(() => jsModules.parseModule("let a: number;", { typescript: true }), (error) => !(error instanceof core.ParseError));
+
 const lexer = await import("sveast/lexer");
 assert.equal(lexer.lexImportsExports, (await import("sveast")).lexImportsExports);
 const [imported, reexported] = lexer.lexImportsExports('import a, { type B as C } from "d"; export * as e from "f";');
@@ -239,6 +255,11 @@ import {
   type Program as CoreProgram,
 } from "sveast/core";
 import { entities } from "sveast/entities";
+import {
+  createModuleParser,
+  type ModuleParser,
+  type Program as ModuleProgram,
+} from "sveast/module";
 import { type LexedStatement, lexImportsExports } from "sveast/lexer";
 import { typescript } from "sveast/typescript";
 import {
@@ -336,6 +357,17 @@ void coreProgram;
 void fromSveast;
 // @ts-expect-error: typescript comes from sveast/typescript
 createParser({ typescript: true });
+
+const moduleParser: ModuleParser = createModuleParser({ typescript });
+const moduleProgram: ModuleProgram = moduleParser.parseModule("let a: number;", { typescript: true });
+const moduleImports: ModuleDeclaration[] = moduleParser.parseImportsExports("import a from 'a';", importsOptions);
+const sameProgram: Program = moduleProgram;
+void moduleImports;
+void sameProgram;
+// @ts-expect-error: createModuleParser has no entities
+createModuleParser({ entities });
+// @ts-expect-error: createModuleParser doesn't parse components
+moduleParser.parse;
 
 const walkRoot: WalkAST.Root = ast;
 const walkVisitor: WalkVisitor = visitor;
