@@ -4,7 +4,8 @@ import {
   css_selector_invalid,
   unexpected_eof,
 } from "./errors";
-import { isWhitespace, type TemplateParserState } from "./state";
+import { isWhitespace, styleContentEnd } from "./markup";
+import type { TemplateParserState } from "./state";
 import type { AST } from "./types/svelte-ast";
 
 const REGEX_NTH_OF =
@@ -75,28 +76,7 @@ export function readStyle(
 }
 
 function skipBody(state: TemplateParserState): BodyNode[] {
-  const source = state.source;
-  let index = state.index;
-  while (index < source.length) {
-    const code = source.charCodeAt(index);
-    if (code === SLASH && source.charCodeAt(index + 1) === ASTERISK) {
-      const end = source.indexOf("*/", index + 2);
-      index = end === -1 ? source.length : end + 2;
-    } else if (code === DOUBLE_QUOTE || code === SINGLE_QUOTE) {
-      index++;
-      while (index < source.length) {
-        const next = source.charCodeAt(index);
-        if (next === code || next === 10) break;
-        index += next === BACKSLASH ? 2 : 1;
-      }
-      index++;
-    } else if (code === LESS_THAN && source.startsWith("</style", index)) {
-      break;
-    } else {
-      index++;
-    }
-  }
-  state.index = Math.min(index, source.length);
+  state.index = styleContentEnd(state.source, state.index);
   return [];
 }
 

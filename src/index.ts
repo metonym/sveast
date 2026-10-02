@@ -1,13 +1,19 @@
 export { isValidType } from "./is-valid-type";
 export type {
+  LexedAttribute,
+  LexedComponent,
+  LexedContent,
   LexedExport,
   LexedExportSpecifier,
   LexedImport,
   LexedImportSpecifier,
+  LexedOptions,
+  LexedScript,
   LexedSource,
   LexedStatement,
+  LexedStyle,
 } from "./lexer";
-export { lexImportsExports } from "./lexer";
+export { lexComponent, lexImportsExports } from "./lexer";
 export type {
   ParseImportsExportsOptions,
   ParseModuleOptions,
@@ -16,13 +22,17 @@ export type {
 export { parse } from "./parse";
 export { parseImportsExports } from "./parse-imports-exports";
 export { ParseError, parseModule } from "./parse-module";
+export { parseSections } from "./parse-sections";
+export { isRunesMode } from "./runes";
 export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";
-export type { Visitor } from "./walk";
+export type { Visitor, VisitorKeys } from "./walk";
 export {
+  createLocator,
   extractIdentifiers,
   isReference,
+  markupVisitorKeys,
   SKIP,
   STOP,
   visitorKeys,

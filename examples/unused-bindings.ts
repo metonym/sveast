@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import {
   type AST,
+  createLocator,
   type EntityName,
   extractIdentifiers,
   type Identifier,
@@ -61,12 +62,10 @@ export function unusedBindings(source: string): UnusedBinding[] {
       }
     },
   });
+  const locate = createLocator(source);
   return declared
     .filter(({ name }) => !used.has(name))
-    .map(({ name, start }) => ({
-      name,
-      line: source.slice(0, start).split("\n").length,
-    }));
+    .map(({ name, start }) => ({ name, line: locate(start).line }));
 }
 
 function topLevelBindings(ast: AST.Root): Identifier[] {

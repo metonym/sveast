@@ -3,6 +3,7 @@ import type { AST } from "./types/svelte-ast";
 
 export { extractIdentifiers } from "./extract-identifiers";
 export { isReference } from "./is-reference";
+export { createLocator } from "./locator";
 export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";
@@ -251,6 +252,62 @@ export const visitorKeys = {
   readonly [T in NodeType]: readonly ChildKey<T>[];
 };
 
+/** A table of the fields of each node type that {@link walk} visits, such as {@link visitorKeys} or {@link markupVisitorKeys}. */
+export type VisitorKeys = Readonly<Partial<Record<string, readonly string[]>>>;
+
+const ELEMENT = ["attributes", "fragment"] as const;
+
+/**
+ * The fields of the markup's nodes that hold other markup nodes, for a
+ * {@link walk} that never enters the scripts, the styles or the
+ * expressions: `Root` holds only its `fragment`, an `ExpressionTag` or a
+ * directive has no children, and a block holds only its fragments.
+ */
+export const markupVisitorKeys = {
+  Root: ["fragment"],
+  Fragment: ["nodes"],
+  Text: [],
+  Comment: [],
+  ExpressionTag: [],
+  HtmlTag: [],
+  ConstTag: [],
+  DeclarationTag: [],
+  DebugTag: [],
+  RenderTag: [],
+  AttachTag: [],
+  Attribute: ["value"],
+  SpreadAttribute: [],
+  AnimateDirective: [],
+  BindDirective: [],
+  ClassDirective: [],
+  LetDirective: [],
+  OnDirective: [],
+  StyleDirective: ["value"],
+  TransitionDirective: [],
+  UseDirective: [],
+  Component: ELEMENT,
+  TitleElement: ELEMENT,
+  SlotElement: ELEMENT,
+  RegularElement: ELEMENT,
+  SvelteBody: ELEMENT,
+  SvelteBoundary: ELEMENT,
+  SvelteComponent: ELEMENT,
+  SvelteDocument: ELEMENT,
+  SvelteElement: ELEMENT,
+  SvelteFragment: ELEMENT,
+  SvelteHead: ELEMENT,
+  SvelteOptions: ELEMENT,
+  SvelteSelf: ELEMENT,
+  SvelteWindow: ELEMENT,
+  IfBlock: ["consequent", "alternate"],
+  EachBlock: ["body", "fallback"],
+  AwaitBlock: ["pending", "then", "catch"],
+  KeyBlock: ["fragment"],
+  SnippetBlock: ["body"],
+} as const satisfies {
+  readonly [T in NodeType]?: readonly ChildKey<T>[];
+};
+
 const keysByType: Partial<Record<string, readonly string[]>> = Object.assign(
   Object.create(null),
   visitorKeys,
@@ -299,11 +356,30 @@ export interface Visitor {
  * Visits `node` and its descendants depth-first, in source order, calling
  * `visitor.enter` before a node's children and `visitor.leave` after them.
  * `parent[key]` is the node, or `parent[key][index]` when the field is an
- * array; all three are `null` for `node` itself.
+ * array; all three are `null` for `node` itself. `keys` says which fields
+ * of each node type to visit, {@link visitorKeys} by default; with
+ * {@link markupVisitorKeys}, only the markup is visited. A node whose
+ * type it has no entry for throws.
  */
-export function walk(node: AST.SvelteNode, visitor: Visitor): void {
-  visit(node, null, null, null, visitor);
+export function walk(
+  node: AST.SvelteNode,
+  visitor: Visitor,
+  keys?: VisitorKeys,
+): void {
+  visit(
+    node,
+    null,
+    null,
+    null,
+    visitor,
+    keys === undefined || keys === visitorKeys
+      ? keysOf
+      : (child) =>
+          Object.hasOwn(keys, child.type) ? keys[child.type] : undefined,
+  );
 }
+
+type KeysOf = (node: AST.SvelteNode) => readonly string[] | undefined;
 
 function visit(
   node: AST.SvelteNode,
@@ -311,14 +387,15 @@ function visit(
   key: string | null,
   index: number | null,
   visitor: Visitor,
+  keysFor: KeysOf,
 ): boolean {
-  const keys = keysOf(node);
+  const keys = keysFor(node);
   if (keys === undefined) throw new Error(`unknown node type: ${node.type}`);
   const entered = visitor.enter?.(node, parent, key, index);
   if (entered === STOP) return true;
   if (entered !== SKIP) {
     if (entered !== node && isNode(entered)) {
-      return replace(entered, parent, key, index, visitor);
+      return replace(entered, parent, key, index, visitor, keysFor);
     }
     const fields = fieldsOf(node);
     for (let k = 0; k < keys.length; k++) {
@@ -327,11 +404,14 @@ function visit(
       if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
           const child: unknown = value[i];
-          if (isNode(child) && visit(child, node, field, i, visitor)) {
+          if (isNode(child) && visit(child, node, field, i, visitor, keysFor)) {
             return true;
           }
         }
-      } else if (isNode(value) && visit(value, node, field, null, visitor)) {
+      } else if (
+        isNode(value) &&
+        visit(value, node, field, null, visitor, keysFor)
+      ) {
         return true;
       }
     }
@@ -357,6 +437,7 @@ function replace(
   key: string | null,
   index: number | null,
   visitor: Visitor,
+  keysFor: KeysOf,
 ): boolean {
   if (parent === null || key === null) {
     throw new Error("walk can't replace the node it was called with");
@@ -365,5 +446,5 @@ function replace(
   const field = fields[key];
   if (index === null) fields[key] = node;
   else if (Array.isArray(field)) field[index] = node;
-  return visit(node, parent, key, index, visitor);
+  return visit(node, parent, key, index, visitor, keysFor);
 }

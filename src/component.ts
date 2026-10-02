@@ -18,26 +18,29 @@ export function parseComponent(
   options: ParseOptions | undefined,
   support: Support,
 ): AST.Root {
+  const state = componentState(source, options, support);
+  while (state.index < state.source.length) readNode(state);
+  return finishComponent(state);
+}
+
+/** The parser's state for `source`, without a leading byte order mark. */
+export function componentState(
+  source: string,
+  options: ParseOptions | undefined,
+  support: Support,
+): TemplateParserState {
   const template = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
   setSource(template);
-
-  const state = new TemplateParserState(
+  return new TemplateParserState(
     template.trimEnd(),
     template.length,
     support,
     options,
   );
+}
 
-  while (state.index < state.source.length) {
-    if (state.match("<")) {
-      readElement(state);
-    } else if (state.match("{")) {
-      readTag(state);
-    } else {
-      readText(state);
-    }
-  }
-
+/** Rejects what's still open, and moves `<svelte:options>` to `Root.options`. */
+export function finishComponent(state: TemplateParserState): AST.Root {
   if (state.stack.length > 1) {
     const current = state.current();
     current.end = current.start + 1;
@@ -65,4 +68,14 @@ export function parseComponent(
   }
 
   return state.root;
+}
+
+export function readNode(state: TemplateParserState): void {
+  if (state.match("<")) {
+    readElement(state);
+  } else if (state.match("{")) {
+    readTag(state);
+  } else {
+    readText(state);
+  }
 }

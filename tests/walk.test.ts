@@ -1,5 +1,6 @@
 import {
   type AST,
+  markupVisitorKeys,
   parse,
   parseModule,
   SKIP,
@@ -113,6 +114,57 @@ test("parent, key and index locate the node", () => {
   }
   expect([...found].sort(byCodeUnit)).toEqual([]);
   expect(roots).toEqual(ASTS.map((ast) => [ast, null, null, null]));
+});
+
+const MARKUP_TYPES = new Set(Object.keys(markupVisitorKeys));
+
+test("markupVisitorKeys visits the markup nodes the full walk reaches outside scripts, styles and expressions", () => {
+  let components = 0;
+  let mismatched = 0;
+  for (const ast of ASTS) {
+    if (ast.type !== "Root") continue;
+    components++;
+    const expected: AST.SvelteNode[] = [];
+    let outside = 0;
+    walk(ast, {
+      enter(node, parent) {
+        const markup =
+          MARKUP_TYPES.has(node.type) &&
+          (parent?.type !== "Root" || node.type === "Fragment");
+        if (!markup) outside++;
+        else if (outside === 0) expected.push(node);
+      },
+      leave(node, parent) {
+        const markup =
+          MARKUP_TYPES.has(node.type) &&
+          (parent?.type !== "Root" || node.type === "Fragment");
+        if (!markup) outside--;
+      },
+    });
+    const reached: AST.SvelteNode[] = [];
+    walk(
+      ast,
+      {
+        enter(node) {
+          reached.push(node);
+        },
+      },
+      markupVisitorKeys,
+    );
+    const same =
+      reached.length === expected.length &&
+      reached.every((node, i) => node === expected[i]);
+    if (!same) mismatched++;
+  }
+  expect(mismatched).toBe(0);
+  expect(components).toBeGreaterThan(300);
+});
+
+test("walk throws on a node its keys have no entry for", () => {
+  const ast = parse("<script>let a;</script>");
+  expect(() =>
+    walk(ast.instance?.content ?? ast, {}, markupVisitorKeys),
+  ).toThrow("unknown node type: Program");
 });
 
 test("enter returning SKIP skips the children, and leave still runs", () => {

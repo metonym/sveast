@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type AST, parse, parseImportsExports } from "sveast";
+import { lexComponent, parseImportsExports } from "sveast";
 
 const TYPESCRIPT_FILE = /\.[cm]?ts$/;
 const EXTENSIONS = ["", ".ts", ".js", ".svelte", "/index.ts", "/index.js"];
@@ -10,7 +10,8 @@ const EXTENSIONS = ["", ".ts", ".js", ".svelte", "/index.ts", "/index.js"];
  * The modules a file imports or re-exports from, as written:
  * `"./Button.svelte"`, `"svelte/store"`. A component's `<script>`s are read with
  * `parseImportsExports`, which skips everything but the import and export
- * statements, and `parse` with `script: false` only finds where they are.
+ * statements, and `lexComponent` only finds where they are, without
+ * parsing the markup.
  */
 export function importsOf(file: string, source: string): string[] {
   const specifiers = new Set<string>();
@@ -23,25 +24,17 @@ export function importsOf(file: string, source: string): string[] {
     }
   };
   if (file.endsWith(".svelte")) {
-    const ast = parse(source, { css: false, script: false });
-    for (const script of [ast.module, ast.instance]) {
+    const lexed = lexComponent(source);
+    const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+    for (const script of [lexed.module, lexed.instance]) {
       if (!script) continue;
       const { start, end } = script.content;
-      add(source.slice(start, end), lang(script.attributes) === "ts");
+      add(text.slice(start, end), lexed.typescript);
     }
   } else {
     add(source, TYPESCRIPT_FILE.test(file));
   }
   return [...specifiers];
-}
-
-function lang(attributes: AST.Attribute[]): string | undefined {
-  for (const { name, value } of attributes) {
-    if (name !== "lang" || !Array.isArray(value)) continue;
-    const [text] = value;
-    if (text?.type === "Text") return text.data;
-  }
-  return undefined;
 }
 
 export interface ModuleGraph {

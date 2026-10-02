@@ -1,12 +1,17 @@
 import { group, task } from "ostia";
 import {
   type AST,
+  isRunesMode,
+  lexComponent,
   lexImportsExports,
+  markupVisitorKeys,
   ParseError,
   type ParseOptions,
   parse,
   parseImportsExports,
   parseModule,
+  parseSections,
+  type VisitorKeys,
   walk,
 } from "sveast";
 import {
@@ -235,6 +240,44 @@ group("lexImportsExports", () => {
   );
 });
 
+group("lexComponent", () => {
+  const lexTask = (name: string, components: Component[]) => {
+    const sources = components.map((c) => flat(c.source));
+    const run = () => sources.map(lexComponent);
+    task(
+      name,
+      lean(run, (lexed) => lexed.length),
+      { description: `${components.length} files, ${kb(components)}` },
+    );
+  };
+
+  lexTask("all files", COMPONENTS);
+  lexTask("carbon largest", CARBON_LARGEST);
+});
+
+group("parseSections", () => {
+  const sources = COMPONENTS.map((c) => flat(c.source));
+  mustParse("parseSections", sources, (source) => parseSections(source));
+  task(
+    "all files",
+    lean(
+      () => sources.map((source) => parseSections(source)),
+      (asts) => asts.length,
+    ),
+    { description: `${COMPONENTS.length} files, ${kb(COMPONENTS)}` },
+  );
+});
+
+group("isRunesMode", () => {
+  const sources = COMPONENTS.map((c) => flat(c.source));
+  mustParse("isRunesMode", sources, (source) => ({
+    runes: isRunesMode(source),
+  }));
+  task("all files", () => sources.filter(isRunesMode).length, {
+    description: `${COMPONENTS.length} files, ${kb(COMPONENTS)}`,
+  });
+});
+
 const SIZES = [
   ["10 kB", 10_000],
   ["100 kB", 100_000],
@@ -261,7 +304,11 @@ group("svelte:options", () => {
 });
 
 group("walk", () => {
-  const walkTask = (name: string, nodes: AST.SvelteNode[]) => {
+  const walkTask = (
+    name: string,
+    nodes: AST.SvelteNode[],
+    keys?: VisitorKeys,
+  ) => {
     let count = 0;
     const visitor = {
       enter() {
@@ -270,7 +317,7 @@ group("walk", () => {
     };
     const run = () => {
       count = 0;
-      for (const node of nodes) walk(node, visitor);
+      for (const node of nodes) walk(node, visitor, keys);
       return count;
     };
     task(name, run, { description: `${run()} nodes` });
@@ -283,10 +330,9 @@ group("walk", () => {
       [module, instance, fragment].filter((node) => node !== undefined),
     ),
   );
-  walkTask(
-    "corpus files",
-    COMPONENTS.map(({ source }) => parse(flat(source))),
-  );
+  const corpus = COMPONENTS.map(({ source }) => parse(flat(source)));
+  walkTask("corpus files", corpus);
+  walkTask("corpus files, markupVisitorKeys", corpus, markupVisitorKeys);
 });
 
 group("errors", () => {

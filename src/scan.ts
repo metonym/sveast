@@ -271,6 +271,158 @@ export function scan(
   }
 }
 
+/**
+ * The offset of the first `)` or `}` after `from` that closes no bracket
+ * opened after it, such as the `}` that ends a template expression, read
+ * with `scan`'s tokenizer: strings, comments, templates, regular
+ * expressions and brackets are skipped. The source's length if there's
+ * none. `word` is called with the offsets of each word that doesn't
+ * follow `.` or `?.`, and returning `true` from it stops the scan there,
+ * at -1.
+ */
+export function closingBracket(
+  source: string,
+  from: number,
+  word?: (start: number, end: number) => boolean,
+): number {
+  const length = source.length;
+  const stack: number[] = [];
+  let pos = from;
+  let prev = OPERATOR;
+  let afterDot = false;
+
+  while (pos < length) {
+    const code = source.charCodeAt(pos);
+    if (code === 32 || code === 10 || isSpaceCode(code)) {
+      pos++;
+      continue;
+    }
+    if (code === 47) {
+      const next = source.charCodeAt(pos + 1);
+      if (next === 47) {
+        pos = lineEnd(source, pos + 2);
+        continue;
+      }
+      if (next === 42) {
+        const end = source.indexOf("*/", pos + 2);
+        pos = end === -1 ? length : end + 2;
+        continue;
+      }
+    }
+    const wasAfterDot = afterDot;
+    afterDot = false;
+
+    if (isWordCode(code) || code === 35) {
+      const start = pos;
+      pos++;
+      while (pos < length) {
+        const next = source.charCodeAt(pos);
+        if (next === 92) pos += 2;
+        else if (isWordCode(next)) pos++;
+        else break;
+      }
+      if (!wasAfterDot && word?.(start, pos)) return -1;
+      const kind = wasAfterDot ? VALUE : wordKind(source, start, pos);
+      prev =
+        kind === OPERATOR || kind === BLOCK_OPENER || kind === HEAD
+          ? OPERATOR
+          : VALUE;
+      continue;
+    }
+
+    pos++;
+    switch (code) {
+      case 34:
+      case 39:
+        pos = stringEnd(source, pos, code);
+        prev = VALUE;
+        break;
+      case 96:
+        pos = templateEnd(source, pos, stack);
+        prev = source.charCodeAt(pos - 1) === 123 ? OPERATOR : VALUE;
+        break;
+      case 47: {
+        const end = prev === VALUE ? -1 : regexEnd(source, pos);
+        if (end === -1) {
+          prev = OPERATOR;
+        } else {
+          pos = end;
+          while (pos < length && isWordCode(source.charCodeAt(pos))) pos++;
+          prev = VALUE;
+        }
+        break;
+      }
+      case 40:
+        stack.push(PAREN);
+        prev = OPERATOR;
+        break;
+      case 41:
+        if (stack.length === 0) return pos - 1;
+        stack.pop();
+        prev = VALUE;
+        break;
+      case 123:
+        stack.push(prev === OPERATOR ? OBJECT : BLOCK);
+        prev = STATEMENT_START;
+        break;
+      case 125: {
+        if (stack.length === 0) return pos - 1;
+        const open = stack.pop();
+        if (open === TEMPLATE) {
+          pos = templateEnd(source, pos, stack);
+          prev = source.charCodeAt(pos - 1) === 123 ? OPERATOR : VALUE;
+        } else {
+          prev = open === OBJECT ? VALUE : STATEMENT_START;
+        }
+        break;
+      }
+      case 93:
+        prev = VALUE;
+        break;
+      case 46:
+        if (isDigit(source.charCodeAt(pos))) {
+          while (pos < length && isWordCode(source.charCodeAt(pos))) pos++;
+          prev = VALUE;
+        } else if (source.startsWith("..", pos)) {
+          pos += 2;
+          prev = OPERATOR;
+        } else {
+          afterDot = true;
+          prev = OPERATOR;
+        }
+        break;
+      case 63:
+        if (
+          source.charCodeAt(pos) === 46 &&
+          !isDigit(source.charCodeAt(pos + 1))
+        ) {
+          pos++;
+          afterDot = true;
+        }
+        prev = OPERATOR;
+        break;
+      case 33:
+        prev =
+          prev === VALUE && !isSpaceCode(source.charCodeAt(pos - 2))
+            ? VALUE
+            : OPERATOR;
+        break;
+      case 43:
+      case 45:
+        if (source.charCodeAt(pos) === code && prev === VALUE) pos++;
+        else prev = OPERATOR;
+        break;
+      case 61:
+        if (source.charCodeAt(pos) === 62) pos++;
+        prev = OPERATOR;
+        break;
+      default:
+        prev = OPERATOR;
+    }
+  }
+  return length;
+}
+
 export function isDigit(code: number): boolean {
   return code >= 48 && code <= 57;
 }

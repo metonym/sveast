@@ -1,9 +1,9 @@
 import { parseExpressionAt } from "./acorn-bridge";
 import { position } from "./locator";
+import { skipWhitespace } from "./markup";
 import {
   RESERVED_WORDS,
   scanIdentifier,
-  skipWhitespace,
   type TemplateParserState,
 } from "./state";
 import type {

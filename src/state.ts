@@ -8,6 +8,7 @@ import {
 } from "./errors";
 import type { EntityNames } from "./html-entities";
 import { locate } from "./locator";
+import { isTypeScript, isWhitespace, skipWhitespace } from "./markup";
 import type { ParseOptions } from "./options";
 import { missingTypeScript, type Support } from "./support";
 import type { Identifier, SourceLocation } from "./types/estree";
@@ -19,32 +20,7 @@ export const RESERVED_WORDS = new Set(
   ),
 );
 
-const REGEX_LANG_ATTRIBUTE =
-  /<!--[\s\S]*?-->|<script\s+(?:[^>]*|(?:[^=>'"/]+=(?:"[^"]*"|'[^']*'|[^>\s]+)\s+)*)lang=(["'])?([^"' >]+)\1[^>]*>/y;
 const REGEX_NON_LF_LINE_BREAK = /\r(?!\n)|[\u2028\u2029]/;
-
-export function isWhitespace(code: number): boolean {
-  if (code === 32 || (code <= 13 && code >= 9)) return true;
-  if (code < 160) return false;
-  return (
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  );
-}
-
-export function skipWhitespace(source: string, from: number): number {
-  let index = from;
-  while (index < source.length && isWhitespace(source.charCodeAt(index)))
-    index++;
-  return index;
-}
 
 export function scanIdentifier(source: string, from: number): number {
   const code = source.codePointAt(from);
@@ -56,24 +32,6 @@ export function scanIdentifier(source: string, from: number): number {
     next = source.codePointAt(end);
   }
   return end;
-}
-
-function isTypeScript(source: string): boolean {
-  let index = source.indexOf("<");
-  while (index !== -1) {
-    const next = source.charCodeAt(index + 1);
-    if (next === 33 || next === 115) {
-      REGEX_LANG_ATTRIBUTE.lastIndex = index;
-      const match = REGEX_LANG_ATTRIBUTE.exec(source);
-      if (match) {
-        if (next === 115) return match[2] === "ts";
-        index = source.indexOf("<", REGEX_LANG_ATTRIBUTE.lastIndex);
-        continue;
-      }
-    }
-    index = source.indexOf("<", index + 1);
-  }
-  return false;
 }
 
 export type StackNode = AST.Root | AST.ElementLike | AST.Block;

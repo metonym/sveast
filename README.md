@@ -22,13 +22,17 @@ ast.fragment.nodes; // [Text, RegularElement]
 | Function | For | Import from |
 |:---|:---|:---|
 | [`parse`](#parsesource-options--astroot) | A component's AST, the same as svelte's | `sveast` |
+| [`parseSections`](#parsesectionssource-options--astroot) | A component's AST without the markup: its `<script>`s, `<style>` and `<svelte:options>` | `sveast` |
 | [`parseModule`](#parsemodulesource-options--program) | A `.js` or `.ts` module's AST, the same as a component's `<script>` | `sveast` |
 | [`parseImportsExports`](#parseimportsexportssource-options--moduledeclaration) | A module's `import` and `export` statements, without parsing the rest | `sveast` |
 | [`lexImportsExports`](#leximportsexportssource--lexedstatement) | Their offsets, sources and names, without loading a parser | `sveast/lexer` |
+| [`lexComponent`](#lexcomponentsource--lexedcomponent) | A component's `<script>`s, `<style>` and `<svelte:options>`, with their attributes and offsets, without loading a parser | `sveast/lexer` |
 | [`createParser`, `createModuleParser`](#smaller-bundles-sveastcore-and-sveastmodule) | The parsers without TypeScript, named HTML entities or the template parser, for a smaller bundle | `sveast/core`, `sveast/module` |
 | [`isValidType`](#isvalidtypetext-options--boolean) | Whether a JSDoc type is safe to copy into a `.d.ts` | `sveast` |
-| [`walk`, `visitorKeys`](#walknode-visitor--void) | Visit, skip, stop at or replace nodes | `sveast`, `sveast/walk` |
+| [`isRunesMode`](#isrunesmodesource--boolean) | Whether svelte compiles a component in runes mode, mostly without parsing it | `sveast` |
+| [`walk`, `visitorKeys`, `markupVisitorKeys`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST or only the markup | `sveast`, `sveast/walk` |
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
+| [`createLocator`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
 
@@ -101,8 +105,8 @@ Apple M2, medians of warm calls. The corpus is `tests/corpus`: all of carbon-com
 | `parse` alone, minified for the browser | Gzipped |
 |:---|:---|
 | svelte/compiler | 126.7 kB |
-| sveast | **57.9 kB** |
-| `sveast/core`'s `createParser()`, without TypeScript and named HTML entities | **40.8 kB** |
+| sveast | **58.5 kB** |
+| `sveast/core`'s `createParser()`, without TypeScript and named HTML entities | **41.0 kB** |
 
 In a fresh process, importing the parser takes 5.3 ms with sveast and 44.7 ms with `svelte/compiler`, and a first parse of the whole corpus takes 65 ms against 161 ms. Keeping ten parses of the corpus alive retains 154 MB with sveast, 268 MB with `loc: true`, and 293 MB with `svelte/compiler`.
 
@@ -120,6 +124,17 @@ In a fresh process, importing the parser takes 5.3 ms with sveast and 44.7 ms wi
 With `loc: true`, the result equals svelte's. With the defaults, it's svelte's without `loc` and `name_loc`.
 
 A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed"`), `message`, `position` (`[start, end]` offsets), `start`/`end` (`{ line, column, character }`) and `frame` (the source around the error). `message` is always the reason, a line break, then the link to the error's docs, `https://svelte.dev/e/${code}`; `reason` is the reason on its own, e.g. `"Unexpected token"`.
+
+### `parseSections(source, options?) => AST.Root`
+
+`parse` for a pass that only reads a component's scripts, such as its props or its module script's exports: the top-level `<script>`s, `<style>` and `<svelte:options>` are parsed as `parse` parses them, and the markup between them is skipped as [`lexComponent`](#lexcomponentsource--lexedcomponent) skips it. `fragment.nodes` is empty, `comments` has only the scripts' comments, and the markup's syntax errors aren't reported; the rest is `parse`'s, offsets and the HTML comment before a `<script>` included. It takes `parse`'s options, and on the benchmark corpus it's 1.5× faster, where most of what's left is the scripts. It's a function of its own so that a bundle with only `parse` doesn't carry the lexer; `createParser` doesn't return it.
+
+```ts
+import { parseSections } from "sveast";
+
+const { instance, module } = parseSections(source, { css: false });
+module?.content.body; // the module script's statements, with parse's offsets
+```
 
 ### `parseModule(source, options?) => Program`
 
@@ -176,6 +191,44 @@ for (const statement of lexImportsExports(source)) {
 
 Names are as the module sees them: escapes decoded, and a string name without its quotes. A specifier's `typeOnly` is also `true` in an `import type` or `export type`. Its `start` is that of `type` before the name, if any, and `end` is after the last name; for `export *`, after the `*`.
 
+### `lexComponent(source) => LexedComponent`
+
+From `sveast/lexer`, and also `sveast`. A component's top-level `<script>`, `<script module>`, `<style>` and `<svelte:options>`, with their attributes and the offsets of their tags and content, found without parsing: e.g. to read a component's scripts and their imports, its language or its options, or to rewrite a script, on a path that can't afford a parser. On the benchmark corpus it's about 50× faster than `parse`.
+
+It skips the markup by tracking only tags, attribute values, blocks, and the brackets, strings, comments and templates of each `{…}` expression, so a `<script>` in `<svelte:head>`, a block, an attribute, an expression or an HTML comment isn't one, and it stops after the last `<script`, `<style` or `<svelte:options`. Where `parse` accepts the component, the sections are its `instance`, `module`, `css` and `options`, with the same offsets, into the source without a leading byte order mark. It doesn't check syntax and never throws.
+
+```ts
+import { lexComponent } from "sveast/lexer";
+
+const { typescript, instance, module, css, options } = lexComponent(source);
+typescript; // whether `parse` reads it as TypeScript, decided by the first <script> with a lang
+instance?.content; // { start, end }: source.slice(start, end) is the script
+instance?.attributes; // [{ name: "lang", value: "ts", start, end }]
+module?.context; // "module"
+options?.attributes; // [{ name: "runes", value: "{true}", start, end }]
+```
+
+An attribute's `value` is as written, without its quotes: character references aren't decoded, an expression keeps its braces, and an attribute without a value has `true`.
+
+`typescript` is what `createParser` needs to know to load the TypeScript parser only for the components that use it:
+
+```ts
+import { createParser } from "sveast/core";
+import { lexComponent } from "sveast/lexer";
+
+let parser = createParser();
+let loaded = false;
+
+async function parseComponent(source: string) {
+  if (!loaded && lexComponent(source).typescript) {
+    const { typescript } = await import("sveast/typescript");
+    parser = createParser({ typescript });
+    loaded = true;
+  }
+  return parser.parse(source);
+}
+```
+
 ### Smaller bundles: `sveast/core` and `sveast/module`
 
 `createParser(support?)` from `sveast/core` returns `parse`, `parseModule` and `parseImportsExports` without the TypeScript parser and the table of HTML's named character references, which most tools can do without. `createModuleParser(support?)` from `sveast/module` returns `parseModule` and `parseImportsExports` without the template parser either, for tools that read `.js` and `.ts` files but never components, such as a bundler plugin following a module graph. Pass back the parts you need; with them, the parsers are the same as `sveast`'s.
@@ -200,7 +253,13 @@ Whether `text` is exactly one TypeScript type, such as a JSDoc `{"sm" | "lg"}` a
 
 A `//` comment runs to the end of the line, so `string // the size` is a valid type but breaks `CustomEvent<${text}>`. Pass `inline: true` when the text goes before more code on the same line: it's then also `false` unless every `//` comment in it ends with a line break.
 
-### `walk(node, visitor) => void`
+### `isRunesMode(source) => boolean`
+
+Whether svelte compiles the component in runes mode, as `compile(source).metadata.runes` says: by `<svelte:options runes>` if it has one, otherwise by whether it uses a rune, such as `$state` or `$props`, or `await` outside a function in its instance script or markup. A `$state` that subscribes to a store named `state`, or that a function declares, isn't a rune, as in svelte. E.g. to track a migration to Svelte 5, or to pick the rules a linter applies.
+
+Most components are decided without parsing: `<svelte:options>` is read with `lexComponent`, a component without a rune's name or `await` isn't in runes mode, and one whose scripts call a rune in a way that can't be a declaration, a method, a type or a store is. The rest is parsed, without the markup unless a rune's name or `await` is in it, and a syntax error there throws a `ParseError`. On 12,808 components from other Svelte projects, it takes a twelfth of the time parsing them does.
+
+### `walk(node, visitor, keys?) => void`
 
 Visits `node` and every node under it, depth-first and in source order, calling `visitor.enter(node, parent, key, index)` before a node's children and `visitor.leave(node, parent, key, index)` after them. `parent[key]` is the node, or `parent[key][index]` when the field is an array; all three are `null` for the node you pass. Checking `node.type` narrows `node`.
 
@@ -213,9 +272,23 @@ What `enter` and `leave` return controls the walk:
 
 It works on any node the parsers return: a `Root`, a `Fragment`, an expression, a `Program`, a `<style>`'s rules. It never descends into `loc`, comments or strings, and throws on a node type it doesn't know. A component's sections are visited in scope order, `module`, `instance`, `fragment`, then `css`, and a template literal's `quasis` before its `expressions`. `<svelte:options>`'s attributes aren't visited; read them from `ast.options?.attributes`. In `import { a }` and `export { a }`, one `Identifier` is both names, so it's visited twice.
 
-`visitorKeys` is the table `walk` reads: the fields of each node type that hold child nodes, in source order, e.g. `visitorKeys.IfBlock` is `["test", "consequent", "alternate"]`.
+`visitorKeys` is the table `walk` reads: the fields of each node type that hold child nodes, in source order, e.g. `visitorKeys.IfBlock` is `["test", "consequent", "alternate"]`. Pass another table as `keys` to visit other fields; a node whose type it has no entry for throws. `markupVisitorKeys` visits only the markup: `Root`'s `fragment`, elements' attributes and fragments, attribute values and blocks' fragments, but no script, style or expression. For a query about the markup, such as the components a file renders or the classes it uses, it's 4.8× faster on the benchmark corpus than walking everything:
 
-`sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `isReference`, `extractIdentifiers` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
+```ts
+import { markupVisitorKeys, walk } from "sveast";
+
+walk(
+  ast,
+  {
+    enter(node) {
+      if (node.type === "Component") names.add(node.name);
+    },
+  },
+  markupVisitorKeys,
+);
+```
+
+`sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `markupVisitorKeys`, `isReference`, `extractIdentifiers`, `createLocator` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
 
 ### `isReference(node, parent) => boolean`
 
@@ -246,6 +319,21 @@ const [declaration] = parseModule("let { a, b: [c] } = x;").body;
 if (declaration.type === "VariableDeclaration") {
   declaration.declarations.flatMap((d) => extractIdentifiers(d.id)).map((node) => node.name); // ["a", "c"]
 }
+```
+
+### `createLocator(source) => (offset) => Position`
+
+A function from an offset to its `{ line, column }`, line from 1 and column from 0, as `loc: true` gives them: for a tool that parses without `loc`, which is faster, and needs lines only for what it reports. Lines are found on the first call, and each lookup starts its search at the line found last, so lookups in source order are fastest. Lines end at `\n`, as in the markup's `loc` and `ParseError`; acorn's `loc` in scripts and modules also ends them at a lone `\r`, U+2028 and U+2029. `parse` drops a leading byte order mark, so pass the source without one.
+
+```ts
+import { createLocator, parse, walk } from "sveast";
+
+const locate = createLocator(source);
+walk(parse(source), {
+  enter(node) {
+    if (node.type === "Component") console.log(node.name, locate(node.start).line);
+  },
+});
 ```
 
 ### Types

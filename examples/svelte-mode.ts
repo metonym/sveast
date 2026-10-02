@@ -1,5 +1,13 @@
 import { readFile } from "node:fs/promises";
-import { type AST, isReference, type Program, parse, STOP, walk } from "sveast";
+import {
+  type AST,
+  createLocator,
+  isReference,
+  type Program,
+  parse,
+  STOP,
+  walk,
+} from "sveast";
 
 const RUNES = new Set([
   "$state",
@@ -30,6 +38,8 @@ export interface SvelteMode {
  * Whether a component uses runes or Svelte 4's syntax, e.g. to track a
  * migration to Svelte 5. The walk stops at the first rune, which decides
  * it; `export let`, `$:` and `$$props` only decide it if no rune follows.
+ * For svelte's own answer alone, `compile(source).metadata.runes`, use
+ * `isRunesMode`, which mostly doesn't need to parse.
  */
 export function svelteMode(source: string): SvelteMode {
   const ast = parse(source, { css: false, comments: false });
@@ -95,7 +105,7 @@ function legacySyntax(
 }
 
 const lineOf = (source: string, offset: number): number =>
-  source.slice(0, offset).split("\n").length;
+  createLocator(source)(offset).line;
 
 if (import.meta.main) {
   const files = process.argv.slice(2);
