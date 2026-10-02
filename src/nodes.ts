@@ -11,7 +11,7 @@ declare module "./types/estree" {
   }
 }
 
-export interface ParenthesizedExpression extends BaseExpression {
+interface ParenthesizedExpression extends BaseExpression {
   type: "ParenthesizedExpression";
   expression: Expression;
 }

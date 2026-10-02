@@ -24,11 +24,11 @@ export interface TokenType {
   binop: number | null;
 }
 
-export interface BinaryTokenType extends TokenType {
+interface BinaryTokenType extends TokenType {
   binop: number;
 }
 
-export interface TokenTypes {
+interface TokenTypes {
   arrow: TokenType;
   backQuote: TokenType;
   bitShift: TokenType;
@@ -74,7 +74,7 @@ export interface TokenTypes {
   _with: TokenType;
 }
 
-export interface TokContext {
+interface TokContext {
   token: string;
   isExpr: boolean;
   preserveSpace: boolean;
@@ -92,13 +92,13 @@ export interface Scope {
   tsEnums?: string[];
 }
 
-export interface Label {
+interface Label {
   kind: string | null;
   name?: string;
   statementStart?: number;
 }
 
-export interface PrivateNameScope {
+interface PrivateNameScope {
   declared: Record<string, string>;
   used: Node[];
 }
@@ -115,7 +115,7 @@ export type ForInit = boolean | "await" | undefined;
 export type ExportedNames = Record<string, boolean>;
 export type ClassStatement = boolean | "nullableID";
 
-export type NodeValue =
+type NodeValue =
   | Node
   | Node[]
   | SourceLocation
@@ -157,7 +157,7 @@ export interface ParserOptions extends Options {
   startLocation?: { line: number; column: number };
 }
 
-export interface ParserInternals {
+interface ParserInternals {
   input: string;
   options: ParserOptions;
   keywords: WordTester;
