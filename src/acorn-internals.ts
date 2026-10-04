@@ -157,7 +157,7 @@ export interface ParserOptions extends Options {
   startLocation?: { line: number; column: number };
 }
 
-interface ParserInternals {
+export interface ParserInternals {
   input: string;
   options: ParserOptions;
   keywords: WordTester;
@@ -192,8 +192,21 @@ interface ParserInternals {
   awaitIdentPos: number;
   potentialArrowAt: number;
   potentialArrowInForAwait: boolean;
+  regexpState: unknown;
+  inTemplateElement?: boolean;
 
+  /**
+   * Points the parser at `input` from `pos`, in the state a new parser with
+   * the same options would start in, so one parser can be reused. sveast's
+   * plugins add it; acorn's `Parser` has none.
+   */
+  reset?(
+    input: string,
+    pos: number,
+    startLocation: ParserOptions["startLocation"],
+  ): void;
   parse(): Node;
+  curPosition(): Position;
   initialContext(): TokContext[];
   skipSpace(): void;
   readWord(): void;
@@ -423,7 +436,6 @@ export interface ParserConstructor {
     input: string,
     startPos?: number,
   ): ParserInternals;
-  parseExpressionAt(input: string, pos: number, options: ParserOptions): Node;
   readonly acorn: {
     tokTypes: TokenTypes;
     keywordTypes: Record<string, TokenType>;

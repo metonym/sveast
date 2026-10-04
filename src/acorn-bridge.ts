@@ -1,3 +1,4 @@
+import type { Position } from "acorn";
 import {
   type Node as AcornNode,
   definePlugin,
@@ -5,6 +6,7 @@ import {
   extendParser,
   type ForInit,
   type ParserConstructor,
+  type ParserInternals,
   type ParserOptions,
   type WordTester,
 } from "./acorn-internals";
@@ -29,6 +31,9 @@ import type {
 } from "./types/estree";
 
 let sawParenthesized = false;
+
+const SCOPE_TOP = 1;
+const LINE_BREAK = /\r\n?|\n|\u2028|\u2029/;
 
 const WORD_TESTERS = new Map<RegExp, WordTester>();
 
@@ -59,6 +64,47 @@ export const tweaks = definePlugin((Base) => {
       this.reservedWords = wordTester(this.reservedWords);
       this.reservedWordsStrict = wordTester(this.reservedWordsStrict);
       this.reservedWordsStrictBind = wordTester(this.reservedWordsStrictBind);
+    }
+
+    // acorn's constructor from `this.input` on, for a module; `tests/acorn-bridge.test.ts` checks it against a new parser
+    reset(
+      input: string,
+      pos: number,
+      startLocation: ParserOptions["startLocation"],
+    ) {
+      super.reset?.(input, pos, startLocation);
+      this.input = input;
+      this.containsEsc = false;
+      this.pos = pos;
+      if (startLocation) {
+        this.lineStart = pos - startLocation.column;
+        this.curLine = startLocation.line;
+      } else {
+        this.lineStart = input.lastIndexOf("\n", pos - 1) + 1;
+        this.curLine = this.options.locations
+          ? input.slice(0, this.lineStart).split(LINE_BREAK).length
+          : 1;
+      }
+      this.type = tokTypes.eof;
+      this.value = null as unknown as string;
+      this.start = this.end = pos;
+      this.startLoc = this.endLoc = this.curPosition();
+      this.lastTokEndLoc = this.lastTokStartLoc = null as unknown as Position;
+      this.lastTokStart = this.lastTokEnd = pos;
+      this.context = this.initialContext();
+      this.exprAllowed = true;
+      this.strict = true;
+      this.potentialArrowAt = -1;
+      this.potentialArrowInForAwait = false;
+      this.yieldPos = this.awaitPos = this.awaitIdentPos = 0;
+      this.labels = [];
+      this.undefinedExports = Object.create(null);
+      this.scopeStack = [];
+      this.enterScope(SCOPE_TOP);
+      this.regexpState = null;
+      this.privateNameStack = [];
+      // acorn sets this one only once it reads a template; a new parser has it unset
+      this.inTemplateElement = false;
     }
 
     parseParenAndDistinguishExpression(canBeArrow: boolean, forInit: ForInit) {
@@ -209,6 +255,51 @@ export function parseProgram(
 
 export const acornExpressionParses = { count: 0 };
 
+interface SpareParser {
+  ParserClass: ParserConstructor;
+  onComment: ParserOptions["onComment"];
+  locations: ParserOptions["locations"];
+  parser: ParserInternals;
+}
+
+let spare: SpareParser | undefined;
+
+/**
+ * acorn's `parseExpressionAt`, but with the last call's parser when the
+ * options match: a markup expression is short, so constructing a parser is
+ * a large part of its cost. A parser that threw is dropped.
+ */
+function parseExpressionWith(
+  ParserClass: ParserConstructor,
+  options: ParserOptions,
+  source: string,
+  index: number,
+): AcornNode {
+  let entry = spare;
+  spare = undefined;
+  if (
+    entry?.ParserClass === ParserClass &&
+    entry.onComment === options.onComment &&
+    entry.locations === options.locations &&
+    entry.parser.reset
+  ) {
+    entry.parser.reset(source, index, options.startLocation);
+  } else {
+    entry = {
+      ParserClass,
+      onComment: options.onComment,
+      locations: options.locations,
+      parser: new ParserClass(options, source, index),
+    };
+  }
+  const parser = entry.parser;
+  parser.nextToken();
+  const node = parser.parseExpression();
+  parser.input = "";
+  spare = entry;
+  return node;
+}
+
 export function parseExpressionAt(
   context: ParseContext,
   source: string,
@@ -219,7 +310,7 @@ export function parseExpressionAt(
   sawParenthesized = false;
   const node = estree<Expression>(
     run(context, source, index, true, (ParserClass, options) =>
-      ParserClass.parseExpressionAt(source, index, options),
+      parseExpressionWith(ParserClass, options, source, index),
     ),
   );
 
