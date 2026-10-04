@@ -10,6 +10,7 @@ import {
   type Scope,
   type TokenType,
 } from "./acorn-internals";
+import { hasName } from "./scope-names";
 
 const SKIP_WHITESPACE = /(?:\s|\/\/.*|\/\*[\s\S]*?\*\/)*/g;
 
@@ -1599,7 +1600,7 @@ export const tsPlugin = definePlugin((Base) => {
       }
       if (bindingType === BIND_TS_TYPE || bindingType === BIND_TS_INTERFACE) {
         scope.tsTypes ??= [];
-        if (bindingType === BIND_TS_TYPE && scope.tsTypes.includes(name)) {
+        if (bindingType === BIND_TS_TYPE && hasName(scope.tsTypes, name)) {
           this.raise(pos, `type '${name}' has already been declared.`);
         }
         scope.tsTypes.push(name);
@@ -1608,7 +1609,7 @@ export const tsPlugin = definePlugin((Base) => {
       }
       if (bindingType & BIND_FLAGS_TS_ENUM) {
         scope.tsEnums ??= [];
-        if (scope.tsEnums.includes(name)) return;
+        if (hasName(scope.tsEnums, name)) return;
         super.declareName(name, BIND_LEXICAL, pos);
         scope.tsEnums.push(name);
         return;
@@ -1626,8 +1627,8 @@ export const tsPlugin = definePlugin((Base) => {
       for (let i = this.scopeStack.length - 1; i >= 0; i--) {
         const scope = this.scopeStack[i];
         if (
-          scope.tsTypes?.includes(id.name) ||
-          scope.tsExportOnly?.includes(id.name)
+          hasName(scope.tsTypes, id.name) ||
+          hasName(scope.tsExportOnly, id.name)
         ) {
           return;
         }

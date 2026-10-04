@@ -1,5 +1,5 @@
 import { parse } from "sveast";
-import { tweaks } from "../src/acorn-bridge";
+import { declarations, tweaks } from "../src/acorn-bridge";
 import {
   extendParser,
   type ParserConstructor,
@@ -9,7 +9,7 @@ import {
 import { TypeScriptParser } from "../src/typescript-parser";
 
 const PARSERS: [string, ParserConstructor][] = [
-  ["JavaScript", extendParser(tweaks)],
+  ["JavaScript", extendParser(declarations, tweaks)],
   ["TypeScript", TypeScriptParser],
 ];
 
