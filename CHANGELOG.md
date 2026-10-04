@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.1 — 2026-10-04
+
+**Performance**
+
+- Name hashing stays in int32. `readWord1` hashed with
+  `(hash * 31 + code) | 0`. Past six characters the multiply leaves int32
+  before the `| 0`, so JavaScriptCore drops the loop to double arithmetic on
+  every identifier character. `Math.imul` keeps the same low 32 bits, so the
+  intern table's slots don't change. 0.9.0 was slower than 0.8.0 on files
+  with long names: `parseModule` of Carbon's root barrel was 8% to 12%
+  slower (19% as measured from sveld), and a 500-line barrel of long
+  PascalCase names was +17%.
+- Against 0.8.0, interleaved, one process, 61 rounds, median of two runs:
+  Carbon's root `index.js` −3.2% and −5.4% (0.9.0 was +7.8% and +11.9%), the
+  long-name barrel −4.0% and −2.9% (0.9.0 was +16.8% and +25.6%), Carbon's
+  `.js` −2.1% and −4.0%, its largest component −8.9% and −7.1%, its
+  `.svelte` −2.0% and −2.4%. `ostia ab` against 0.9.0, 21 rounds: geomean
+  −1.6%, nothing regressed. `parseModule` of Carbon's `.js` −4.6% to −6.3%,
+  the long-name barrel −9.5%. Ten parses of the corpus kept alive retain
+  145.9 MB (146.4 MB on 0.9.0).
+
 ## 0.9.0 — 2026-10-03
 
 **Fixes**

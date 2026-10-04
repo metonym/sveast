@@ -1,6 +1,6 @@
 {
   "name": "sveast",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "license": "MIT",
   "description": "Fast, zero-dependency Svelte 5 parser with svelte/compiler's AST.",
   "author": "Eric Liu (https://github.com/metonym)",
