@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.9.2 — 2026-10-04
+
+**Features**
+
+- `lexStrings(source)`, from `sveast/lexer` and `sveast`, returns a module's
+  string literals and the text of its template literals, in source order,
+  with offsets and decoded values, without loading a parser. Where
+  `parseModule` accepts the module, they are its string `Literal`s and its
+  `TemplateElement`s, types, imports and directives included. `kind` is
+  `"string"` or `"template"`. `value` is the decoded text, as a `Literal`'s
+  `value` or a `TemplateElement`'s `value.cooked`, or `null` for an escape
+  acorn rejects in a module, such as `"\1"`, or one that leaves a tagged
+  template's `cooked` `null`. A template's line breaks read as `\n`; its raw
+  text is `source.slice(start, end)`, with `\r\n` and `\r` as `\n`. Comments
+  and regular expressions are skipped, and it never throws. It tells a
+  regular expression from a division by the token before it, as acorn's
+  tokenizer does, but acorn's parser can overrule that guess: a statement
+  that starts with a regular expression after a line break without a `;`,
+  following `let a`, an `import`, a type alias ending in `}`, or a block
+  after `case …:` or a label, reads as a division, as does `/` after a
+  variable named `of`, and a quote in that regular expression starts a
+  string. `LexedString` is exported.
+
+**Performance**
+
+- A tool that only needs a component's strings can parse with
+  `script: false` and lex the scripts. On Carbon's 258 components,
+  `parse` with `comments: false` takes 19.5 ms; `script: false` plus
+  `lexStrings` takes 9.6 ms, 49% of that. `lexStrings` on the 229 scripts
+  takes 1.55 ms, 15% of `parseModule`'s time. It matched `parseModule` on
+  21,443 modules and component scripts, and on 9,647 TypeScript conformance
+  tests. `ostia ab` against 0.9.1, 21 rounds: geomean −1.1%, nothing
+  regressed; `lexImportsExports` and `parseImportsExports` unchanged.
+
 ## 0.9.1 — 2026-10-04
 
 **Performance**
