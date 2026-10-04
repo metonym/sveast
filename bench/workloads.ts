@@ -291,6 +291,10 @@ export const CONSTRUCTS: Construct[] = [
     options: { loc: true },
   },
   {
+    name: "expression tags, acorn, one line",
+    build: (bytes) => repeatTo(bytes, () => "<p>{a(b)} {c ? d : e} {f}</p>"),
+  },
+  {
     name: "<script>, TypeScript, loc: true",
     build: (bytes) =>
       `<script lang="ts">\n${repeatTo(
