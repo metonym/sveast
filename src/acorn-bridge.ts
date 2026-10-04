@@ -1,6 +1,7 @@
 import type { Position } from "acorn";
 import {
   type Node as AcornNode,
+  type DestructuringErrors,
   definePlugin,
   type ExportedNames,
   extendParser,
@@ -28,6 +29,7 @@ import type {
   Expression,
   ModuleDeclaration,
   Node,
+  Pattern,
   Program,
   Statement,
 } from "./types/estree";
@@ -384,16 +386,22 @@ interface SpareParser {
 
 let spare: SpareParser | undefined;
 
+type Read = (parser: ParserInternals) => AcornNode;
+
+const readExpression: Read = (parser) => parser.parseExpression();
+
 /**
- * acorn's `parseExpressionAt`, but with the last call's parser when the
- * options match: a markup expression is short, so constructing a parser is
- * a large part of its cost. A parser that threw is dropped.
+ * acorn's `parseExpressionAt`, reading with `read`, but with the last
+ * call's parser when the options match: a markup expression is short, so
+ * constructing a parser is a large part of its cost. A parser that threw
+ * is dropped.
  */
-function parseExpressionWith(
+function parseWith(
   ParserClass: ParserConstructor,
   options: ParserOptions,
   source: string,
   index: number,
+  read: Read,
 ): AcornNode {
   let entry = spare;
   spare = undefined;
@@ -414,10 +422,24 @@ function parseExpressionWith(
   }
   const parser = entry.parser;
   parser.nextToken();
-  const node = parser.parseExpression();
+  const node = read(parser);
   parser.input = "";
   spare = entry;
   return node;
+}
+
+function parseMarkupAt(
+  context: ParseContext,
+  source: string,
+  index: number,
+  read: Read,
+): AcornNode {
+  acornExpressionParses.count += 1;
+  sawParenthesized = false;
+  return run(context, source, index, true, (ParserClass, options) => {
+    options.startLocation ??= acornLocation(index, options.locations);
+    return parseWith(ParserClass, options, source, index, read);
+  });
 }
 
 export function parseExpressionAt(
@@ -426,13 +448,8 @@ export function parseExpressionAt(
   index: number,
   keepParens = false,
 ): { node: Expression; end: number } {
-  acornExpressionParses.count += 1;
-  sawParenthesized = false;
   const node = estree<Expression>(
-    run(context, source, index, true, (ParserClass, options) => {
-      options.startLocation ??= acornLocation(index, options.locations);
-      return parseExpressionWith(ParserClass, options, source, index);
-    }),
+    parseMarkupAt(context, source, index, readExpression),
   );
 
   const end = Math.max(node.end, lastCommentEnd());
@@ -441,6 +458,49 @@ export function parseExpressionAt(
     node: sawParenthesized && !keepParens ? removeParens(node) : node,
     end,
   };
+}
+
+/**
+ * The left side of `${source} = 1` read from `index`, as svelte reads a
+ * destructuring pattern, without building that string: what acorn's
+ * `parseMaybeAssign` does with its left side when it sees `=`. Building it
+ * copied the component up to the pattern, and the pattern's strings kept
+ * the copy alive. `undefined` if the expression at `index` ends before
+ * `source` does.
+ */
+export function parsePatternAt(
+  context: ParseContext,
+  source: string,
+  index: number,
+): Pattern | undefined {
+  const comments = context.root.comments.length;
+  let complete = true;
+  const node = parseMarkupAt(context, source, index, (parser) => {
+    const refDestructuringErrors: DestructuringErrors = {
+      shorthandAssign: -1,
+      trailingComma: -1,
+      parenthesizedAssign: -1,
+      parenthesizedBind: -1,
+      doubleProto: -1,
+    };
+    const left = parser.parseMaybeConditional(
+      undefined,
+      refDestructuringErrors,
+    );
+    if (parser.type !== JSParser.acorn.tokTypes.eof) {
+      complete = false;
+      return left;
+    }
+    const pattern = parser.toAssignable(left, false, refDestructuringErrors);
+    parser.checkLValPattern(pattern);
+    return pattern;
+  });
+  if (!complete) {
+    context.root.comments.length = comments;
+    return undefined;
+  }
+  const pattern = estree<Pattern>(node);
+  return sawParenthesized ? removeParens(pattern) : pattern;
 }
 
 export function parseStatementAt(

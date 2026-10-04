@@ -126,7 +126,7 @@ Changes to `src/` must not make things slower. `bench/sveast.bench.ts` holds the
 Commit first, then run `bun run bench:ab` against the commit before your change. Don't trust numbers from two runs minutes apart: machine load drifts too much.
 
 Pitfalls seen before:
-- **Rebuilding the source prefix per node is quadratic.** acorn never reads before the offset it starts at, so pass `source.slice(0, end)` rather than padding the prefix with spaces.
+- **Rebuilding the source prefix per node is quadratic.** acorn never reads before the offset it starts at, so pass `source.slice(0, end)` rather than padding the prefix with spaces. Appending to it, as in `` `${source.slice(0, end)} = 1` ``, is no better: the engine copies the whole string the first time acorn reads it, and strings sliced from the result keep the copy alive. `parsePatternAt` reads a destructuring pattern without one; type annotations still parse such a copy, because reading `_ as ` in place took a hook on every token, which slowed every parse more than it sped up annotations.
 - **`loc` work must stay behind `loc`.** Computing lines and columns, even lazily, costs more than the rest of the node.
 - **`String#repeat` returns a rope**; flatten test inputs before timing them.
 

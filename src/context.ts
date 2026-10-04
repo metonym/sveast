@@ -1,9 +1,9 @@
-import { parseExpressionAt } from "./acorn-bridge";
+import { parseExpressionAt, parsePatternAt } from "./acorn-bridge";
 import { matchBracket } from "./bracket";
 import { expected_pattern } from "./errors";
 import { assertType } from "./nodes";
 import type { TemplateParserState } from "./state";
-import type { Pattern } from "./types/estree";
+import type { AssignmentExpression, Pattern } from "./types/estree";
 import type { TSTypeAnnotation } from "./types/typescript";
 
 const REGEX_OPTIONAL_PARAM_COLON = /\?\s*:/g;
@@ -22,18 +22,27 @@ export function readPattern(state: TemplateParserState): Pattern {
 
   state.index = matchBracket(state.source, start);
 
+  const pattern =
+    parsePatternAt(state, state.source.slice(0, state.index), start) ??
+    assignedPattern(state, start);
+  assertType(pattern, "ObjectPattern", "ArrayPattern");
+  const typeAnnotation = readTypeAnnotation(state);
+  pattern.typeAnnotation = typeAnnotation;
+  if (typeAnnotation) pattern.end = typeAnnotation.end;
+  return pattern;
+}
+
+function assignedPattern(
+  state: TemplateParserState,
+  start: number,
+): AssignmentExpression["left"] {
   const { node } = parseExpressionAt(
     state,
     `${state.source.slice(0, state.index)} = 1`,
     start,
   );
   assertType(node, "AssignmentExpression");
-  const pattern = node.left;
-  assertType(pattern, "ObjectPattern", "ArrayPattern");
-  const typeAnnotation = readTypeAnnotation(state);
-  pattern.typeAnnotation = typeAnnotation;
-  if (typeAnnotation) pattern.end = typeAnnotation.end;
-  return pattern;
+  return node.left;
 }
 
 function readTypeAnnotation(
