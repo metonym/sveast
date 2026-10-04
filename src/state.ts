@@ -10,15 +10,10 @@ import type { EntityNames } from "./html-entities";
 import { locate } from "./locator";
 import { isTypeScript, isWhitespace, skipWhitespace } from "./markup";
 import type { ParseOptions } from "./options";
+import { RESERVED_WORDS } from "./reserved-words";
 import { missingTypeScript, type Support } from "./support";
 import type { Identifier, SourceLocation } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
-
-export const RESERVED_WORDS = new Set(
-  "arguments await break case catch class const continue debugger default delete do else enum eval export extends false finally for function if implements import in instanceof interface let new null package private protected public return static super switch this throw true try typeof var void while with yield".split(
-    " ",
-  ),
-);
 
 const REGEX_NON_LF_LINE_BREAK = /\r(?!\n)|[\u2028\u2029]/;
 

@@ -28,6 +28,13 @@ const DIRTY = [
   "class A { #x; async *m() { label: for (;;) { yield await (",
   "declare namespace N { let x: ",
   "`\\u{",
+  "let a = 1;",
+  "var b;",
+  "function c() {}",
+  "type T = 1;",
+  "enum E {}",
+  "namespace N {}",
+  "label: for (;;) {",
 ];
 
 function options(
@@ -67,6 +74,11 @@ describe("reset", () => {
       for (const startLocation of [undefined, { line: 7, column: 3 }]) {
         test(`${name}, locations: ${locations}, startLocation: ${startLocation !== undefined}: the state of a new parser`, () => {
           for (const pos of POSITIONS) {
+            const fresh = new ParserClass(
+              options(locations, startLocation),
+              INPUT,
+              pos,
+            );
             const parser = new ParserClass(options(locations), "", 0);
             for (const dirty of DIRTY) {
               parser.reset?.(dirty, 0, undefined);
@@ -76,14 +88,9 @@ describe("reset", () => {
               } catch {
                 // a parse that throws leaves its state behind too
               }
+              parser.reset?.(INPUT, pos, startLocation);
+              expect(state(parser)).toEqual(state(fresh));
             }
-            parser.reset?.(INPUT, pos, startLocation);
-            const fresh = new ParserClass(
-              options(locations, startLocation),
-              INPUT,
-              pos,
-            );
-            expect(state(parser)).toEqual(state(fresh));
           }
         });
       }

@@ -21,6 +21,7 @@ import {
 import { js_parse_error, unexpected_eof } from "./errors";
 import { locate } from "./locator";
 import { mapChildren } from "./nodes";
+import { RESERVED_WORDS } from "./reserved-words";
 import { missingTypeScript } from "./support";
 import type {
   Expression,
@@ -57,6 +58,7 @@ export const tweaks = definePlugin((Base) => {
       .map((word) => [word, keywordTypes[word]] as const),
   );
 
+  let initialContext: unknown;
   return class extends Base {
     constructor(options: ParserOptions, input: string, startPos?: number) {
       super(options, input, startPos);
@@ -64,6 +66,7 @@ export const tweaks = definePlugin((Base) => {
       this.reservedWords = wordTester(this.reservedWords);
       this.reservedWordsStrict = wordTester(this.reservedWordsStrict);
       this.reservedWordsStrictBind = wordTester(this.reservedWordsStrictBind);
+      initialContext ??= this.context[0];
     }
 
     // acorn's constructor from `this.input` on, for a module; `tests/acorn-bridge.test.ts` checks it against a new parser
@@ -91,18 +94,37 @@ export const tweaks = definePlugin((Base) => {
       this.startLoc = this.endLoc = this.curPosition();
       this.lastTokEndLoc = this.lastTokStartLoc = null as unknown as Position;
       this.lastTokStart = this.lastTokEnd = pos;
-      this.context = this.initialContext();
+      const context = this.context;
+      if (context.length !== 1 || context[0] !== initialContext) {
+        this.context = this.initialContext();
+      }
       this.exprAllowed = true;
       this.strict = true;
       this.potentialArrowAt = -1;
       this.potentialArrowInForAwait = false;
       this.yieldPos = this.awaitPos = this.awaitIdentPos = 0;
-      this.labels = [];
-      this.undefinedExports = Object.create(null);
-      this.scopeStack = [];
-      this.enterScope(SCOPE_TOP);
+      if (this.labels.length > 0) this.labels = [];
+      for (const _ in this.undefinedExports) {
+        this.undefinedExports = Object.create(null);
+        break;
+      }
+      const scopes = this.scopeStack;
+      const top = scopes[0];
+      if (
+        scopes.length !== 1 ||
+        top.flags !== SCOPE_TOP ||
+        top.var.length > 0 ||
+        top.lexical.length > 0 ||
+        top.functions.length > 0 ||
+        top.tsTypes !== undefined ||
+        top.tsExportOnly !== undefined ||
+        top.tsEnums !== undefined
+      ) {
+        this.scopeStack = [];
+        this.enterScope(SCOPE_TOP);
+      }
       this.regexpState = null;
-      this.privateNameStack = [];
+      if (this.privateNameStack.length > 0) this.privateNameStack = [];
       // acorn sets this one only once it reads a template; a new parser has it unset
       this.inTemplateElement = false;
     }
@@ -114,6 +136,23 @@ export const tweaks = definePlugin((Base) => {
       );
       if (node.type === "ParenthesizedExpression") sawParenthesized = true;
       return node;
+    }
+
+    checkUnreserved(ref: AcornNode) {
+      if (RESERVED_WORDS.has(ref.name)) super.checkUnreserved(ref);
+    }
+
+    canInsertSemicolon() {
+      const type = this.type;
+      if (type === tokTypes.eof || type === tokTypes.braceR) return true;
+      const input = this.input;
+      for (let i = this.lastTokEnd; i < this.start; i++) {
+        const code = input.charCodeAt(i);
+        if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
+          return true;
+        }
+      }
+      return false;
     }
 
     checkLocalExport() {
