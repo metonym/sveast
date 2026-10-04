@@ -22,6 +22,7 @@ import { js_parse_error, unexpected_eof } from "./errors";
 import { locate } from "./locator";
 import { mapChildren } from "./nodes";
 import { RESERVED_WORDS } from "./reserved-words";
+import { hasName } from "./scope-names";
 import { missingTypeScript } from "./support";
 import type {
   Expression,
@@ -34,6 +35,13 @@ import type {
 let sawParenthesized = false;
 
 const SCOPE_TOP = 1;
+const SCOPE_FUNCTION = 2;
+const SCOPE_SIMPLE_CATCH = 32;
+const SCOPE_CLASS_STATIC_BLOCK = 256;
+const SCOPE_VAR = SCOPE_TOP | SCOPE_FUNCTION | SCOPE_CLASS_STATIC_BLOCK;
+const BIND_LEXICAL = 2;
+const BIND_FUNCTION = 3;
+const BIND_SIMPLE_CATCH = 4;
 const LINE_BREAK = /\r\n?|\n|\u2028|\u2029/;
 
 const WORD_TESTERS = new Map<RegExp, WordTester>();
@@ -48,6 +56,61 @@ function wordTester(words: WordTester): WordTester {
   }
   return tester;
 }
+
+// acorn's declareName with `hasName` for its `indexOf`s; the TypeScript plugin's declareName calls it
+export const declarations = definePlugin(
+  (Base) =>
+    class extends Base {
+      declareName(name: string, bindingType: number, pos: number) {
+        let redeclared = false;
+        if (bindingType === BIND_LEXICAL) {
+          const scope = this.currentScope();
+          redeclared =
+            hasName(scope.lexical, name) ||
+            hasName(scope.functions, name) ||
+            hasName(scope.var, name);
+          scope.lexical.push(name);
+          if (this.inModule && scope.flags & SCOPE_TOP) {
+            delete this.undefinedExports[name];
+          }
+        } else if (bindingType === BIND_SIMPLE_CATCH) {
+          this.currentScope().lexical.push(name);
+        } else if (bindingType === BIND_FUNCTION) {
+          const scope = this.currentScope();
+          redeclared = this.treatFunctionsAsVar
+            ? hasName(scope.lexical, name)
+            : hasName(scope.lexical, name) || hasName(scope.var, name);
+          scope.functions.push(name);
+        } else {
+          for (let i = this.scopeStack.length - 1; i >= 0; --i) {
+            const scope = this.scopeStack[i];
+            if (
+              (hasName(scope.lexical, name) &&
+                !(
+                  scope.flags & SCOPE_SIMPLE_CATCH && scope.lexical[0] === name
+                )) ||
+              (!this.treatFunctionsAsVarInScope(scope) &&
+                hasName(scope.functions, name))
+            ) {
+              redeclared = true;
+              break;
+            }
+            scope.var.push(name);
+            if (this.inModule && scope.flags & SCOPE_TOP) {
+              delete this.undefinedExports[name];
+            }
+            if (scope.flags & SCOPE_VAR) break;
+          }
+        }
+        if (redeclared) {
+          this.raiseRecoverable(
+            pos,
+            `Identifier '${name}' has already been declared`,
+          );
+        }
+      }
+    },
+);
 
 // svelte's own acorn.js subclasses the same way
 export const tweaks = definePlugin((Base) => {
@@ -206,7 +269,7 @@ export const tweaks = definePlugin((Base) => {
   };
 });
 
-const JSParser = extendParser(tweaks);
+const JSParser = extendParser(declarations, tweaks);
 
 interface ParseContext {
   isTypeScript: boolean;

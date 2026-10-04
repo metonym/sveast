@@ -238,6 +238,7 @@ export interface ParserInternals {
   finishNode(node: Node, type: string): Node;
   finishNodeAt(node: Node, type: string, pos: number, loc?: Position): Node;
 
+  treatFunctionsAsVarInScope(scope: Scope): boolean;
   currentScope(): Scope;
   enterScope(flags: number): void;
   exitScope(): void;
