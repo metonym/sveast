@@ -317,3 +317,12 @@ export const SVELTE_OPTIONS_COMPONENTS: string[] = Array.from(
 <p>{label}</p>
 `),
 );
+
+/** A barrel of re-exports with long PascalCase names, like Carbon's `src/index.js`. */
+export const LONG_NAME_BARREL: string = flat(
+  Array.from(
+    { length: 500 },
+    (_, i) =>
+      `export { default as DataTableSkeletonRow${i} } from "./DataTable/DataTableSkeletonRow${i}.svelte";\n`,
+  ).join(""),
+);
