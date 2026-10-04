@@ -47,15 +47,48 @@ const FAST_PATH_SHAPES = [
   '"x" === a',
   "änderung.übersicht",
   "π",
+  "a ? b : c",
+  "a ? b : c ? d : e",
+  "a ? b ? c : d : e",
+  'open ? "region" : undefined',
+  "a ?b: c",
+  "a + b",
+  "a - b - c",
+  "a + b * c",
+  "a * b + c",
+  "a / b % c",
+  "a < b",
+  "a > b",
+  "a <= b && c >= d",
+  "a + b === c",
+  "a || b && c",
+  "a && b || c",
+  "a ?? b ?? c",
+  "a ?? b ? c : d",
+  "a - -b",
+  "-1",
+  "-a.b",
+  "!-a",
+  "f()",
+  "f(a)",
+  "f( a , b )",
+  "a.b()",
+  "a.b(c).d",
+  "f(a)(b)",
+  "f(a ? b : c, d + e)",
+  "f(g(h))",
+  "a[0](b)",
+  'getIconSize(size) === "sm"',
+  "!f(x) && g(y)",
+  "f(a)[0]",
+  "async(x)",
+  "a ?\n  b :\n  c",
+  "a /b/ c",
 ];
 
 const FALLBACK_SHAPES = [
   "  a",
-  "a ? b : c",
   "a, b",
-  "a + b",
-  "a < b",
-  "a > b",
   "a in b",
   "a instanceof b",
   "a ||= b",
@@ -64,9 +97,6 @@ const FALLBACK_SHAPES = [
   "a = b",
   "a?.b",
   "a?.[0]",
-  "f()",
-  "f(a)",
-  "a.b()",
   "() => a",
   "(a) => a + 1",
   "[a, b]",
@@ -76,8 +106,42 @@ const FALLBACK_SHAPES = [
   "new X()",
   "a.b[c]",
   "a[b]",
-  "-1",
   "+x",
+  "a ** b",
+  "-a ** b",
+  "a << b",
+  "a | b",
+  "a & b",
+  "a ?? b || c",
+  "a || b ?? c",
+  "a && b ?? c",
+  "a ?? b && c",
+  "a ?.5 : 1",
+  "a?.b ? c : d",
+  "a ? b = c : d",
+  "a ? b : c = d",
+  "f(...a)",
+  "f(a,)",
+  "f(a, ...b)",
+  "f(a)?.b",
+  "f(a)`t`",
+  "a.b(c) => d",
+  "async (x) => x",
+  "async(x) => x",
+  "a+ +b",
+  "a--",
+  "--a",
+  "a -= b",
+  "eval(x)",
+  "a //c\n",
+  "a /* c */ + b",
+  "f(/* c */ a)",
+  "a ? b : (c)",
+  "(a) ? b : c",
+  "f((a))",
+  "a ? b",
+  "a ? b :",
+  "f(a",
   "typeof a",
   "void 0",
   "this",
@@ -104,6 +168,10 @@ const ERROR_SHAPES = [
 ];
 
 const TS_FALLBACK_SHAPES = [
+  "a < b",
+  "a > b",
+  "f<T>(a)",
+  "a ? (b) : c",
   "a as string",
   "a!",
   "a satisfies string",
@@ -111,7 +179,18 @@ const TS_FALLBACK_SHAPES = [
   "a as const",
 ];
 
-const TS_FAST_PATH_SHAPES = ["a", "a.b", 'size === "sm"', "!flag", '"str"'];
+const TS_FAST_PATH_SHAPES = [
+  "a",
+  "a.b",
+  'size === "sm"',
+  "!flag",
+  '"str"',
+  "a ? b : c",
+  "f(a, b)",
+  "a + b * c",
+  "a ?? b",
+  "a ? b : f(c)",
+];
 
 const TS_PREFIX = '<script lang="ts"></script>';
 
@@ -221,14 +300,14 @@ describe("fast path fires end-to-end", () => {
   test("markup with only trivial expressions parses without any acorn expression call", () => {
     const before = acornExpressionParses.count;
     parse(
-      '<div class:a={x === "y"} data-b={items[0]} data-c={flag ?? "z"}>{!flag}{a.b}</div>',
+      '<div class:a={x === "y"} data-b={items[0]} data-c={flag ?? "z"} data-d={x ? 1 : 2}>{!flag}{a.b}{f(x)}</div>',
     );
     expect(acornExpressionParses.count).toBe(before);
   });
 
   test("non-trivial expressions still reach acorn", () => {
     const before = acornExpressionParses.count;
-    parse("<div data-a={x ? 1 : 2}>{f(x)}</div>");
+    parse("<div data-a={() => 1}>{a?.b}</div>");
     expect(acornExpressionParses.count).toBe(before + 2);
   });
 });
