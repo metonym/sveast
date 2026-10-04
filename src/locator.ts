@@ -1,3 +1,4 @@
+import { resetNames } from "./names";
 import type { Position } from "./types/estree";
 
 export interface Location {
@@ -13,6 +14,7 @@ let lastLine = 0;
 let breakEnds: number[] | null | undefined;
 
 export function setSource(value: string): void {
+  resetNames();
   source = value;
   lineStarts = [0];
   scanned = 0;
