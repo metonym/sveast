@@ -17,6 +17,7 @@ test("exports the parsers, the lexers, isRunesMode, walk and its helpers, and Pa
     "isValidType",
     "lexComponent",
     "lexImportsExports",
+    "lexStrings",
     "markupVisitorKeys",
     "parse",
     "parseImportsExports",

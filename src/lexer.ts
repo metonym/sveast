@@ -1,4 +1,11 @@
-import { isDigit, isWordAt, isWordCode, scan, skipTrivia } from "./scan";
+import {
+  isDigit,
+  isWordAt,
+  isWordCode,
+  scan,
+  scanLiterals,
+  skipTrivia,
+} from "./scan";
 
 export type {
   LexedAttribute,
@@ -77,6 +84,18 @@ export interface LexedExport extends LexedStatementBase {
 
 export type LexedStatement = LexedImport | LexedExport;
 
+/** A string literal, or the text of a template literal between two of its delimiters. */
+export interface LexedString {
+  /** `"string"` for a string literal, where `parseModule` has a `Literal`; `"template"` for a template's text, where it has a `TemplateElement`. */
+  kind: "string" | "template";
+  /** The value with escapes decoded, as a `Literal`'s `value` or a `TemplateElement`'s `value.cooked`: a template's line breaks read as `\n`. `null` for an escape that acorn rejects in a module, or that leaves a tagged template's `cooked` `null`. */
+  value: string | null;
+  /** The offset of the opening quote, or of a template's text, after its backtick or `}`. */
+  start: number;
+  /** The offset after the closing quote, or of the backtick or `${` after a template's text. */
+  end: number;
+}
+
 /**
  * A module's top-level `import` statements and `export … from`
  * re-exports, read without a parser: each statement's offsets, its
@@ -97,6 +116,40 @@ export function lexImportsExports(source: string): LexedStatement[] {
     return statement.end;
   });
   return statements;
+}
+
+/**
+ * A module's string literals and the text of its template literals, in
+ * source order, read without a parser: the offsets and value of each
+ * `Literal` with a string value and each `TemplateElement` that
+ * {@link parseModule} returns, for a tool that only needs a script's
+ * strings, such as one that looks for class names. Comments and regular
+ * expressions are skipped, as `parseModule` skips them. It tells a regular
+ * expression from a division by the token before it, as acorn's tokenizer
+ * does, and doesn't check syntax, so it never throws. A template's raw
+ * text is `source.slice(start, end)`, with `\r\n` and `\r` as `\n`.
+ */
+export function lexStrings(source: string): LexedString[] {
+  const lexer = new Lexer(source);
+  const strings: LexedString[] = [];
+  scanLiterals(source, (start, end, template) => {
+    strings.push(
+      template
+        ? {
+            kind: "template",
+            value: lexer.cooked(start, end, true),
+            start,
+            end,
+          }
+        : {
+            kind: "string",
+            value: lexer.cooked(start + 1, end - 1, false),
+            start,
+            end,
+          },
+    );
+  });
+  return strings;
 }
 
 class Lexer {
@@ -445,6 +498,29 @@ class Lexer {
       }
     }
     return null;
+  }
+
+  /** The text from `from` to `to` with its escapes decoded, and a template's `\r\n` and `\r` as `\n`, or `null` where acorn rejects an escape. */
+  cooked(from: number, to: number, template: boolean): string | null {
+    const source = this.source;
+    let value = "";
+    let chunk = from;
+    for (let i = from; i < to; ) {
+      const code = source.charCodeAt(i);
+      if (code === 92) {
+        const escaped = this.escape(i + 1);
+        if (escaped === null) return null;
+        value += source.slice(chunk, i) + escaped;
+        i = chunk = this.escapeEnd;
+      } else if (code === 13 && template) {
+        value += `${source.slice(chunk, i)}\n`;
+        i += source.charCodeAt(i + 1) === 10 ? 2 : 1;
+        chunk = i;
+      } else {
+        i++;
+      }
+    }
+    return value + source.slice(chunk, to);
   }
 
   /** The value of the escape after a `\` in a string, ending at `escapeEnd`, or `null` where acorn rejects it in a module. */

@@ -11,9 +11,10 @@ export type {
   LexedScript,
   LexedSource,
   LexedStatement,
+  LexedString,
   LexedStyle,
 } from "./lexer";
-export { lexComponent, lexImportsExports } from "./lexer";
+export { lexComponent, lexImportsExports, lexStrings } from "./lexer";
 export type {
   ParseImportsExportsOptions,
   ParseModuleOptions,

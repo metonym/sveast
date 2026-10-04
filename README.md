@@ -27,6 +27,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`parseImportsExports`](#parseimportsexportssource-options--moduledeclaration) | A module's `import` and `export` statements, without parsing the rest | `sveast` |
 | [`lexImportsExports`](#leximportsexportssource--lexedstatement) | Their offsets, sources and names, without loading a parser | `sveast/lexer` |
 | [`lexComponent`](#lexcomponentsource--lexedcomponent) | A component's `<script>`s, `<style>` and `<svelte:options>`, with their attributes and offsets, without loading a parser | `sveast/lexer` |
+| [`lexStrings`](#lexstringssource--lexedstring) | A module's string and template literals, with their offsets and values, without loading a parser | `sveast/lexer` |
 | [`createParser`, `createModuleParser`](#smaller-bundles-sveastcore-and-sveastmodule) | The parsers without TypeScript, named HTML entities or the template parser, for a smaller bundle | `sveast/core`, `sveast/module` |
 | [`isValidType`](#isvalidtypetext-options--boolean) | Whether a JSDoc type is safe to copy into a `.d.ts` | `sveast` |
 | [`isRunesMode`](#isrunesmodesource--boolean) | Whether svelte compiles a component in runes mode, mostly without parsing it | `sveast` |
@@ -228,6 +229,24 @@ async function parseComponent(source: string) {
   return parser.parse(source);
 }
 ```
+
+### `lexStrings(source) => LexedString[]`
+
+From `sveast/lexer`, and also `sveast`. A module's string literals and the text of its template literals, in source order, read without parsing, for a tool that only needs a script's strings, such as one that collects the class names a component's script can produce. With `parse(source, { script: false })` for the markup, it reads a component's scripts in a fraction of the time: on Carbon's 258 components, `parse` with `comments: false` takes 19.5 ms, and `script: false` plus `lexStrings` on each script 9.6 ms, of which `lexStrings` is 1.55 ms, 15% of what `parseModule` takes on the same scripts.
+
+Where `parseModule` accepts the module, the strings are its `Literal`s with a string value and its `TemplateElement`s, types, imports and directives included, with the same offsets and values. Comments and regular expressions are skipped, and it never throws. It tells a regular expression from a division by the token before it, as acorn's tokenizer does, but acorn's parser can overrule that guess and `lexStrings` can't: a statement that starts with a regular expression after a line break without a `;`, following `let a`, an `import`, a type alias ending in `}`, or a block after `case …:` or a label, reads as a division, as does `/` after a variable named `of`, and a quote in that regular expression starts a string. It matched `parseModule` on all 21,443 modules and component scripts it accepts from the projects under [Parity and performance](#parity-and-performance), and on all 9,647 of TypeScript's conformance tests that `parseModule` accepts.
+
+```ts
+import { lexStrings } from "sveast/lexer";
+
+for (const string of lexStrings(source)) {
+  string.kind; // "string", a Literal: start and end include the quotes
+  // "template", a TemplateElement: the text between the backtick, `${` or `}` around it
+  string.value; // escapes decoded, as Literal's value or TemplateElement's value.cooked
+}
+```
+
+`value` is `null` for an escape acorn rejects in a module, such as `"\1"`, or one that leaves a tagged template's `cooked` `null`. A template's line breaks read as `\n` in `value`; its raw text is `source.slice(start, end)`, with `\r\n` and `\r` as `\n`.
 
 ### Smaller bundles: `sveast/core` and `sveast/module`
 

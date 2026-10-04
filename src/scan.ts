@@ -104,8 +104,37 @@ export function scan(
   localExports: boolean,
   parseAt: (start: number, keyword: number) => number,
 ): void {
+  tokenize(
+    source,
+    lastStatementKeyword(source, localExports),
+    localExports,
+    parseAt,
+    undefined,
+  );
+}
+
+/**
+ * Calls `literal` with the offsets of each string, quotes included, and of
+ * the text of each template literal between its delimiters, read with
+ * `scan`'s tokenizer through the whole source.
+ */
+export function scanLiterals(
+  source: string,
+  literal: (start: number, end: number, template: boolean) => void,
+): void {
+  tokenize(source, source.length - 1, false, undefined, literal);
+}
+
+function tokenize(
+  source: string,
+  last: number,
+  localExports: boolean,
+  parseAt: ((start: number, keyword: number) => number) | undefined,
+  literal:
+    | ((start: number, end: number, template: boolean) => void)
+    | undefined,
+): void {
   const length = source.length;
-  const last = lastStatementKeyword(source, localExports);
   const stack: number[] = [];
   let pos = source.startsWith("#!") ? lineEnd(source, 2) : 0;
   let prev = STATEMENT_START;
@@ -152,6 +181,7 @@ export function scan(
       }
       const kind = wasAfterDot ? VALUE : wordKind(source, start, pos);
       if (
+        parseAt !== undefined &&
         stack.length === 0 &&
         (kind === EXPORT
           ? localExports || isReexport(source, pos)
@@ -179,14 +209,20 @@ export function scan(
     pos++;
     switch (code) {
       case 34:
-      case 39:
+      case 39: {
+        const start = pos - 1;
         pos = stringEnd(source, pos, code);
+        literal?.(start, pos, false);
         prev = VALUE;
         break;
-      case 96:
+      }
+      case 96: {
+        const start = pos;
         pos = templateEnd(source, pos, stack);
+        literal?.(start, quasiEnd(source, pos), true);
         prev = source.charCodeAt(pos - 1) === 123 ? OPERATOR : VALUE;
         break;
+      }
       case 47: {
         const end = prev === VALUE ? -1 : regexEnd(source, pos);
         if (end === -1) {
@@ -212,7 +248,9 @@ export function scan(
       case 125: {
         const open = stack.pop();
         if (open === TEMPLATE) {
+          const start = pos;
           pos = templateEnd(source, pos, stack);
+          literal?.(start, quasiEnd(source, pos), true);
           prev = source.charCodeAt(pos - 1) === 123 ? OPERATOR : VALUE;
         } else if (open === OBJECT) prev = VALUE;
         else statementEnd();
@@ -461,6 +499,14 @@ function templateEnd(source: string, pos: number, stack: number[]): number {
     }
   }
   return source.length;
+}
+
+/** The end of a template's text that `templateEnd` stopped after: the offset of its backtick or `${`. */
+function quasiEnd(source: string, pos: number): number {
+  const code = source.charCodeAt(pos - 1);
+  if (code === 96) return pos - 1;
+  if (code === 123 && source.charCodeAt(pos - 2) === 36) return pos - 2;
+  return pos;
 }
 
 /** The offset after a regular expression's closing `/`, or -1 if the line ends first. */

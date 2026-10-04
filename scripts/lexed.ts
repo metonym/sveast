@@ -1,8 +1,11 @@
-import type {
-  Identifier,
-  LexedStatement,
-  ModuleDeclaration,
-  StringLiteral,
+import {
+  type Identifier,
+  type LexedStatement,
+  type LexedString,
+  type ModuleDeclaration,
+  type Program,
+  type StringLiteral,
+  walk,
 } from "../src/index";
 
 interface Comparable {
@@ -140,4 +143,29 @@ export function expectedLexed(nodes: ModuleDeclaration[]): Comparable[] {
             })),
     };
   });
+}
+
+/** The strings `lexStrings` should return for a module `parseModule` returned: each string `Literal` and each `TemplateElement`, in source order. */
+export function expectedStrings(program: Program): LexedString[] {
+  const strings: LexedString[] = [];
+  walk(program, {
+    enter(node) {
+      if (node.type === "Literal" && typeof node.value === "string") {
+        strings.push({
+          kind: "string",
+          value: node.value,
+          start: node.start,
+          end: node.end,
+        });
+      } else if (node.type === "TemplateElement") {
+        strings.push({
+          kind: "template",
+          value: node.value.cooked ?? null,
+          start: node.start,
+          end: node.end,
+        });
+      }
+    },
+  });
+  return strings.sort((a, b) => a.start - b.start);
 }
