@@ -146,6 +146,36 @@ test("syntax errors are ParseErrors with svelte's code and position", () => {
   expect(error?.frame).toBe("1: <div>\n2:   {#if x}\n3: </div>\n   ^");
 });
 
+const LINES = Array.from({ length: 12 }, (_, i) => `<p>${i}</p>`);
+
+test.each([
+  ["first line", `{:else}\n${LINES.join("\n")}`],
+  ["second line", `<p>\n{:else}\n${LINES.join("\n")}`],
+  ["middle", [...LINES.slice(0, 6), "{:else}", ...LINES.slice(6)].join("\n")],
+  ["second-to-last line", `${LINES.join("\n")}\n{:else}\n<p>`],
+  ["last line, no line break after", `${LINES.join("\n")}\n{:else}`],
+  ["last line, a line break after", `${LINES.join("\n")}\n{:else}\n`],
+  ["CRLF", `${LINES.join("\r\n")}\r\n{:else}\r\n${LINES.join("\r\n")}`],
+  ["one line", "{:else}"],
+  ["past the trimmed end", `${LINES.join("\n")}\n<div>\n\n\n`],
+])("error frames match svelte's: %s", (_, source) => {
+  const thrown = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      return error;
+    }
+    throw new Error("parsed");
+  };
+  const ours = thrown(() => parse(source)) as ParseError;
+  const theirs = thrown(() =>
+    svelteParse(source, { modern: true }),
+  ) as ParseError;
+  expect(ours.frame).toBe(theirs.frame);
+  expect(ours.start).toEqual(theirs.start);
+  expect(ours.end).toEqual(theirs.end);
+});
+
 test.each([
   ["{#if x}", "block_unclosed"],
   ["<div>", "element_unclosed"],

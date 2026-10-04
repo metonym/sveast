@@ -7,13 +7,28 @@ export interface Location {
 }
 
 let source = "";
-let lineStarts: number[] | undefined;
+let lineStarts = [0];
+let scanned = 0;
 let lastLine = 0;
 
 export function setSource(value: string): void {
   source = value;
-  lineStarts = undefined;
+  lineStarts = [0];
+  scanned = 0;
   lastLine = 0;
+}
+
+/** Finds line starts up to the first one past `index`, so an error near the start doesn't scan the whole source. */
+function scanTo(index: number): void {
+  while (scanned <= index) {
+    const newline = source.indexOf("\n", scanned);
+    if (newline === -1) {
+      scanned = Number.POSITIVE_INFINITY;
+      return;
+    }
+    scanned = newline + 1;
+    lineStarts.push(scanned);
+  }
 }
 
 function lineStartsOf(text: string): number[] {
@@ -42,7 +57,7 @@ function lineOf(starts: number[], index: number, hint: number): number {
 }
 
 export function locate(index: number): Location {
-  lineStarts ??= lineStartsOf(source);
+  scanTo(index);
   lastLine = lineOf(lineStarts, index, lastLine);
   return {
     line: lastLine + 1,
@@ -56,8 +71,18 @@ export function position(index: number): { line: number; column: number } {
   return { line, column };
 }
 
-export function sourceLines(): string[] {
-  return source.split("\n");
+/** The text of the 0-based `line`, without its line break, or `undefined` past the last line. */
+export function lineText(line: number): string | undefined {
+  while (
+    lineStarts.length <= line + 1 &&
+    scanned !== Number.POSITIVE_INFINITY
+  ) {
+    scanTo(scanned);
+  }
+  if (line >= lineStarts.length) return undefined;
+  const end =
+    line + 1 < lineStarts.length ? lineStarts[line + 1] - 1 : source.length;
+  return source.slice(lineStarts[line], end);
 }
 
 /**
