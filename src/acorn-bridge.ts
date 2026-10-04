@@ -21,6 +21,7 @@ import {
 } from "./comments";
 import { js_parse_error, unexpected_eof } from "./errors";
 import { lineBreaksBefore, locate } from "./locator";
+import { internName } from "./names";
 import { mapChildren } from "./nodes";
 import { RESERVED_WORDS } from "./reserved-words";
 import { hasName } from "./scope-names";
@@ -249,6 +250,7 @@ export const tweaks = definePlugin((Base) => {
       const start = this.pos;
       let end = start;
       let code = input.charCodeAt(end);
+      let hash = 0;
       while (
         (code >= 97 && code <= 122) ||
         (code >= 65 && code <= 90) ||
@@ -256,12 +258,13 @@ export const tweaks = definePlugin((Base) => {
         code === 95 ||
         code === 36
       ) {
+        hash = (hash * 31 + code) | 0;
         code = input.charCodeAt(++end);
       }
       if (code >= 128 || code === 92) return super.readWord1();
       this.containsEsc = false;
       this.pos = end;
-      return input.slice(start, end);
+      return internName(input, start, end, hash);
     }
 
     readWord() {
