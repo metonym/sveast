@@ -27,7 +27,12 @@ import {
   scriptTexts,
   TYPESCRIPT,
 } from "./corpus";
-import { CONSTRUCTS, flat, SVELTE_OPTIONS_COMPONENTS } from "./workloads";
+import {
+  CONSTRUCTS,
+  flat,
+  LONG_NAME_BARREL,
+  SVELTE_OPTIONS_COMPONENTS,
+} from "./workloads";
 
 function mustParse(
   name: string,
@@ -143,6 +148,12 @@ group("parseModule", () => {
     sources(CARBON_JS),
     { typescript: false },
     kb(CARBON_JS),
+  );
+  moduleTask(
+    "barrel of long names",
+    [LONG_NAME_BARREL],
+    { typescript: false },
+    `500 re-exports, ${Math.round(LONG_NAME_BARREL.length / 1000)} kB`,
   );
   moduleTask(
     "carbon .d.ts",

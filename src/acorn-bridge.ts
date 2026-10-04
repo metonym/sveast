@@ -258,7 +258,7 @@ export const tweaks = definePlugin((Base) => {
         code === 95 ||
         code === 36
       ) {
-        hash = (hash * 31 + code) | 0;
+        hash = (Math.imul(hash, 31) + code) | 0;
         code = input.charCodeAt(++end);
       }
       if (code >= 128 || code === 92) return super.readWord1();
