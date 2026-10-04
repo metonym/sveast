@@ -362,20 +362,21 @@ export function parseProgram(
 
 /**
  * Where acorn's constructor would put a parser starting at `index` of the
- * component: the column from the last `\n`, and with `locations`, the line
+ * component, with `locations`: the column from the last `\n`, and the line
  * after every line break before it. Every markup expression's source has
  * the component's text before `index`, so the locator's line starts give
- * it without scanning back from each expression.
+ * it without scanning back from each expression. Without `locations`,
+ * acorn never reads its line or line start (only `curPosition` does, and
+ * it returns nothing then), so any location will do, and asking the
+ * locator would index every line start up to `index`.
  */
 function acornLocation(
   index: number,
   locations: boolean | undefined,
 ): { line: number; column: number } {
+  if (!locations) return { line: 1, column: 0 };
   const { column } = locate(index);
-  return {
-    line: locations ? lineBreaksBefore(index - column) + 1 : 1,
-    column,
-  };
+  return { line: lineBreaksBefore(index - column) + 1, column };
 }
 
 export const acornExpressionParses = { count: 0 };
