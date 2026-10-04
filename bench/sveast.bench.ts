@@ -124,6 +124,13 @@ group("carbon", () => {
     parseTask(component.path, [component], undefined, kb([component]));
   }
   parseTask("largest, loc: true", CARBON_LARGEST, { loc: true });
+  parseTask("all components, comments: false", CARBON_COMPONENTS, {
+    comments: false,
+  });
+  parseTask("all components, script: false", CARBON_COMPONENTS, {
+    comments: false,
+    script: false,
+  });
 });
 
 group("parseModule", () => {
