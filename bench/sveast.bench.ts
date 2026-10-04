@@ -4,6 +4,7 @@ import {
   isRunesMode,
   lexComponent,
   lexImportsExports,
+  lexStrings,
   markupVisitorKeys,
   ParseError,
   type ParseOptions,
@@ -248,6 +249,31 @@ group("lexImportsExports", () => {
     "largest carbon script",
     [largest],
     `${Math.round(largest.length / 1000)} kB`,
+  );
+});
+
+group("lexStrings", () => {
+  const lexTask = (name: string, inputs: string[], description: string) => {
+    const run = () => inputs.map(lexStrings);
+    task(
+      name,
+      lean(run, (lists) => lists.length),
+      { description },
+    );
+  };
+
+  lexTask(
+    "carbon .js",
+    CARBON_JS.map((m) => flat(m.source)),
+    kb(CARBON_JS),
+  );
+  const scripts = CARBON_COMPONENTS.flatMap(({ source }) =>
+    scriptTexts(source).map(flat),
+  );
+  lexTask(
+    "carbon scripts",
+    scripts,
+    `${scripts.length} scripts, ${Math.round(scripts.join("").length / 1000)} kB`,
   );
 });
 
