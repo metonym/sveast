@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.9.0 — 2026-10-03
+
+**Fixes**
+
+- The TypeScript plugin rejects `({ m() })` and `x = function f();`. It used
+  to accept them as `TSDeclareMethod` and `TSDeclareFunction`. A missing body
+  is allowed only on function declarations and class methods, as overloads,
+  matching acorn-typescript.
+- `isRunesMode` no longer throws a plain `Error` on a snippet signature that
+  TypeScript reads as a type assertion, such as `<T<U>>(x)`. svelte takes
+  `params` off whatever parsed, so `parameters` is undefined; sveast assumed
+  the array.
+
+**Performance**
+
+- Markup expressions reuse one acorn parser. The last call's parser is reset
+  when its options match, and a parser that threw is dropped. Each expression
+  used to construct a new one.
+- `checkUnreserved` returns unless the name is a reserved word, instead of
+  walking the scope stack for `inGenerator`, `inAsync` and the this-scope on
+  every identifier. `canInsertSemicolon` scans for a line break instead of
+  slicing and testing a regular expression. `reset` keeps the context, label,
+  scope and private-name stacks when they are still in the state a new parser
+  starts in. `ostia ab`, 15 rounds: geomean −6.0%. The corpus is −4.2%
+  (−5.7% with `loc: true`), Carbon's largest components −5% to −9%,
+  `parseModule` of Carbon's `.js` −8.4%, expression tags −10.8%, special tags
+  −15.7%, typed patterns −11.0%.
+- Declaring a name looks it up in a `Set` once a scope has more than 16
+  names. acorn's `declareName` used `indexOf`, and the TypeScript plugin
+  `includes`, so n declarations in one scope took O(n²). `parseModule` of n
+  `const` declarations: 1,000 from 2.02 ms to 0.85 ms, 4,000 from 20.0 ms to
+  2.19 ms, 16,000 from 272 ms to 8.74 ms. Script workloads: geomean −3.1%;
+  TypeScript ambiguities (100 kB) −20%, comments (100 kB) −15%.
+- A `ParseError` no longer splits the whole source into lines. The locator
+  finds line starts only as far as the offsets it's asked about, and the
+  frame slices its five lines from them. An error at the start of a large
+  component goes from 122 µs to 8.9 µs. The parser throws and catches
+  `ParseError`s internally, as when an `{#each}` expression reads too far.
+- A reused parser gets its line from the locator. `reset` used
+  `lastIndexOf("\n")` from the expression, and with `locations` counted the
+  line by splitting everything before it, both O(offset) per expression.
+  Expression tags on one line, 100 kB: −38%. The same with CR line breaks and
+  `loc: true`: −41%.
+- A markup destructuring pattern is read off the component's own text.
+  It was parsed as `` `${prefix} = 1` ``, which copied the component up to
+  the pattern, and strings sliced from the copy kept that copy alive. An AST
+  of a 100 kB component with an `{#each}` pattern with a default in every row
+  retains 1.2 MB instead of 60.6 MB. Destructuring patterns, 100 kB: 20.1 ms
+  to 11.6 ms. `{#each}` with defaults, 100 kB: 25.7 ms to 12.0 ms. Typed
+  patterns, 10 kB: 3.16 ms to 2.72 ms. Geomean −7.7%.
+- The expression fast path reads calls, unary `-`, arithmetic, relational,
+  equality and logical operators, and conditionals, so `open ? "region" :
+  undefined`, `getIconSize(size)` and `a + b * c` no longer construct an
+  acorn parse. It still hands acorn `??` next to `||` or `&&`, `<` and `>`
+  under TypeScript, and comments, spread, trailing commas, `**`, shifts and
+  assignments. Corpus −3.6%, Carbon's DataTable −9.2%, special tags −48%,
+  expression tags −24% (−38% with `loc: true`, −85% on one line), snippets
+  and render tags −27%.
+- Repeated identifier and keyword text shares one string. The corpus's ASTs
+  hold 51,000 names and 4,800 distinct ones; each used to be a new slice of
+  the source, and a slice of three characters or more keeps its whole source
+  alive. Ten parses of the corpus kept alive retain 147.3 MB instead of
+  153.8 MB. Timing is unchanged (geomean −0.3%).
+
 ## 0.8.0 — 2026-10-02
 
 **Features**
