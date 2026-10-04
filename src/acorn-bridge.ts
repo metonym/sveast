@@ -19,7 +19,7 @@ import {
   skipComment,
 } from "./comments";
 import { js_parse_error, unexpected_eof } from "./errors";
-import { locate } from "./locator";
+import { lineBreaksBefore, locate } from "./locator";
 import { mapChildren } from "./nodes";
 import { RESERVED_WORDS } from "./reserved-words";
 import { hasName } from "./scope-names";
@@ -355,6 +355,24 @@ export function parseProgram(
   );
 }
 
+/**
+ * Where acorn's constructor would put a parser starting at `index` of the
+ * component: the column from the last `\n`, and with `locations`, the line
+ * after every line break before it. Every markup expression's source has
+ * the component's text before `index`, so the locator's line starts give
+ * it without scanning back from each expression.
+ */
+function acornLocation(
+  index: number,
+  locations: boolean | undefined,
+): { line: number; column: number } {
+  const { column } = locate(index);
+  return {
+    line: locations ? lineBreaksBefore(index - column) + 1 : 1,
+    column,
+  };
+}
+
 export const acornExpressionParses = { count: 0 };
 
 interface SpareParser {
@@ -411,9 +429,10 @@ export function parseExpressionAt(
   acornExpressionParses.count += 1;
   sawParenthesized = false;
   const node = estree<Expression>(
-    run(context, source, index, true, (ParserClass, options) =>
-      parseExpressionWith(ParserClass, options, source, index),
-    ),
+    run(context, source, index, true, (ParserClass, options) => {
+      options.startLocation ??= acornLocation(index, options.locations);
+      return parseExpressionWith(ParserClass, options, source, index);
+    }),
   );
 
   const end = Math.max(node.end, lastCommentEnd());

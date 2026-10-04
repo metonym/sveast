@@ -1,4 +1,5 @@
 import { parse } from "sveast";
+import { parse as svelteParse } from "svelte/compiler";
 import { declarations, tweaks } from "../src/acorn-bridge";
 import {
   extendParser,
@@ -99,6 +100,27 @@ describe("reset", () => {
 });
 
 describe("reused expression parsers", () => {
+  test.each([
+    ["LF", "\n"],
+    ["CRLF", "\r\n"],
+    ["CR", "\r"],
+    ["U+2028", "\u2028"],
+    ["mixed", "\r\n\r\u2029\n"],
+  ])("give svelte's loc with %s line breaks", (_, br) => {
+    const source = [
+      "<p>{a(b)} {c ? d : e}</p>",
+      "{#each items as { id, label = 'x' }, i (id)}",
+      "  <li title={f.map((g) => g.h)}>{label}</li>",
+      "{/each}",
+      "<p>{x?.y}</p>",
+    ].join(br);
+    const ours = parse(source, { loc: true });
+    const theirs = svelteParse(source, { modern: true });
+    expect(JSON.parse(JSON.stringify(ours))).toEqual(
+      JSON.parse(JSON.stringify(theirs)),
+    );
+  });
+
   test("parse the same after an expression that throws", () => {
     const source = `<script lang="ts">let a: number = 1;</script>{a satisfies number}{(b) => [c, d]}<p class={\`x\${y}\`}>{z}</p>`;
     const before = parse(source, { loc: true });

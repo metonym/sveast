@@ -10,12 +10,14 @@ let source = "";
 let lineStarts = [0];
 let scanned = 0;
 let lastLine = 0;
+let breakEnds: number[] | null | undefined;
 
 export function setSource(value: string): void {
   source = value;
   lineStarts = [0];
   scanned = 0;
   lastLine = 0;
+  breakEnds = undefined;
 }
 
 /** Finds line starts up to the first one past `index`, so an error near the start doesn't scan the whole source. */
@@ -64,6 +66,32 @@ export function locate(index: number): Location {
     column: index - lineStarts[lastLine],
     character: index,
   };
+}
+
+const REGEX_LINE_BREAK = /\r\n?|\n|\u2028|\u2029/g;
+const REGEX_OTHER_LINE_BREAK = /[\r\u2028\u2029]/;
+
+/** How many line breaks as acorn counts them, `\r\n`, `\r`, `\n`, U+2028 and U+2029, end at or before `offset`. */
+export function lineBreaksBefore(offset: number): number {
+  if (breakEnds === undefined) {
+    breakEnds = REGEX_OTHER_LINE_BREAK.test(source) ? [] : null;
+    REGEX_LINE_BREAK.lastIndex = 0;
+    while (breakEnds !== null && REGEX_LINE_BREAK.exec(source) !== null) {
+      breakEnds.push(REGEX_LINE_BREAK.lastIndex);
+    }
+  }
+  if (breakEnds === null) {
+    scanTo(offset);
+    return lineOf(lineStarts, offset, lastLine);
+  }
+  let low = 0;
+  let high = breakEnds.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (breakEnds[mid] <= offset) low = mid + 1;
+    else high = mid;
+  }
+  return low;
 }
 
 export function position(index: number): { line: number; column: number } {
