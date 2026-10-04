@@ -1,4 +1,4 @@
-import { type Location, locate, sourceLines } from "./locator";
+import { type Location, lineText, locate } from "./locator";
 
 export type NodeLike = number | { start?: number; end?: number } | null;
 
@@ -45,12 +45,16 @@ const tabsToSpaces = (text: string) =>
   text.replace(REGEX_LEADING_TABS, (match) => "  ".repeat(match.length));
 
 function codeFrame(line: number, column: number): string {
-  const lines = sourceLines();
   const frameStart = Math.max(0, line - 2);
-  const frameEnd = Math.min(line + 3, lines.length);
+  const lines: string[] = [];
+  for (let i = frameStart; i < line + 3; i++) {
+    const text = lineText(i);
+    if (text === undefined) break;
+    lines.push(text);
+  }
+  const frameEnd = frameStart + lines.length;
   const digits = String(frameEnd + 1).length;
   return lines
-    .slice(frameStart, frameEnd)
     .map((text, i) => {
       const lineNumber = String(i + frameStart + 1).padStart(digits, " ");
       if (frameStart + i !== line)
