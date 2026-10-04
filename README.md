@@ -108,7 +108,7 @@ Apple M2, medians of warm calls. The corpus is `tests/corpus`: all of carbon-com
 | sveast | **58.5 kB** |
 | `sveast/core`'s `createParser()`, without TypeScript and named HTML entities | **41.0 kB** |
 
-In a fresh process, importing the parser takes 5.3 ms with sveast and 44.7 ms with `svelte/compiler`, and a first parse of the whole corpus takes 65 ms against 161 ms. Keeping ten parses of the corpus alive retains 154 MB with sveast, 268 MB with `loc: true`, and 293 MB with `svelte/compiler`.
+In a fresh process, importing the parser takes 5.3 ms with sveast and 44.7 ms with `svelte/compiler`, and a first parse of the whole corpus takes 65 ms against 161 ms. Keeping ten parses of the corpus alive retains 147 MB with sveast, 260 MB with `loc: true`, and 294 MB with `svelte/compiler`.
 
 ## API
 
