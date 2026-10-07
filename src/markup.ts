@@ -1,6 +1,14 @@
 const REGEX_LANG_ATTRIBUTE =
   /<!--[\s\S]*?-->|<script\s+(?:[^>]*|(?:[^=>'"/]+=(?:"[^"]*"|'[^']*'|[^>\s]+)\s+)*)lang=(["'])?([^"' >]+)\1[^>]*>/y;
 
+export function withoutByteOrderMark(source: string): string {
+  return source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+}
+
+export function isDigit(code: number): boolean {
+  return code >= 48 && code <= 57;
+}
+
 export function isWhitespace(code: number): boolean {
   if (code === 32 || (code <= 13 && code >= 9)) return true;
   if (code < 160) return false;

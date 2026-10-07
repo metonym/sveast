@@ -1,4 +1,4 @@
-import { isWhitespace } from "./markup";
+import { isDigit, isWhitespace } from "./markup";
 
 const STATEMENT_START = 0;
 const OPERATOR = 1;
@@ -400,10 +400,6 @@ export function closingBracket(
     }
   }
   return length;
-}
-
-export function isDigit(code: number): boolean {
-  return code >= 48 && code <= 57;
 }
 
 function isLineBreak(code: number): boolean {

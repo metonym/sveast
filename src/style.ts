@@ -4,7 +4,7 @@ import {
   css_selector_invalid,
   unexpected_eof,
 } from "./errors";
-import { isWhitespace, styleContentEnd } from "./markup";
+import { isDigit, isWhitespace, styleContentEnd } from "./markup";
 import type { TemplateParserState } from "./state";
 import type { AST } from "./types/svelte-ast";
 
@@ -677,10 +677,6 @@ function readComment(state: TemplateParserState): AST.CSS.CSSComment {
   state.eat("*/", true);
 
   return { type: "CSSComment", value, start, end: state.index };
-}
-
-function isDigit(code: number): boolean {
-  return code >= 48 && code <= 57;
 }
 
 function isAsciiLetter(code: number): boolean {

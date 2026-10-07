@@ -8,6 +8,7 @@ import {
   nameEnd,
   skipWhitespace,
   styleContentEnd,
+  withoutByteOrderMark,
 } from "./markup";
 import { closingBracket } from "./scan";
 
@@ -111,8 +112,7 @@ const CLOSING_OPTIONS_TAG = "</svelte:options";
  * doesn't check syntax and never throws.
  */
 export function lexComponent(input: string): LexedComponent {
-  const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
-  const source = text.trimEnd();
+  const source = withoutByteOrderMark(input).trimEnd();
   return lex(source, isTypeScript(source), null);
 }
 

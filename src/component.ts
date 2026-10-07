@@ -5,6 +5,7 @@ import {
   svelte_meta_invalid_content,
 } from "./errors";
 import { setSource } from "./locator";
+import { withoutByteOrderMark } from "./markup";
 import type { ParseOptions } from "./options";
 import { readOptions } from "./read-options";
 import { TemplateParserState } from "./state";
@@ -28,7 +29,7 @@ export function componentState(
   options: ParseOptions | undefined,
   support: Support,
 ): TemplateParserState {
-  const template = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+  const template = withoutByteOrderMark(source);
   setSource(template);
   return new TemplateParserState(
     template.trimEnd(),
