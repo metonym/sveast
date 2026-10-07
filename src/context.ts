@@ -12,10 +12,8 @@ export function readPattern(state: TemplateParserState): Pattern {
   const start = state.index;
   const id = state.readIdentifierName();
 
-  if (id.name !== "") {
-    const typeAnnotation = readTypeAnnotation(state);
-    return { ...id, typeAnnotation };
-  }
+  if (id.name !== "")
+    return { ...id, typeAnnotation: readTypeAnnotation(state) };
 
   const char = state.source[state.index];
   if (char !== "{" && char !== "[") expected_pattern(state.index);

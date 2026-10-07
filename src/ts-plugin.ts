@@ -5,6 +5,7 @@ import {
   definePlugin,
   type ExportedNames,
   type ForInit,
+  hasLineBreak,
   type Node,
   type ParserOptions,
   type Scope,
@@ -128,7 +129,6 @@ export const tsPlugin = definePlugin((Base) => {
       }
     }
 
-    // the fields above as a new parser has them; acorn-bridge's tweaks reset acorn's
     reset() {
       this.inType = false;
       this.tsNoConditional = false;
@@ -190,16 +190,7 @@ export const tsPlugin = definePlugin((Base) => {
     }
 
     hasPrecedingLineBreak() {
-      return this.tsHasLineBreak(this.lastTokEnd, this.start);
-    }
-
-    tsHasLineBreak(from: number, to: number) {
-      for (let i = from; i < to; i++) {
-        const code = this.input.charCodeAt(i);
-        if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029)
-          return true;
-      }
-      return false;
+      return hasLineBreak(this.input, this.lastTokEnd, this.start);
     }
 
     tsPeekPos(from: number = this.pos) {
@@ -224,7 +215,7 @@ export const tsPlugin = definePlugin((Base) => {
     }
 
     tsPeekSameLine() {
-      return !this.tsHasLineBreak(this.pos, this.tsPeekPos());
+      return !hasLineBreak(this.input, this.pos, this.tsPeekPos());
     }
 
     tsNextIsIdentifierOnSameLine() {
@@ -559,8 +550,9 @@ export const tsPlugin = definePlugin((Base) => {
     tsParseInferConstraint() {
       if (!this.eat(tt._extends)) return;
       const constraint = this.tsWithConditional(true, () => this.tsParseType());
-      if (this.tsNoConditional || this.type !== tt.question) return constraint;
-      return;
+      return this.tsNoConditional || this.type !== tt.question
+        ? constraint
+        : undefined;
     }
 
     tsParseTypeParameterName() {
@@ -1445,7 +1437,6 @@ export const tsPlugin = definePlugin((Base) => {
     ) {
       if (isMethod && this.type === tt.colon)
         node.returnType = this.tsParseTypeAnnotation(true);
-      // a function may have no body, as an overload, only if it starts at `tsBodilessAt`: a declaration or a class method
       if (
         isArrowFunction ||
         this.type === tt.braceL ||
@@ -1636,9 +1627,8 @@ export const tsPlugin = definePlugin((Base) => {
       super.checkLocalExport(id);
     }
 
-    checkExport() {
-      // skips acorn's duplicate export check, which TypeScript's overloads and merged declarations would fail
-    }
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: TypeScript's overloads and merged declarations export a name more than once
+    checkExport() {}
 
     raiseRecoverable(pos: number, message: string) {
       if (message === "Duplicate constructor in the same class") return;
