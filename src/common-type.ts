@@ -276,11 +276,6 @@ class CommonTypeReader {
   }
 }
 
-/**
- * Whether `text` is one of the common shapes of a JSDoc type, read without
- * the TypeScript parser, whose first calls cost milliseconds. `true` means
- * it's certainly one valid type; `false` means "ask the parser".
- */
 export function isCommonType(text: string): boolean {
   return new CommonTypeReader(text).readAll();
 }

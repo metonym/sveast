@@ -6,6 +6,7 @@ import {
   type ExportedNames,
   extendParser,
   type ForInit,
+  hasLineBreak,
   type ParserConstructor,
   type ParserInternals,
   type ParserOptions,
@@ -60,7 +61,6 @@ function wordTester(words: WordTester): WordTester {
   return tester;
 }
 
-// acorn's declareName with `hasName` for its `indexOf`s; the TypeScript plugin's declareName calls it
 export const declarations = definePlugin(
   (Base) =>
     class extends Base {
@@ -115,7 +115,6 @@ export const declarations = definePlugin(
     },
 );
 
-// svelte's own acorn.js subclasses the same way
 export const tweaks = definePlugin((Base) => {
   const { keywordTypes, tokTypes } = Base.acorn;
   const keywordTokens = new Map(
@@ -135,7 +134,6 @@ export const tweaks = definePlugin((Base) => {
       initialContext ??= this.context[0];
     }
 
-    // acorn's constructor from `this.input` on, for a module; `tests/acorn-bridge.test.ts` checks it against a new parser
     reset(
       input: string,
       pos: number,
@@ -191,7 +189,6 @@ export const tweaks = definePlugin((Base) => {
       }
       this.regexpState = null;
       if (this.privateNameStack.length > 0) this.privateNameStack = [];
-      // acorn sets this one only once it reads a template; a new parser has it unset
       this.inTemplateElement = false;
     }
 
@@ -210,20 +207,15 @@ export const tweaks = definePlugin((Base) => {
 
     canInsertSemicolon() {
       const type = this.type;
-      if (type === tokTypes.eof || type === tokTypes.braceR) return true;
-      const input = this.input;
-      for (let i = this.lastTokEnd; i < this.start; i++) {
-        const code = input.charCodeAt(i);
-        if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
-          return true;
-        }
-      }
-      return false;
+      return (
+        type === tokTypes.eof ||
+        type === tokTypes.braceR ||
+        hasLineBreak(this.input, this.lastTokEnd, this.start)
+      );
     }
 
-    checkLocalExport() {
-      // skips acorn's check that exported names are declared, as svelte's acorn.js does
-    }
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: svelte's acorn.js doesn't check that exported names are declared
+    checkLocalExport() {}
 
     skipSpace() {
       const input = this.input;
@@ -287,12 +279,10 @@ interface ParseContext {
 
 const REGEX_POSITION_SUFFIX = / \(\d+:\d+\)$/;
 
-/** acorn's nodes are estree nodes; the plugin's parse methods are typed with its own looser `Node`. */
 function estree<T extends Node>(node: AcornNode): T {
   return node as unknown as T;
 }
 
-/** acorn's `SyntaxError` for a syntax error, which carries the offset it points at. */
 function isSyntaxErrorAt(
   error: unknown,
 ): error is SyntaxError & { pos: number } {
@@ -360,16 +350,6 @@ export function parseProgram(
   );
 }
 
-/**
- * Where acorn's constructor would put a parser starting at `index` of the
- * component, with `locations`: the column from the last `\n`, and the line
- * after every line break before it. Every markup expression's source has
- * the component's text before `index`, so the locator's line starts give
- * it without scanning back from each expression. Without `locations`,
- * acorn never reads its line or line start (only `curPosition` does, and
- * it returns nothing then), so any location will do, and asking the
- * locator would index every line start up to `index`.
- */
 function acornLocation(
   index: number,
   locations: boolean | undefined,
@@ -394,13 +374,7 @@ type Read = (parser: ParserInternals) => AcornNode;
 
 const readExpression: Read = (parser) => parser.parseExpression();
 
-/**
- * acorn's `parseExpressionAt`, reading with `read`, but with the last
- * call's parser when the options match: a markup expression is short, so
- * constructing a parser is a large part of its cost. A parser that threw
- * is dropped.
- */
-function parseWith(
+function parseWithSpare(
   ParserClass: ParserConstructor,
   options: ParserOptions,
   source: string,
@@ -442,7 +416,7 @@ function parseMarkupAt(
   sawParenthesized = false;
   return run(context, source, index, true, (ParserClass, options) => {
     options.startLocation ??= acornLocation(index, options.locations);
-    return parseWith(ParserClass, options, source, index, read);
+    return parseWithSpare(ParserClass, options, source, index, read);
   });
 }
 
@@ -464,14 +438,6 @@ export function parseExpressionAt(
   };
 }
 
-/**
- * The left side of `${source} = 1` read from `index`, as svelte reads a
- * destructuring pattern, without building that string: what acorn's
- * `parseMaybeAssign` does with its left side when it sees `=`. Building it
- * copied the component up to the pattern, and the pattern's strings kept
- * the copy alive. `undefined` if the expression at `index` ends before
- * `source` does.
- */
 export function parsePatternAt(
   context: ParseContext,
   source: string,
@@ -528,11 +494,6 @@ export function parseStatementAt(
   );
 }
 
-/**
- * Parses the top-level statement at each offset `find` passes to
- * `parseAt`, with one parser, so a name exported or imported twice is an
- * error as in a whole module. `parseAt` returns the statement's end.
- */
 export function parseStatementsAt(
   context: ParseContext,
   source: string,

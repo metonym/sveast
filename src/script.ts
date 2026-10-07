@@ -34,9 +34,15 @@ export function readScript(
   if (!close) element_unclosed(source.length, "script");
   state.index = close.index + close[0].length;
 
-  const program = state.script
+  const program: Program = state.script
     ? parseProgram(state, source.slice(0, close.index), scriptStart)
-    : skippedProgram(scriptStart, close.index);
+    : {
+        type: "Program",
+        start: scriptStart,
+        end: close.index,
+        body: [],
+        sourceType: "module",
+      };
   program.start = scriptStart;
   if (program.loc) {
     Object.assign(program.loc.start, position(start));
@@ -62,7 +68,6 @@ export function readScript(
     if (attribute.name === "context") {
       const value = attribute.value;
       if (
-        value === true ||
         !Array.isArray(value) ||
         value.length !== 1 ||
         value[0].type !== "Text" ||
@@ -82,9 +87,4 @@ export function readScript(
     content: program,
     attributes,
   };
-}
-
-/** The `Program` of a script `parse(source, { script: false })` doesn't parse: its bounds, no statements. */
-function skippedProgram(start: number, end: number): Program {
-  return { type: "Program", start, end, body: [], sourceType: "module" };
 }

@@ -13,14 +13,8 @@ declare global {
 }
 
 export interface TokenType {
-  label: string;
   keyword: string;
-  beforeExpr: boolean;
   startsExpr: boolean;
-  isLoop: boolean;
-  isAssign: boolean;
-  prefix: boolean;
-  postfix: boolean;
   binop: number | null;
 }
 
@@ -74,14 +68,6 @@ interface TokenTypes {
   _with: TokenType;
 }
 
-interface TokContext {
-  token: string;
-  isExpr: boolean;
-  preserveSpace: boolean;
-  override: ((parser: ParserInternals) => void) | null;
-  generator: boolean;
-}
-
 export interface Scope {
   flags: number;
   var: string[];
@@ -90,17 +76,6 @@ export interface Scope {
   tsTypes?: string[];
   tsExportOnly?: string[];
   tsEnums?: string[];
-}
-
-interface Label {
-  kind: string | null;
-  name?: string;
-  statementStart?: number;
-}
-
-interface PrivateNameScope {
-  declared: Record<string, string>;
-  used: Node[];
 }
 
 export interface DestructuringErrors {
@@ -147,12 +122,10 @@ export interface Node {
   arguments: Node[];
 }
 
-/** What acorn tests keywords and reserved words with: a `RegExp`, or anything with its `test`. */
 export interface WordTester {
   test(word: string): boolean;
 }
 
-/** `Options`, plus where in the source a parse starts, which acorn's published type omits. */
 export interface ParserOptions extends Options {
   startLocation?: { line: number; column: number };
 }
@@ -177,15 +150,15 @@ export interface ParserInternals {
   lastTokEndLoc: Position;
   curLine: number;
   lineStart: number;
-  context: TokContext[];
+  context: unknown[];
   exprAllowed: boolean;
   containsEsc: boolean;
   strict: boolean;
   inModule: boolean;
   treatFunctionsAsVar: boolean;
   scopeStack: Scope[];
-  privateNameStack: PrivateNameScope[];
-  labels: Label[];
+  privateNameStack: unknown[];
+  labels: unknown[];
   undefinedExports: Record<string, Node>;
   yieldPos: number;
   awaitPos: number;
@@ -194,12 +167,6 @@ export interface ParserInternals {
   potentialArrowInForAwait: boolean;
   regexpState: unknown;
   inTemplateElement?: boolean;
-
-  /**
-   * Points the parser at `input` from `pos`, in the state a new parser with
-   * the same options would start in, so one parser can be reused. sveast's
-   * plugins add it; acorn's `Parser` has none.
-   */
   reset?(
     input: string,
     pos: number,
@@ -207,7 +174,7 @@ export interface ParserInternals {
   ): void;
   parse(): Node;
   curPosition(): Position;
-  initialContext(): TokContext[];
+  initialContext(): unknown[];
   skipSpace(): void;
   readWord(): void;
   readWord1(): string;
@@ -448,11 +415,6 @@ export interface ParserConstructor {
 
 type Plugin = (BaseParser: typeof Parser) => typeof Parser;
 
-/**
- * acorn's published types hide the parser's internals and its constructor,
- * so `Parser.extend` can't take a plugin written against them. These two
- * functions are where the types are widened to what the runtime has.
- */
 export function definePlugin(
   plugin: (Base: ParserConstructor) => ParserConstructor,
 ): Plugin {
@@ -464,4 +426,14 @@ export function definePlugin(
 
 export function extendParser(...plugins: Plugin[]): ParserConstructor {
   return Parser.extend(...plugins) as unknown as ParserConstructor;
+}
+
+export function hasLineBreak(input: string, from: number, to: number): boolean {
+  for (let i = from; i < to; i++) {
+    const code = input.charCodeAt(i);
+    if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
+      return true;
+    }
+  }
+  return false;
 }

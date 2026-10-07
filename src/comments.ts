@@ -15,6 +15,8 @@ export interface Comment {
 let commentSource = "";
 let commentSink: Comment[] = [];
 let commentEnd = 0;
+let queue: Comment[] = [];
+let next = 0;
 
 export function bindOnComment(source: string, comments: Comment[]): void {
   commentSource = source;
@@ -22,12 +24,10 @@ export function bindOnComment(source: string, comments: Comment[]): void {
   commentEnd = 0;
 }
 
-/** Where the last comment acorn reported since {@link bindOnComment} ends, or 0. */
 export function lastCommentEnd(): number {
   return commentEnd;
 }
 
-/** acorn's `onComment` for `comments: false`: records where the comment ends, as the parser needs, and drops it. */
 export function skipComment(
   _block: boolean,
   _value: string,
@@ -115,9 +115,6 @@ export function attachComments(
   }
 }
 
-let queue: Comment[] = [];
-let next = 0;
-
 const LIST_KEYS = new Map([
   ["BlockStatement", "body"],
   ["Program", "body"],
@@ -125,7 +122,6 @@ const LIST_KEYS = new Map([
   ["ObjectExpression", "properties"],
 ]);
 
-/** Whether `source` between `from` and `to` has a character other than `,`, `)`, space or tab. */
 function gapBlocked(from: number, to: number): boolean {
   for (let i = from; i < to; i++) {
     const code = commentSource.charCodeAt(i);

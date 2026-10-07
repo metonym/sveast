@@ -10,8 +10,7 @@ import type {
   SimpleLiteral,
 } from "./types/estree";
 
-// acorn's `binop` for each binary operator the fast path reads
-const PRECEDENCE: Record<string, number> = {
+const PRECEDENCE = {
   "||": 1,
   "??": 1,
   "&&": 2,
@@ -29,6 +28,8 @@ const PRECEDENCE: Record<string, number> = {
   "/": 10,
   "%": 10,
 };
+
+type Operator = keyof typeof PRECEDENCE;
 
 function literal(
   source: string,
@@ -133,7 +134,6 @@ function scanAtom(
   }
 }
 
-/** The arguments of a call from after its `(`, and where the `)` ends. */
 function scanArguments(
   source: string,
   from: number,
@@ -185,12 +185,11 @@ function scanUnary(
   };
 }
 
-/** The binary operator at `index`, if the fast path reads it: not `**`, `<<`, a compound assignment, a comment, or `<` and `>` in TypeScript. */
 function operatorAt(
   source: string,
   index: number,
   typescript: boolean,
-): string | null {
+): Operator | null {
   const code = source.charCodeAt(index);
   const next = source.charCodeAt(index + 1);
   switch (code) {
@@ -226,7 +225,6 @@ function operatorAt(
   }
 }
 
-/** acorn's `parseExprOp`: binary operators above `minPrecedence` after `left`. */
 function scanBinary(
   source: string,
   left: Expression,
@@ -239,8 +237,6 @@ function scanBinary(
   if (operator === null) return left;
   const precedence = PRECEDENCE[operator];
   if (precedence <= minPrecedence) return left;
-  const logical = operator === "||" || operator === "&&";
-  const coalesce = operator === "??";
   const operand = scanUnary(
     source,
     skipWhitespace(source, index + operator.length),
@@ -250,42 +246,40 @@ function scanBinary(
   const right = scanBinary(
     source,
     operand,
-    coalesce ? 2 : precedence,
+    operator === "??" ? 2 : precedence,
     typescript,
   );
   if (!right) return null;
-  const node: Expression =
-    logical || coalesce
-      ? {
-          type: "LogicalExpression",
-          start: left.start,
-          end: right.end,
-          left,
-          operator: operator as "||" | "&&" | "??",
-          right,
-        }
-      : {
-          type: "BinaryExpression",
-          start: left.start,
-          end: right.end,
-          left,
-          operator: operator as "==",
-          right,
-        };
-  if (logical || coalesce) {
+  let node: Expression;
+  if (operator === "||" || operator === "&&" || operator === "??") {
     const after = operatorAt(
       source,
-      skipWhitespace(source, node.end),
+      skipWhitespace(source, right.end),
       typescript,
     );
-    // acorn rejects `??` next to `||` or `&&` without parentheses
-    if (coalesce ? after === "||" || after === "&&" : after === "??")
+    if (operator === "??" ? after === "||" || after === "&&" : after === "??")
       return null;
+    node = {
+      type: "LogicalExpression",
+      start: left.start,
+      end: right.end,
+      left,
+      operator,
+      right,
+    };
+  } else {
+    node = {
+      type: "BinaryExpression",
+      start: left.start,
+      end: right.end,
+      left,
+      operator,
+      right,
+    };
   }
   return scanBinary(source, node, minPrecedence, typescript);
 }
 
-/** acorn's `parseMaybeConditional`, without assignments. */
 function scanConditional(
   source: string,
   from: number,
@@ -323,24 +317,15 @@ function scanConditional(
   };
 }
 
-/** `}`, `)`, `,` or `:`, which end an operand wherever the fast path reads one. */
 function isClosing(code: number): boolean {
   return code === 125 || code === 41 || code === 44 || code === 58;
 }
 
 function atTerminator(source: string, from: number): boolean {
-  const index = skipWhitespace(source, from);
-  if (index >= source.length) return false;
-  const code = source.charCodeAt(index);
+  const code = source.charCodeAt(skipWhitespace(source, from));
   return code === 125 || code === 41;
 }
 
-/**
- * The expression at `from` if it's made only of what acorn reads the same
- * way every time, names, simple literals, member chains, calls, unary `!`
- * and `-`, binary and logical operators and conditionals, and is followed
- * by `}` or `)`; otherwise `null`, and acorn reads it.
- */
 function scanTrivialExpression(
   source: string,
   from: number,
