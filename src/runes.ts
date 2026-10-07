@@ -20,7 +20,7 @@ import type {
   Super,
 } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
-import { SKIP, walk } from "./walk";
+import { SKIP, STOP, walk } from "./walk";
 
 const RUNES = new Set([
   "$state",
@@ -87,18 +87,21 @@ export function isRunesMode(source: string): boolean {
   );
   let candidates = false;
   let inMarkup = false;
+  let onlyAwait = true;
   REGEX_CANDIDATE.lastIndex = 0;
   for (
     let match = REGEX_CANDIDATE.exec(text);
-    match !== null && !inMarkup;
+    match !== null && !(inMarkup && !onlyAwait);
     match = REGEX_CANDIDATE.exec(text)
   ) {
     const at = match.index;
     candidates = true;
-    inMarkup = !scripts.some(({ start, end }) => at >= start && at < end);
+    onlyAwait &&= match[0] === "await";
+    inMarkup ||= !scripts.some(({ start, end }) => at >= start && at < end);
   }
   if (!candidates) return false;
   if (
+    !onlyAwait &&
     option === undefined &&
     !text.includes("\\u") &&
     callsRune(text, scripts)
@@ -111,7 +114,27 @@ export function isRunesMode(source: string): boolean {
     ? parse(source, options)
     : parseSections(source, options);
   if (ast.options?.runes !== undefined) return ast.options.runes;
+  if (onlyAwait) {
+    return (
+      (ast.instance !== undefined &&
+        awaitsOutsideFunctions(ast.instance.content)) ||
+      awaitsOutsideFunctions(ast.fragment)
+    );
+  }
   return usesRunes(ast);
+}
+
+function awaitsOutsideFunctions(root: AST.SvelteNode): boolean {
+  let awaits = false;
+  walk(root, {
+    enter(node) {
+      if (isFunction(node)) return SKIP;
+      if (node.type !== "AwaitExpression") return;
+      awaits = true;
+      return STOP;
+    },
+  });
+  return awaits;
 }
 
 function booleanValue(attribute: LexedAttribute): boolean | undefined {
