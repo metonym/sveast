@@ -52,15 +52,12 @@ function codeFrame(line: number, column: number): string {
     if (text === undefined) break;
     lines.push(text);
   }
-  const frameEnd = frameStart + lines.length;
-  const digits = String(frameEnd + 1).length;
+  const digits = String(frameStart + lines.length + 1).length;
   return lines
     .map((text, i) => {
-      const lineNumber = String(i + frameStart + 1).padStart(digits, " ");
-      if (frameStart + i !== line)
-        return `${lineNumber}: ${tabsToSpaces(text)}`;
-      const indicator = `${" ".repeat(digits + 2 + tabsToSpaces(text.slice(0, column)).length)}^`;
-      return `${lineNumber}: ${tabsToSpaces(text)}\n${indicator}`;
+      const numbered = `${String(frameStart + i + 1).padStart(digits, " ")}: ${tabsToSpaces(text)}`;
+      if (frameStart + i !== line) return numbered;
+      return `${numbered}\n${" ".repeat(digits + 2 + tabsToSpaces(text.slice(0, column)).length)}^`;
     })
     .join("\n");
 }

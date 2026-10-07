@@ -11,8 +11,7 @@ const support = {
 
 /**
  * Parses a Svelte component into svelte's modern AST, the same as
- * `parse(source, { modern: true })` from svelte/compiler. From svelte's
- * `Parser` constructor (`phases/1-parse/index.js`).
+ * `parse(source, { modern: true })` from svelte/compiler.
  *
  * Throws a {@link ParseError} on a syntax error.
  */

@@ -45,7 +45,6 @@ const REGEX_NAMESPACED_NAME =
 const REGEX_CUSTOM_ELEMENT_NAME =
   /^[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9.\-_\u00B7\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u037D\u037F-\u1FFF\u200C-\u200D\u203F-\u2040\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u{10000}-\u{EFFFF}]*)?$/u;
 
-// ZWNJ and ZWJ are allowed in identifiers on their own
 const ID_JOINERS = "\\u200C\\u200D";
 const REGEX_COMPONENT_NAME = new RegExp(
   `^(?:\\p{Lu}[$${ID_JOINERS}\\p{ID_Continue}.]*|\\p{ID_Start}[$${ID_JOINERS}\\p{ID_Continue}]*(?:\\.[$${ID_JOINERS}\\p{ID_Continue}]+)+)$`,
@@ -214,7 +213,6 @@ function closeElement(state: TemplateParserState, start: number): void {
   }
 }
 
-/** Svelte's `type` and `name` for a tag always go together, which TypeScript can't see. */
 function createElement(
   type: ElementType,
   start: number,
@@ -353,7 +351,6 @@ function readTopLevelBlock(
   state.root[slot] = script;
 }
 
-/** The HTML comment that a top-level `<script>`/`<style>` at `start` directly follows, whitespace aside. */
 function commentBefore(
   nodes: AST.Fragment["nodes"],
   start: number,
@@ -400,7 +397,6 @@ function literalTag(chunk: Chunk): Expression {
   };
 }
 
-/** Reads attributes up to `>` or `/>`, rejecting a repeated name as svelte does. */
 function readAttributes<T extends AttributeLike>(
   state: TemplateParserState,
   into: T[],
@@ -451,7 +447,6 @@ function rejectQuote(state: TemplateParserState): void {
   }
 }
 
-/** An attribute of a top-level `<script>` or `<style>`: a plain value, no expressions or directives. */
 function readStaticAttribute(state: TemplateParserState): AST.Attribute | null {
   const start = state.index;
   const name = readName(state, true);
@@ -462,8 +457,9 @@ function readStaticAttribute(state: TemplateParserState): AST.Attribute | null {
     state.allowWhitespace();
     const { source } = state;
     const at = state.index;
+    const quoted = isQuote(source.charCodeAt(at));
     let end = -1;
-    if (isQuote(source.charCodeAt(at))) {
+    if (quoted) {
       const close = source.indexOf(source[at], at + 1);
       if (close !== -1) end = close + 1;
     }
@@ -479,7 +475,7 @@ function readStaticAttribute(state: TemplateParserState): AST.Attribute | null {
       if (end === at) expected_attribute_value(at);
     }
     state.index = end;
-    const quotes = isQuote(source.charCodeAt(at)) ? 1 : 0;
+    const quotes = quoted ? 1 : 0;
     const raw = source.slice(at + quotes, end - quotes);
     value = [
       text(
@@ -574,11 +570,6 @@ function readBraceAttribute(
   return createAttribute(state, id, start, state.index, value);
 }
 
-/**
- * What svelte builds for every directive. Its published types leave
- * `modifiers` off some and give `class:` a literal `name`, so the result is
- * cast to `AST.Directive` once, at the end.
- */
 interface DirectiveFields {
   start: number;
   end: number;
@@ -652,7 +643,6 @@ function directive(
   return node as AST.Directive;
 }
 
-/** `"..."`, `'...'` or an unquoted value, as text and `{expression}` chunks. */
 function readAttributeValue(
   state: TemplateParserState,
 ): AST.ExpressionTag | Chunk[] {
@@ -677,16 +667,16 @@ function readAttributeValue(
       quoted ? quote : undefined,
     );
   } catch (error) {
-    // `<a b={{c:1} />`: acorn read `/>` as the start of a regex.
-    const at = error instanceof ParseError ? error.position?.[0] : undefined;
+    const jsErrorAt =
+      error instanceof ParseError && error.code === "js_parse_error"
+        ? error.position?.[0]
+        : undefined;
     if (
-      error instanceof ParseError &&
-      error.code === "js_parse_error" &&
-      at !== undefined &&
-      state.source.startsWith("/>", at - 1)
+      jsErrorAt !== undefined &&
+      state.source.startsWith("/>", jsErrorAt - 1)
     ) {
-      state.index = at;
-      expected_token(at, quoted ? String.fromCharCode(quote) : "}");
+      state.index = jsErrorAt;
+      expected_token(jsErrorAt, quoted ? String.fromCharCode(quote) : "}");
     }
     throw error;
   }
@@ -699,10 +689,6 @@ function readAttributeValue(
     : value[0];
 }
 
-/**
- * Text and `{expression}` chunks up to where `ends` says. With `quote`, text
- * runs up to the next `{` or quote are skipped in one go.
- */
 function readSequence(
   state: TemplateParserState,
   ends: (source: string, i: number) => boolean,
