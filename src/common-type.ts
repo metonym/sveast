@@ -72,12 +72,29 @@ class CommonTypeReader {
   }
 
   word(): string | undefined {
-    if (!isWordStart(this.peek())) return undefined;
     const start = this.pos;
-    let end = start + 1;
+    return this.skipWord() ? this.text.slice(start, this.pos) : undefined;
+  }
+
+  skipWord(): boolean {
+    if (!isWordStart(this.peek())) return false;
+    let end = this.pos + 1;
     while (isWordPart(this.text.charCodeAt(end))) end++;
     this.pos = end;
-    return this.text.slice(start, end);
+    return true;
+  }
+
+  keyword(word: string): boolean {
+    this.peek();
+    const end = this.pos + word.length;
+    if (
+      !this.text.startsWith(word, this.pos) ||
+      isWordPart(this.text.charCodeAt(end))
+    ) {
+      return false;
+    }
+    this.pos = end;
+    return true;
   }
 
   name(): boolean {
@@ -143,9 +160,7 @@ class CommonTypeReader {
   }
 
   operatorType(): boolean {
-    const start = this.pos;
-    if (this.word() === "keyof") return this.operatorType();
-    this.pos = start;
+    if (this.keyword("keyof")) return this.operatorType();
     if (!this.primaryType()) return false;
     while (this.eat("[")) {
       if (this.eat("]")) continue;
@@ -174,7 +189,7 @@ class CommonTypeReader {
     }
     if (RESERVED_WORDS.has(word)) return false;
     while (this.eat(".")) {
-      if (this.word() === undefined) return false;
+      if (!this.skipWord()) return false;
     }
     return !this.eat("<") || this.typeArguments();
   }
@@ -187,9 +202,7 @@ class CommonTypeReader {
   }
 
   typeQuery(): boolean {
-    const start = this.pos;
-    if (this.word() === "import") return this.importType(false);
-    this.pos = start;
+    if (this.keyword("import")) return this.importType(false);
     do {
       if (!this.name()) return false;
     } while (this.eat("."));
