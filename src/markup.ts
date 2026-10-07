@@ -50,6 +50,21 @@ export function isTypeScript(source: string): boolean {
   return false;
 }
 
+export function closingScriptTag(source: string, from: number): number {
+  let close = source.indexOf("</script", from);
+  while (close !== -1) {
+    if (source.charCodeAt(skipWhitespace(source, close + 8)) === GT) {
+      return close;
+    }
+    close = source.indexOf("</script", close + 8);
+  }
+  return -1;
+}
+
+export function closingScriptTagEnd(source: string, close: number): number {
+  return skipWhitespace(source, close + 8) + 1;
+}
+
 const VOID_ELEMENTS = new Set(
   "area base br col command embed hr img input keygen link meta param source track wbr".split(
     " ",

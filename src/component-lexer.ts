@@ -1,5 +1,7 @@
 import { closingTagOmitted } from "./autoclosing";
 import {
+  closingScriptTag,
+  closingScriptTagEnd,
   endsUnquotedValue,
   isQuote,
   isTypeScript,
@@ -89,10 +91,9 @@ const SLASH = 47;
 const EQUALS = 61;
 const BRACE = 123;
 
-const REGEX_SECTION_TAG = /<(?:script|style|svelte:options)(?![^\s/>])/g;
-const REGEX_CLOSING_SCRIPT_TAG = /<\/script\s*>/g;
 const REGEX_CLOSING_STYLE_TAG_END = /\s*>/y;
 const REGEX_CLOSING_TEXTAREA = /<\/textarea(\s[^>]*)?>/iy;
+const SECTION_TAG_NAMES = ["cript", "tyle", "velte:options"];
 const CLOSING_OPTIONS_TAG = "</svelte:options";
 
 /**
@@ -153,15 +154,30 @@ function lex(
 
 function lastSectionTag(source: string): number {
   let last = -1;
-  REGEX_SECTION_TAG.lastIndex = 0;
-  for (
-    let match = REGEX_SECTION_TAG.exec(source);
-    match !== null;
-    match = REGEX_SECTION_TAG.exec(source)
-  ) {
-    last = match.index;
+  let i = source.indexOf("<s");
+  while (i !== -1) {
+    const end = sectionTagNameEnd(source, i + 2);
+    if (end !== -1) {
+      const code = source.charCodeAt(end);
+      if (
+        end === source.length ||
+        isWhitespace(code) ||
+        code === SLASH ||
+        code === GT
+      ) {
+        last = i;
+      }
+    }
+    i = source.indexOf("<s", i + 2);
   }
   return last;
+}
+
+function sectionTagNameEnd(source: string, from: number): number {
+  for (const name of SECTION_TAG_NAMES) {
+    if (source.startsWith(name, from)) return from + name.length;
+  }
+  return -1;
 }
 
 function expressionEnd(source: string, from: number): number {
@@ -283,15 +299,14 @@ function readScript(
   contentStart: number,
   attributes: LexedAttribute[],
 ): LexedScript {
-  REGEX_CLOSING_SCRIPT_TAG.lastIndex = contentStart;
-  const close = REGEX_CLOSING_SCRIPT_TAG.exec(source);
-  const contentEnd = close ? close.index : source.length;
+  const close = closingScriptTag(source, contentStart);
+  const contentEnd = close === -1 ? source.length : close;
   const module = attributes.some(
     (attribute) => attribute.name === "module" || attribute.name === "context",
   );
   return {
     start,
-    end: close ? close.index + close[0].length : source.length,
+    end: close === -1 ? source.length : closingScriptTagEnd(source, close),
     context: module ? "module" : "default",
     attributes,
     content: { start: contentStart, end: contentEnd },
