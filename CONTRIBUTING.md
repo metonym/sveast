@@ -114,7 +114,7 @@ They group mismatches by where they first differ and exit non-zero on any. On th
 
 ## Performance
 
-Changes to `src/` must not make things slower. `bench/sveast.bench.ts` holds the workloads: the corpus, Carbon's largest components and its modules, and each parser path in isolation at 10 kB and 100 kB (`bench/workloads.ts`), where about 10× the time means it scales linearly. Workload names are stable so `bench:ab` keeps pairing them.
+Changes to `src/` must not make things slower. `bench/sveast.bench.ts` holds the workloads: the corpus, Carbon's components and modules, every public function (the lexers, `isValidType` on the corpus's JSDoc types, `walk`, `createLocator`, `isReference`, `extractIdentifiers`, `sveast/core` and `sveast/module`), and each parser path in isolation at 10 kB and 100 kB (`bench/workloads.ts`), where about 10× the time means it scales linearly. Workload names are stable so `bench:ab` keeps pairing them.
 
 | Command | Use |
 |:---|:---|

@@ -50,8 +50,6 @@ const allScripts = TYPESCRIPT.flatMap(({ source }) => scriptTexts(source));
 const Ours = Parser.extend(tsPlugin);
 const Theirs = Parser.extend(acornTypeScript());
 const OPTIONS = { sourceType: "module", ecmaVersion: "latest" } as const;
-// A standalone module parse rejects `export { x }` of a name declared
-// elsewhere, which a component script or a `.d.ts` may have.
 const bothParse = (source: string) => {
   try {
     Ours.parse(source, OPTIONS);

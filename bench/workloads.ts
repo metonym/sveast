@@ -91,7 +91,6 @@ export const CONSTRUCTS: Construct[] = [
       repeatTo(
         bytes,
         () =>
-          // the component holds a template literal; split so it isn't read as a placeholder
           "<p>{a(b)} {c ? d : e} {f.map((g) => g.h)} {`t-$" +
           "{i}`} {a + b * c} {x?.y} {(z)} {[1, 2]} {{ k: v }.k} {i++}</p>\n",
       ),
@@ -318,7 +317,6 @@ export const SVELTE_OPTIONS_COMPONENTS: string[] = Array.from(
 `),
 );
 
-/** A barrel of re-exports with long PascalCase names, like Carbon's `src/index.js`. */
 export const LONG_NAME_BARREL: string = flat(
   Array.from(
     { length: 500 },
