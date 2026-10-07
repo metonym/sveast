@@ -113,45 +113,32 @@ const CLOSING_OPTIONS_TAG = "</svelte:options";
 export function lexComponent(input: string): LexedComponent {
   const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
   const source = text.trimEnd();
-  const component: LexedComponent = {
-    typescript: isTypeScript(source),
-    instance: null,
-    module: null,
-    css: null,
-    options: null,
-  };
-  lex(source, component, null);
-  return component;
+  return lex(source, isTypeScript(source), null);
 }
 
-/** The offsets of a component's top-level `<script>`, `<style>` and `<svelte:options>` tags, duplicates included, and of its top-level HTML comments, as `[start, end]` pairs, flat. */
 export interface TopLevelTags {
   tags: number[];
   comments: number[];
 }
 
-/** {@link TopLevelTags} of `source`, which has no byte order mark or trailing whitespace, as `parse` reads it. */
 export function topLevelTags(source: string): TopLevelTags {
   const found: TopLevelTags = { tags: [], comments: [] };
-  lex(
-    source,
-    {
-      typescript: false,
-      instance: null,
-      module: null,
-      css: null,
-      options: null,
-    },
-    found,
-  );
+  lex(source, false, found);
   return found;
 }
 
 function lex(
   source: string,
-  component: LexedComponent,
+  typescript: boolean,
   found: TopLevelTags | null,
-): void {
+): LexedComponent {
+  const component: LexedComponent = {
+    typescript,
+    instance: null,
+    module: null,
+    css: null,
+    options: null,
+  };
   const last = lastSectionTag(source);
   const stack: string[] = [];
   let i = 0;
@@ -161,6 +148,7 @@ function lex(
     else if (code === BRACE) i = readMustache(source, i, stack);
     else i++;
   }
+  return component;
 }
 
 function lastSectionTag(source: string): number {
@@ -332,7 +320,6 @@ function readStyle(
   };
 }
 
-/** Attributes of a top-level `<script>` or `<style>`, read as `parse` reads them: plain values, no expressions. */
 function readStaticAttributes(
   source: string,
   from: number,
@@ -372,7 +359,6 @@ function readStaticAttributes(
   }
 }
 
-/** Skips an element's attributes, collecting them into `into` if given, and returns the offset of the `/` or `>` that ends the tag. */
 function readAttributes(
   source: string,
   from: number,

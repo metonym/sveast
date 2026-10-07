@@ -2,6 +2,7 @@ import {
   isDigit,
   isWordAt,
   isWordCode,
+  lineEnd,
   scan,
   scanLiterals,
   skipTrivia,
@@ -133,30 +134,20 @@ export function lexStrings(source: string): LexedString[] {
   const lexer = new Lexer(source);
   const strings: LexedString[] = [];
   scanLiterals(source, (start, end, template) => {
-    strings.push(
-      template
-        ? {
-            kind: "template",
-            value: lexer.cooked(start, end, true),
-            start,
-            end,
-          }
-        : {
-            kind: "string",
-            value: lexer.cooked(start + 1, end - 1, false),
-            start,
-            end,
-          },
-    );
+    const quote = template ? 0 : 1;
+    strings.push({
+      kind: template ? "template" : "string",
+      value: lexer.cooked(start + quote, end - quote, template),
+      start,
+      end,
+    });
   });
   return strings;
 }
 
 class Lexer {
   readonly source: string;
-  /** The cursor. */
   pos = 0;
-  /** The offset after the last token read. */
   end = 0;
   escapeEnd = 0;
 
@@ -166,24 +157,14 @@ class Lexer {
 
   statement(keyword: number): LexedStatement {
     this.pos = this.end = keyword + 6;
-    const statement: LexedStatement =
-      this.source.charCodeAt(keyword) === 105
-        ? {
-            kind: "import",
-            start: keyword,
-            end: 0,
-            source: null,
-            typeOnly: false,
-            specifiers: [],
-          }
-        : {
-            kind: "export",
-            start: keyword,
-            end: 0,
-            source: null,
-            typeOnly: false,
-            specifiers: [],
-          };
+    const statement: LexedStatement = {
+      kind: this.source.charCodeAt(keyword) === 105 ? "import" : "export",
+      start: keyword,
+      end: 0,
+      source: null,
+      typeOnly: false,
+      specifiers: [],
+    };
     const read =
       statement.kind === "import"
         ? this.import(statement)
@@ -203,7 +184,7 @@ class Lexer {
       return this.finish();
     }
     if (this.isWord("type")) {
-      const next = this.peek(4);
+      const next = this.peekAfter(4);
       if (
         next === 123 ||
         next === 42 ||
@@ -274,7 +255,7 @@ class Lexer {
     if (this.eatWord("import")) {
       if (
         this.isWord("type") &&
-        isIdentifierStart(this.peek(4)) &&
+        isIdentifierStart(this.peekAfter(4)) &&
         !this.isWordAfter(4, "from")
       ) {
         statement.typeOnly = true;
@@ -283,7 +264,7 @@ class Lexer {
       return this.name() !== null && this.at() === 61 && this.importEquals();
     }
     if (this.isWord("type")) {
-      const next = this.peek(4);
+      const next = this.peekAfter(4);
       if (next === 123 || next === 42) {
         statement.typeOnly = true;
         this.advance(4);
@@ -330,10 +311,9 @@ class Lexer {
     return this.from(statement);
   }
 
-  /** Reads `type` before a specifier's name, as acorn-typescript does: when a string or a name other than `as` follows. */
   typeModifier(): boolean {
     if (!this.isWord("type")) return false;
-    const next = this.peek(4);
+    const next = this.peekAfter(4);
     if (
       next === 34 ||
       next === 39 ||
@@ -345,10 +325,9 @@ class Lexer {
     return false;
   }
 
-  /** Reads `= require("a")` or `= A.B` and the `;`. */
   importEquals(): boolean {
     this.advance(1);
-    if (this.isWord("require") && this.peek(7) === 40) {
+    if (this.isWord("require") && this.peekAfter(7) === 40) {
       this.advance(7);
       this.eat(40);
       if (this.string() === null || !this.eat(41)) return false;
@@ -361,22 +340,18 @@ class Lexer {
     return true;
   }
 
-  from(statement: LexedImport | LexedExport): boolean {
+  from(statement: LexedStatement): boolean {
     if (!this.eatWord("from")) return false;
     statement.source = this.string();
     return statement.source !== null && this.finish();
   }
 
-  /** Reads the import attributes and the `;`. */
   finish(): boolean {
     let keyword = this.isWord("with") ? 4 : 0;
-    if (
-      this.isWord("assert") &&
-      !hasLineBreak(this.source, this.end, this.pos)
-    ) {
+    if (this.isWord("assert") && lineEnd(this.source, this.end) >= this.pos) {
       keyword = 6;
     }
-    if (keyword !== 0 && this.peek(keyword) === 123) {
+    if (keyword !== 0 && this.peekAfter(keyword) === 123) {
       this.advance(keyword);
       this.eat(123);
       while (!this.eat(125)) {
@@ -403,14 +378,12 @@ class Lexer {
     return this.source.charCodeAt(this.skip());
   }
 
-  /** Reads the token of `length` at the cursor, which is past trivia. */
   advance(length: number): void {
     this.pos += length;
     this.end = this.pos;
   }
 
-  /** The code of the token after the one of `length` at the cursor. */
-  peek(length: number): number {
+  peekAfter(length: number): number {
     return this.source.charCodeAt(skipTrivia(this.source, this.pos + length));
   }
 
@@ -442,7 +415,6 @@ class Lexer {
     return this.name() ?? this.string()?.value ?? null;
   }
 
-  /** Reads a name, with its `\u` escapes decoded. */
   name(): string | null {
     const source = this.source;
     const start = this.skip();
@@ -473,7 +445,6 @@ class Lexer {
     return value + source.slice(chunk, i);
   }
 
-  /** Reads a string literal, with its escapes decoded. */
   string(): LexedSource | null {
     const source = this.source;
     const start = this.skip();
@@ -500,7 +471,6 @@ class Lexer {
     return null;
   }
 
-  /** The text from `from` to `to` with its escapes decoded, and a template's `\r\n` and `\r` as `\n`, or `null` where acorn rejects an escape. */
   cooked(from: number, to: number, template: boolean): string | null {
     const source = this.source;
     let value = "";
@@ -523,7 +493,6 @@ class Lexer {
     return value + source.slice(chunk, to);
   }
 
-  /** The value of the escape after a `\` in a string, ending at `escapeEnd`, or `null` where acorn rejects it in a module. */
   escape(pos: number): string | null {
     const code = this.source.charCodeAt(pos);
     this.escapeEnd = pos + 1;
@@ -560,7 +529,6 @@ class Lexer {
     }
   }
 
-  /** The value of `XXXX` or `{X…}` after `\u`, ending at `escapeEnd`. */
   unicodeEscape(pos: number): string | null {
     if (this.source.charCodeAt(pos) !== 123) return this.hexEscape(pos, 4);
     let value = 0;
@@ -596,14 +564,4 @@ function hexValue(code: number): number {
   if (isDigit(code)) return code - 48;
   const lower = code | 32;
   return lower >= 97 && lower <= 102 ? lower - 87 : -1;
-}
-
-function hasLineBreak(source: string, start: number, end: number): boolean {
-  for (let i = start; i < end; i++) {
-    const code = source.charCodeAt(i);
-    if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
-      return true;
-    }
-  }
-  return false;
 }

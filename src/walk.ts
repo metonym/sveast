@@ -8,20 +8,12 @@ export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";
 
-// The parser removes ParenthesizedExpression, which `./nodes` declares.
 type NodeType = Exclude<AST.SvelteNode["type"], "ParenthesizedExpression">;
 type ChildKey<T extends NodeType> = keyof Extract<AST.SvelteNode, { type: T }> &
   string;
 
-/**
- * The fields of each node type that hold child nodes, in source order.
- * Typed against the AST, so a node type without an entry, or a key that
- * isn't one of its fields, fails typechecking. `tests/walk.test.ts` checks
- * the rest against the corpus: no field that holds a node is missing, and
- * children come in source order.
- */
+/** The fields of each node type that hold child nodes, in source order. */
 export const visitorKeys = {
-  // svelte
   Root: ["module", "instance", "fragment", "css"],
   Script: ["attributes", "content"],
   Fragment: ["nodes"],
@@ -64,7 +56,6 @@ export const visitorKeys = {
   KeyBlock: ["expression", "fragment"],
   SnippetBlock: ["expression", "parameters", "body"],
 
-  // CSS
   StyleSheet: ["attributes", "children"],
   Rule: ["prelude", "block"],
   Atrule: ["block"],
@@ -84,7 +75,6 @@ export const visitorKeys = {
   Block: ["children"],
   Declaration: [],
 
-  // estree
   Program: ["body"],
   ExpressionStatement: ["expression"],
   BlockStatement: ["body"],
@@ -175,7 +165,6 @@ export const visitorKeys = {
   ExportAllDeclaration: ["exported", "source", "attributes"],
   Decorator: ["expression"],
 
-  // TypeScript
   TSTypeAnnotation: ["typeAnnotation"],
   TSTypeParameterDeclaration: ["params"],
   TSTypeParameterInstantiation: ["params"],
