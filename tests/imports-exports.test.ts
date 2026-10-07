@@ -1,10 +1,11 @@
 import {
   type ModuleDeclaration,
-  type Node,
   ParseError,
   parseImportsExports,
   parseModule,
 } from "sveast";
+import { expectedImportsExports } from "../scripts/lexed";
+import { attempt, plain } from "../scripts/shared";
 import {
   inputs,
   mutatedModules,
@@ -13,56 +14,24 @@ import {
 } from "./imports-exports-inputs";
 import { SNIPPETS } from "./ts-snippets";
 
-const MODULE_TYPES = new Set([
-  "ImportDeclaration",
-  "ExportNamedDeclaration",
-  "ExportDefaultDeclaration",
-  "ExportAllDeclaration",
-  "TSImportEqualsDeclaration",
-  "TSExportAssignment",
-  "TSNamespaceExportDeclaration",
-]);
-
-const plain = (value: unknown) =>
-  JSON.parse(
-    JSON.stringify(value, (_key, item) =>
-      typeof item === "bigint" ? `${item}n` : item,
-    ),
-  );
-
-function isReexportOrImport(node: Node): boolean {
-  return node.type === "ExportNamedDeclaration"
-    ? node.source !== null && node.source !== undefined
-    : node.type === "ImportDeclaration" ||
-        node.type === "ExportAllDeclaration" ||
-        node.type === "TSImportEqualsDeclaration";
-}
-
-/**
- * `parseImportsExports`'s statements, with and without `localExports`, and
- * the import and export statements `parseModule` returns, or `undefined`
- * if `parseModule` throws.
- */
 function compare(source: string, typescript: boolean) {
-  let body: Node[];
-  try {
-    body = parseModule(source, { typescript, comments: false }).body;
-  } catch {
-    return;
-  }
-  const all = body.filter((node) => MODULE_TYPES.has(node.type));
-  return {
-    ours: {
-      all: plain(parseImportsExports(source, { typescript })),
-      fromOnly: plain(
-        parseImportsExports(source, { typescript, localExports: false }),
-      ),
-    },
-    theirs: {
-      all: plain(all),
-      fromOnly: plain(all.filter(isReexportOrImport)),
-    },
-  };
+  const body = attempt(
+    () => parseModule(source, { typescript, comments: false }).body,
+  );
+  return (
+    body && {
+      ours: {
+        all: plain(parseImportsExports(source, { typescript })),
+        fromOnly: plain(
+          parseImportsExports(source, { typescript, localExports: false }),
+        ),
+      },
+      theirs: {
+        all: plain(expectedImportsExports(body, true)),
+        fromOnly: plain(expectedImportsExports(body, false)),
+      },
+    }
+  );
 }
 
 test("the corpus has imports and exports", () => {

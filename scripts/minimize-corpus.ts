@@ -1,9 +1,9 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { $, Glob } from "bun";
+import { join, relative } from "node:path";
+import { $ } from "bun";
 import { parse } from "../src/index";
-import { byCodeUnit, errorCode, isRecord } from "./shared";
+import { collectFiles, errorCode, isRecord, SVELTE_FILES } from "./shared";
 
 const ROOT = join(import.meta.dir, "..");
 const CORPUS = join(ROOT, "tests/corpus");
@@ -25,9 +25,9 @@ test("parse", () => {
 `,
 );
 
-const files: string[] = [];
-for await (const f of new Glob("**/*.svelte").scan(CORPUS)) files.push(f);
-files.sort(byCodeUnit);
+const files = collectFiles([CORPUS], SVELTE_FILES).map((file) =>
+  relative(CORPUS, file),
+);
 const FUZZ_FIXTURE = /(^|\/)fuzz-/;
 const alwaysKeep = (f: string) =>
   f.startsWith("carbon/") || FUZZ_FIXTURE.test(f);

@@ -1,12 +1,11 @@
 import { tsPlugin as acornTypeScript } from "@sveltejs/acorn-typescript";
 import { Parser } from "acorn";
-import { errorMessage } from "../scripts/shared";
 import { declarations } from "../src/acorn-bridge";
 import { tsPlugin } from "../src/ts-plugin";
+import { acornOutcome } from "./shared";
 
 const OPTIONS = { sourceType: "module", ecmaVersion: 16 } as const;
 
-// enough declarations in one scope that `hasName` reads a `Set`
 const FILLER = Array.from(
   { length: 40 },
   (_, i) => `let l${i}; var v${i}; function f${i}() {}`,
@@ -17,14 +16,8 @@ const TYPES = Array.from(
     `type T${i} = 1; interface I${i} {} enum E${i} {} declare function d${i}(): void;`,
 ).join(" ");
 
-function outcome(ParserClass: typeof Parser, source: string): string {
-  try {
-    ParserClass.parse(source, OPTIONS);
-    return "ok";
-  } catch (error) {
-    return errorMessage(error);
-  }
-}
+const outcome = (ParserClass: typeof Parser, source: string) =>
+  acornOutcome(ParserClass, source, OPTIONS);
 
 describe("declarations in large scopes match acorn", () => {
   test.each([

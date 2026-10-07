@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { tsPlugin as acornTypeScript } from "@sveltejs/acorn-typescript";
 import { type Comment, Parser } from "acorn";
 import { tsPlugin } from "../src/ts-plugin";
-import { collectFiles, errorMessage } from "./shared";
+import { collectFiles, errorMessage, printList, toJson } from "./shared";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -16,20 +16,17 @@ const { values, positionals } = parseArgs({
 const EXTENSIONS = /\.(?:[cm]?ts|[cm]?js)$/;
 const Ours = Parser.extend(tsPlugin);
 const Theirs = Parser.extend(acornTypeScript());
+const DROP = new Set(values["no-loc"] ? ["loc"] : []);
 
 function parse(ParserClass: typeof Parser, source: string): string {
   const comments: Comment[] = [];
-  const locations = ParserClass === Theirs || !values["no-loc"];
   const ast = ParserClass.parse(source, {
     sourceType: "module",
     ecmaVersion: "latest",
-    locations,
+    locations: ParserClass === Theirs || !values["no-loc"],
     onComment: comments,
   });
-  return JSON.stringify({ ast, comments }, (key, value) => {
-    if (typeof value === "bigint") return `${value}n`;
-    return key === "loc" && values["no-loc"] ? undefined : value;
-  });
+  return toJson({ ast, comments }, DROP);
 }
 
 const files = collectFiles(positionals, EXTENSIONS);
@@ -80,11 +77,7 @@ for (const [title, list] of [
   ["Only acorn-typescript parses", rejects],
   ["Only sveast parses", accepts],
 ] as const) {
-  if (list.length === 0) continue;
-  console.log(`\n${title}:`);
-  for (const line of values.list ? list : list.slice(0, 10)) console.log(line);
-  if (!values.list && list.length > 10)
-    console.log(`... ${list.length - 10} more`);
+  printList(title, list, values.list);
 }
 
 process.exitCode =

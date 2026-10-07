@@ -1,12 +1,21 @@
+import { readFileSync } from "node:fs";
 import {
   type Identifier,
   type LexedStatement,
   type LexedString,
   type ModuleDeclaration,
-  type Program,
+  type Node,
+  parse,
+  parseModule,
   type StringLiteral,
   walk,
 } from "../src/index";
+import { attempt } from "./shared";
+
+export interface Module {
+  text: string;
+  typescript: boolean;
+}
 
 interface Comparable {
   kind: "import" | "export";
@@ -23,6 +32,20 @@ interface Comparable {
   }[];
 }
 
+export const MODULE_FILES = /\.(?:[cm]?ts|[cm]?js|svelte)$/;
+const TS_FILE = /\.[cm]?ts$/;
+const LANG_TS = /\blang=["']?ts\b/;
+
+const MODULE_TYPES = new Set([
+  "ImportDeclaration",
+  "ExportNamedDeclaration",
+  "ExportDefaultDeclaration",
+  "ExportAllDeclaration",
+  "TSImportEqualsDeclaration",
+  "TSExportAssignment",
+  "TSNamespaceExportDeclaration",
+]);
+
 const IMPORT_SPECIFIERS = {
   ImportDefaultSpecifier: { kind: "default", imported: "default" },
   ImportNamespaceSpecifier: { kind: "namespace", imported: "*" },
@@ -32,11 +55,47 @@ const IMPORT_SPECIFIERS = {
 const nameOf = (node: Identifier | StringLiteral) =>
   node.type === "Identifier" ? node.name : node.value;
 
-/**
- * `lexImportsExports`'s statements in a shape `parseImportsExports`'s nodes
- * map to. An `export *` has no specifier node, so its specifier's offsets
- * are left out.
- */
+function componentScripts(source: string): Module[] {
+  const ast = attempt(() => parse(source, { script: false }));
+  return [ast?.instance, ast?.module].flatMap((script) =>
+    script
+      ? [
+          {
+            text: source.slice(script.content.start, script.content.end),
+            typescript: LANG_TS.test(
+              source.slice(script.start, script.content.start),
+            ),
+          },
+        ]
+      : [],
+  );
+}
+
+export function modulesIn(file: string): Module[] {
+  const source = readFileSync(file, "utf8");
+  return file.endsWith(".svelte")
+    ? componentScripts(source)
+    : [{ text: source, typescript: TS_FILE.test(file) }];
+}
+
+function isImportOrReexport(node: Node): boolean {
+  return node.type === "ExportNamedDeclaration"
+    ? node.source !== null && node.source !== undefined
+    : node.type === "ImportDeclaration" ||
+        node.type === "ExportAllDeclaration" ||
+        node.type === "TSImportEqualsDeclaration";
+}
+
+export function expectedImportsExports(
+  body: Node[],
+  localExports: boolean,
+): ModuleDeclaration[] {
+  return body.filter(
+    (node): node is ModuleDeclaration =>
+      MODULE_TYPES.has(node.type) && (localExports || isImportOrReexport(node)),
+  );
+}
+
 export function comparableLexed(statements: LexedStatement[]): Comparable[] {
   return statements.map((statement) => ({
     kind: statement.kind,
@@ -65,7 +124,6 @@ export function comparableLexed(statements: LexedStatement[]): Comparable[] {
   }));
 }
 
-/** What `comparableLexed` should give for `parseImportsExports(source, { localExports: false })`'s nodes. */
 export function expectedLexed(nodes: ModuleDeclaration[]): Comparable[] {
   return nodes.map((node) => {
     if (node.type === "TSImportEqualsDeclaration") {
@@ -145,8 +203,14 @@ export function expectedLexed(nodes: ModuleDeclaration[]): Comparable[] {
   });
 }
 
-/** The strings `lexStrings` should return for a module `parseModule` returned: each string `Literal` and each `TemplateElement`, in source order. */
-export function expectedStrings(program: Program): LexedString[] {
+export function expectedStrings(
+  source: string,
+  typescript: boolean,
+): LexedString[] | undefined {
+  const program = attempt(() =>
+    parseModule(source, { typescript, comments: false }),
+  );
+  if (!program) return;
   const strings: LexedString[] = [];
   walk(program, {
     enter(node) {

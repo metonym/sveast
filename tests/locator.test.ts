@@ -1,30 +1,18 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { createLocator, parse, walk } from "sveast";
-import { byCodeUnit } from "../scripts/shared";
+import { attempt, SVELTE_FILES } from "../scripts/shared";
+import { corpusFiles, readCorpus } from "./shared";
 
-const CORPUS = join(import.meta.dir, "corpus");
 const NON_LF_LINE_BREAK = /\r(?!\n)|[\u2028\u2029]/;
-
-function components(): [path: string, source: string][] {
-  return readdirSync(CORPUS, { recursive: true, encoding: "utf8" })
-    .filter((path) => path.endsWith(".svelte"))
-    .sort(byCodeUnit)
-    .map((path) => [path, readFileSync(join(CORPUS, path), "utf8")]);
-}
 
 test("gives each node's loc on the corpus", () => {
   let checked = 0;
-  for (const [path, source] of components()) {
+  for (const path of corpusFiles(SVELTE_FILES)) {
+    const source = readCorpus(path);
     if (NON_LF_LINE_BREAK.test(source) || source.charCodeAt(0) === 0xfeff) {
       continue;
     }
-    let ast: ReturnType<typeof parse>;
-    try {
-      ast = parse(source, { loc: true });
-    } catch {
-      continue;
-    }
+    const ast = attempt(() => parse(source, { loc: true }));
+    if (!ast) continue;
     const locate = createLocator(source);
     const mismatches: string[] = [];
     walk(ast, {

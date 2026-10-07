@@ -1,5 +1,5 @@
 import { parse } from "sveast";
-import type { Json } from "../scripts/shared";
+import { type Json, plain } from "../scripts/shared";
 import { acornExpressionParses, parseExpressionAt } from "../src/acorn-bridge";
 import { htmlEntityNames } from "../src/entity-names";
 import { readExpression } from "../src/expression";
@@ -101,7 +101,6 @@ const FALLBACK_SHAPES = [
   "(a) => a + 1",
   "[a, b]",
   "{ a: 1 }",
-  // a template literal; split so it isn't mistaken for a placeholder in a plain string
   ["`t$", "{a}`"].join(""),
   "new X()",
   "a.b[c]",
@@ -196,14 +195,6 @@ const TS_PREFIX = '<script lang="ts"></script>';
 
 type Outcome = { node: Json; end: number } | { throws: true };
 
-function strip(node: object): Json {
-  return JSON.parse(
-    JSON.stringify(node, (_, value) =>
-      typeof value === "bigint" ? `bigint:${value}` : value,
-    ),
-  );
-}
-
 function referenceOutcome(
   source: string,
   index: number,
@@ -221,7 +212,7 @@ function referenceOutcome(
   };
   try {
     const { node, end } = parseExpressionAt(context, source, index);
-    return { node: strip(node), end };
+    return { node: plain(node), end };
   } catch {
     return { throws: true };
   }
@@ -238,7 +229,7 @@ function actualOutcome(source: string, index: number, loc: boolean): Outcome {
   state.index = index;
   try {
     const node = readExpression(state);
-    return { node: strip(node), end: state.index };
+    return { node: plain(node), end: state.index };
   } catch {
     return { throws: true };
   }

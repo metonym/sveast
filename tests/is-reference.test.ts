@@ -1,7 +1,7 @@
 import { dirname } from "node:path";
 import { type AST, isReference, parse, parseModule, walk } from "sveast";
 import { byCodeUnit } from "../scripts/shared";
-import { corpusAsts } from "./corpus-asts";
+import { corpusAsts } from "./shared";
 
 type IsReference = (node: AST.SvelteNode, parent: AST.SvelteNode) => boolean;
 
@@ -10,9 +10,6 @@ const upstream: { default: IsReference } = await import(
   Bun.resolveSync("is-reference", dirname(svelteCompiler))
 );
 
-// Identifiers is-reference counts that aren't bindings: `import` and `new`
-// in `import.meta` and `new.target`, an import attribute's key, and the
-// name in `export * as name from`.
 const NOT_BINDINGS = new Set([
   "MetaProperty",
   "ImportAttribute",

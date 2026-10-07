@@ -12,7 +12,7 @@ import {
   walk,
 } from "sveast";
 import { byCodeUnit } from "../scripts/shared";
-import { corpusAsts } from "./corpus-asts";
+import { corpusAsts } from "./shared";
 
 type Binding = Pattern | TSParameterProperty | AssignmentExpression["left"];
 
@@ -42,7 +42,6 @@ function bindingsIn(ast: AST.SvelteNode): Binding[] {
           if (node.error) patterns.push(node.error);
           break;
         case "SnippetBlock":
-          // undefined where TypeScript reads the snippet's signature as a type assertion, as in svelte
           patterns.push(...(node.parameters ?? []));
           break;
         case "AssignmentExpression":
@@ -141,7 +140,6 @@ test("svelte: each, await and snippet bindings", () => {
   ).toEqual(["a", "c", "d", "e", "f", "g"]);
 });
 
-/** The identifiers under `pattern` outside keys, defaults, types and member expressions. */
 function boundByWalking(pattern: Binding): Identifier[] {
   const found: Identifier[] = [];
   walk(pattern, {

@@ -1,5 +1,6 @@
 import { isCommonType } from "../src/common-type";
 import { parsesAsType } from "../src/is-valid-type";
+import { singleEdits } from "./shared";
 
 const COMMON = [
   "string",
@@ -102,17 +103,9 @@ test("leaves invalid or unusual text to the parser", () => {
 });
 
 test("never reads as a type what the parser rejects", () => {
-  const unsound: string[] = [];
-  const check = (text: string) => {
-    if (isCommonType(text) && !parsesAsType(text, true)) unsound.push(text);
-  };
-  for (const text of COMMON) {
-    for (let i = 0; i <= text.length; i++) {
-      check(text.slice(0, i) + text.slice(i + 1));
-      for (const insert of [...INSERTS, ...WORDS.map((word) => ` ${word} `)]) {
-        check(text.slice(0, i) + insert + text.slice(i));
-      }
-    }
-  }
+  const inserts = [...INSERTS, ...WORDS.map((word) => ` ${word} `)];
+  const unsound = [...singleEdits(COMMON, inserts)].filter(
+    (text) => isCommonType(text) && !parsesAsType(text, true),
+  );
   expect(unsound).toEqual([]);
 });

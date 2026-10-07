@@ -1,10 +1,4 @@
-import {
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "sveast";
@@ -17,8 +11,10 @@ import { propsOf } from "../examples/props";
 import { svelteMode } from "../examples/svelte-mode";
 import { unusedBindings } from "../examples/unused-bindings";
 import { unusedClasses } from "../examples/unused-classes";
+import { SVELTE_FILES } from "../scripts/shared";
+import { CORPUS, corpusFiles, readCorpus } from "./shared";
 
-const CARBON = join(import.meta.dir, "corpus/carbon");
+const CARBON = join(CORPUS, "carbon");
 
 const APP = `<script lang="ts">
   import Button from "./Button.svelte";
@@ -378,12 +374,10 @@ describe("unused-bindings", () => {
   });
 
   test("finds nothing unused in Carbon", () => {
-    const files = readdirSync(CARBON, { recursive: true, encoding: "utf8" })
-      .filter((file) => file.endsWith(".svelte"))
-      .map((file) => join(CARBON, file));
+    const files = corpusFiles(SVELTE_FILES, CARBON);
     expect(files.length).toBeGreaterThan(300);
     const unused = files.flatMap((file) =>
-      unusedBindings(readFileSync(file, "utf8")),
+      unusedBindings(readCorpus(file, CARBON)),
     );
     expect(unused).toEqual([]);
   });
@@ -479,7 +473,7 @@ describe("prop-types", () => {
 
   test("declares Carbon's Button props", () => {
     const { props, invalid } = propTypes(
-      readFileSync(join(CARBON, "Button/Button.svelte"), "utf8"),
+      readCorpus("Button/Button.svelte", CARBON),
     );
     expect(invalid).toEqual([]);
     expect(declaration("Button", props)).toContain(

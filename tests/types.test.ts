@@ -1,9 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "@typescript/typescript6";
-import { parse, parseModule } from "sveast";
 import { byCodeUnit } from "../scripts/shared";
-import { SNIPPETS } from "./ts-snippets";
+import { corpusAsts } from "./shared";
 
 interface Shape {
   name: string;
@@ -141,29 +139,10 @@ function nonStringLiterals(root: unknown, seen: Set<string>): string[] {
   return [...found];
 }
 
-const CORPUS = join(import.meta.dir, "corpus");
-const FILES = readdirSync(CORPUS, { recursive: true, encoding: "utf8" }).sort();
-
 test("the types declare every node and field the corpus's ASTs have", () => {
   const found = new Set<string>();
-  const check = (root: unknown) => {
-    for (const mismatch of mismatches(root)) found.add(mismatch);
-  };
-  for (const path of FILES) {
-    const source = () => readFileSync(join(CORPUS, path), "utf8");
-    try {
-      if (path.endsWith(".svelte")) {
-        check(parse(source(), { loc: true }));
-        check(parse(source()));
-      } else if (path.endsWith(".js") || path.endsWith(".ts")) {
-        check(parseModule(source(), { typescript: path.endsWith(".ts") }));
-      }
-    } catch {
-      // files neither parser accepts have no AST to check
-    }
-  }
-  for (const snippet of Object.values(SNIPPETS)) {
-    check(parseModule(snippet, { typescript: true, loc: true }));
+  for (const ast of [...corpusAsts(), ...corpusAsts({ loc: true })]) {
+    for (const mismatch of mismatches(ast)) found.add(mismatch);
   }
   expect([...found].sort(byCodeUnit)).toEqual([]);
 });
@@ -171,23 +150,8 @@ test("the types declare every node and field the corpus's ASTs have", () => {
 test("the fields typed StringLiteral hold only string literals", () => {
   const found = new Set<string>();
   const seen = new Set<string>();
-  const check = (root: unknown) => {
-    for (const mismatch of nonStringLiterals(root, seen)) found.add(mismatch);
-  };
-  for (const path of FILES) {
-    const source = () => readFileSync(join(CORPUS, path), "utf8");
-    try {
-      if (path.endsWith(".svelte")) {
-        check(parse(source()));
-      } else if (path.endsWith(".js") || path.endsWith(".ts")) {
-        check(parseModule(source(), { typescript: path.endsWith(".ts") }));
-      }
-    } catch {
-      // files neither parser accepts have no AST to check
-    }
-  }
-  for (const snippet of Object.values(SNIPPETS)) {
-    check(parseModule(snippet, { typescript: true }));
+  for (const ast of corpusAsts()) {
+    for (const mismatch of nonStringLiterals(ast, seen)) found.add(mismatch);
   }
   expect([...found].sort(byCodeUnit)).toEqual([]);
   expect([...seen].sort(byCodeUnit)).toEqual(

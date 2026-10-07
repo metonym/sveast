@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import ts from "@typescript/typescript6";
+import { attempt } from "./shared";
 
 const TS_EXT_RE = /\.tsx?$/;
 const DECL_EXT_RE = /\.(js|ts|d\.ts)$/;
@@ -119,24 +120,18 @@ function rollupDts(entryDts: string, emitted: Map<string, string>): string {
           continue;
         }
 
-        let resolved: string;
-        try {
-          resolved = resolveDts(file, spec, emitted);
-        } catch {
+        const resolved = attempt(() => resolveDts(file, spec, emitted));
+        if (resolved === undefined) {
           externalLines.set(stmt.getText(sf), stmt.getText(sf));
-          continue;
+        } else {
+          visit(resolved);
         }
-
-        visit(resolved);
         continue;
       }
 
       for (const importSpec of collectImportTypeSpecs(stmt)) {
-        if (!isRelative(importSpec)) continue;
-        try {
-          visit(resolveDts(file, importSpec, emitted));
-        } catch {
-          // a spec that doesn't resolve to a declaration file has nothing to follow
+        if (isRelative(importSpec)) {
+          attempt(() => visit(resolveDts(file, importSpec, emitted)));
         }
       }
     }

@@ -24,7 +24,6 @@ export const SNIPPETS: Record<string, string> = {
   interfaces:
     "interface A<T> extends B<T>, C.D { a?: string; readonly b: number; [k: string]: any; m?<U>(x: U): void; (x): y; new (): Z; get g(): T; set s(v: T); new: boolean }",
   "type aliases":
-    // template literal types; split so they aren't read as placeholders
     'type A = { a: 1 } | "b" | `x$' +
     '{Y}` | [a: string, b?: number, ...c: D[]] | (() => void) | keyof T | T[K] | typeof import("x").Y;',
   "mapped and conditional types":

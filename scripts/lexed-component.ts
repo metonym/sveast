@@ -6,6 +6,7 @@ import {
   ParseError,
   parse,
 } from "../src/index";
+import { attempt } from "./shared";
 
 const javascriptOnly = createParser();
 
@@ -45,7 +46,6 @@ function scriptOf(
   };
 }
 
-/** Whether `parse` reads `source` as TypeScript: only then does a parser without the plugin throw an `Error` that isn't a `ParseError`. */
 function isTypeScript(source: string): boolean {
   try {
     javascriptOnly.parse(source, { css: false, script: false });
@@ -55,14 +55,11 @@ function isTypeScript(source: string): boolean {
   }
 }
 
-/** What `lexComponent` should return for `source`, from `parse`, or `undefined` if `parse` throws. */
 export function expectedSections(source: string): LexedComponent | undefined {
-  let ast: AST.Root;
-  try {
-    ast = parse(source, { css: false, script: false, comments: false });
-  } catch {
-    return undefined;
-  }
+  const ast = attempt(() =>
+    parse(source, { css: false, script: false, comments: false }),
+  );
+  if (!ast) return;
   const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
   return {
     typescript: isTypeScript(source),
@@ -82,7 +79,6 @@ export function expectedSections(source: string): LexedComponent | undefined {
   };
 }
 
-/** `ast` as `parseSections(source)` should give it: no markup, and only the scripts' comments. */
 export function withoutMarkup(ast: AST.Root): AST.Root {
   const scripts = [ast.instance, ast.module].flatMap((script) =>
     script ? [script.content] : [],

@@ -163,10 +163,6 @@ if (isWatchMode) {
     },
   );
 
-  setInterval(() => {
-    // keeps the process alive while watching
-  }, 1000);
-
   process.on("SIGINT", () => {
     console.log("\nStopping watch mode...");
     watcher.close();

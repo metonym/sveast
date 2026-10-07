@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { Glob } from "bun";
+import { collectFiles, mulberry32, SVELTE_FILES } from "./shared";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "..", "tests", "corpus");
 const DEFAULT_FINDINGS_DIR = path.join(
@@ -37,16 +37,6 @@ function parseArgs(argv: string[]): FuzzArgs {
   return args;
 }
 
-function mulberry32(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 type Rng = () => number;
 
 function randInt(rng: Rng, min: number, max: number): number {
@@ -62,13 +52,11 @@ interface Seed {
   source: string;
 }
 
-async function loadSeeds(): Promise<Seed[]> {
-  const seeds: Seed[] = [];
-  for await (const file of new Glob("**/*.svelte").scan(FIXTURES_DIR)) {
-    const source = await Bun.file(path.join(FIXTURES_DIR, file)).text();
-    seeds.push({ file: file.replace(/\\/g, "/"), source });
-  }
-  return seeds;
+function loadSeeds(): Seed[] {
+  return collectFiles([FIXTURES_DIR], SVELTE_FILES).map((file) => ({
+    file: path.relative(FIXTURES_DIR, file).replaceAll("\\", "/"),
+    source: readFileSync(file, "utf8"),
+  }));
 }
 
 interface Mutation {
@@ -138,15 +126,11 @@ function mutateDirectiveMangle(rng: Rng, seeds: Seed[]): Mutation | null {
   return { source: mutated, tag: `directive-mangle:${option}:${seed.file}` };
 }
 
-const TEMPLATE_INSERT_POINT_REGEX = /<\/script>/;
 const SCRIPT_LANG_TS_REGEX = /<script[^>]*\blang\s*=\s*["']ts["']/;
 
-function insertIntoTemplate(source: string, block: string): string | null {
-  const matches = [
-    ...source.matchAll(new RegExp(TEMPLATE_INSERT_POINT_REGEX, "g")),
-  ];
-  const last = matches.at(-1);
-  const insertAt = last ? last.index + "</script>".length : 0;
+function insertIntoTemplate(source: string, block: string): string {
+  const end = source.lastIndexOf("</script>");
+  const insertAt = end === -1 ? 0 : end + "</script>".length;
   return `${source.slice(0, insertAt)}\n${block}\n${source.slice(insertAt)}`;
 }
 
@@ -160,13 +144,20 @@ function mutateBlockNesting(rng: Rng, seeds: Seed[]): Mutation | null {
   } else {
     block = `${"{#each [1] as fuzzItem}".repeat(depth)}<span>fuzz</span>${"{/each}".repeat(depth)}`;
   }
-  const mutated = insertIntoTemplate(seed.source, block);
-  if (!mutated) return null;
   return {
-    source: mutated,
+    source: insertIntoTemplate(seed.source, block),
     tag: `block-nesting:${kind}:${depth}:${seed.file}`,
   };
 }
+
+const SNIPPET_BLOCKS = {
+  "unclosed-generic": "{#snippet fuzzSnippet<T(x)}<span>{x}</span>{/snippet}",
+  "unclosed-paren": "{#snippet fuzzSnippet(x, y}<span>{x}</span>{/snippet}",
+  "nested-generic": `{#snippet fuzzSnippet${"<T".repeat(20)}${">".repeat(20)}(x)}<span>{x}</span>{/snippet}`,
+  "empty-generic": "{#snippet fuzzSnippet<>(x)}<span>{x}</span>{/snippet}",
+  "no-parens": "{#snippet fuzzSnippet}<span>fuzz</span>{/snippet}",
+  "extra-parens": "{#snippet fuzzSnippet((x), (y))}<span>{x}</span>{/snippet}",
+};
 
 function mutateSnippetMangle(rng: Rng, seeds: Seed[]): Mutation | null {
   const seed = pick(rng, seeds);
@@ -182,69 +173,35 @@ function mutateSnippetMangle(rng: Rng, seeds: Seed[]): Mutation | null {
         ] as const)
       : (["unclosed-paren", "no-parens", "extra-parens"] as const),
   );
-  let block: string;
-  switch (option) {
-    case "unclosed-generic":
-      block = "{#snippet fuzzSnippet<T(x)}<span>{x}</span>{/snippet}";
-      break;
-    case "unclosed-paren":
-      block = "{#snippet fuzzSnippet(x, y}<span>{x}</span>{/snippet}";
-      break;
-    case "nested-generic":
-      block = `{#snippet fuzzSnippet${"<T".repeat(20)}${">".repeat(20)}(x)}<span>{x}</span>{/snippet}`;
-      break;
-    case "empty-generic":
-      block = "{#snippet fuzzSnippet<>(x)}<span>{x}</span>{/snippet}";
-      break;
-    case "no-parens":
-      block = "{#snippet fuzzSnippet}<span>fuzz</span>{/snippet}";
-      break;
-    case "extra-parens":
-      block = "{#snippet fuzzSnippet((x), (y))}<span>{x}</span>{/snippet}";
-      break;
-    default:
-      block = "{#snippet fuzzSnippet()}<span>fuzz</span>{/snippet}";
-  }
-  const mutated = insertIntoTemplate(seed.source, block);
-  if (!mutated) return null;
-  return { source: mutated, tag: `snippet-mangle:${option}:${seed.file}` };
+  return {
+    source: insertIntoTemplate(seed.source, SNIPPET_BLOCKS[option]),
+    tag: `snippet-mangle:${option}:${seed.file}`,
+  };
 }
+
+const EACH_AWAIT_BLOCKS = {
+  "each-destructure-unclosed":
+    "{#each fuzzList as { a, b }<span>{a}{b}</span>{/each}",
+  "each-as-collision-comma":
+    "{#each fuzzList as fuzzItem, }<span>{fuzzItem}</span>{/each}",
+  "each-key-unclosed":
+    "{#each fuzzList as fuzzItem (fuzzItem.id}<span>{fuzzItem}</span>{/each}",
+  "await-then-catch-both":
+    "{#await fuzzPromise then fuzzValue catch fuzzError}<span>{fuzzValue}</span>{/await}",
+  "await-nested-destructure":
+    "{#await fuzzPromise}...{:then { a: { b } }}<span>{b}</span>{/await}",
+};
 
 function mutateEachAwaitEdge(rng: Rng, seeds: Seed[]): Mutation | null {
   const seed = pick(rng, seeds);
-  const option = pick(rng, [
-    "each-destructure-unclosed",
-    "each-as-collision-comma",
-    "each-key-unclosed",
-    "await-then-catch-both",
-    "await-nested-destructure",
-  ] as const);
-  let block: string;
-  switch (option) {
-    case "each-destructure-unclosed":
-      block = "{#each fuzzList as { a, b }<span>{a}{b}</span>{/each}";
-      break;
-    case "each-as-collision-comma":
-      block = "{#each fuzzList as fuzzItem, }<span>{fuzzItem}</span>{/each}";
-      break;
-    case "each-key-unclosed":
-      block =
-        "{#each fuzzList as fuzzItem (fuzzItem.id}<span>{fuzzItem}</span>{/each}";
-      break;
-    case "await-then-catch-both":
-      block =
-        "{#await fuzzPromise then fuzzValue catch fuzzError}<span>{fuzzValue}</span>{/await}";
-      break;
-    case "await-nested-destructure":
-      block =
-        "{#await fuzzPromise}...{:then { a: { b } }}<span>{b}</span>{/await}";
-      break;
-    default:
-      block = "{#each fuzzList as fuzzItem}{fuzzItem}{/each}";
-  }
-  const mutated = insertIntoTemplate(seed.source, block);
-  if (!mutated) return null;
-  return { source: mutated, tag: `each-await-edge:${option}:${seed.file}` };
+  const option = pick(
+    rng,
+    Object.keys(EACH_AWAIT_BLOCKS) as (keyof typeof EACH_AWAIT_BLOCKS)[],
+  );
+  return {
+    source: insertIntoTemplate(seed.source, EACH_AWAIT_BLOCKS[option]),
+    tag: `each-await-edge:${option}:${seed.file}`,
+  };
 }
 
 function mutateWhitespace(rng: Rng, seeds: Seed[]): Mutation | null {
@@ -431,10 +388,11 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   console.log(`fuzz-parser: iterations=${args.iterations} seed=${args.seed}`);
 
-  const seeds = await loadSeeds();
+  const seeds = loadSeeds();
   console.log(`loaded ${seeds.length} seed fixtures`);
 
-  const rng = mulberry32(args.seed);
+  const next = mulberry32(args.seed);
+  const rng = () => next() / 4294967296;
   const findings = new Map<string, Finding>();
   let matched = 0;
   let slow = 0;

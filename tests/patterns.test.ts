@@ -1,6 +1,4 @@
-import { parse } from "sveast";
-import { parse as svelteParse } from "svelte/compiler";
-import { isRecord, type Json } from "../scripts/shared";
+import { svelteParity } from "./shared";
 
 const PATTERNS = [
   "{ a }",
@@ -64,37 +62,15 @@ const COMPONENTS = [
   (p: string) => `{#if x}{@const ${p} = value}<p>z</p>{/if}`,
 ];
 
-function plain(value: object, dropLoc: boolean): Json {
-  return JSON.parse(
-    JSON.stringify(value, (key, item) =>
-      dropLoc && (key === "loc" || key === "name_loc") ? undefined : item,
-    ),
-  );
-}
-
-function outcome(run: () => object, dropLoc: boolean) {
-  try {
-    return { ast: plain(run(), dropLoc) };
-  } catch (thrown) {
-    if (!isRecord(thrown)) throw thrown;
-    const { code, message, position, frame } = thrown;
-    return { error: { code, message, position, frame } };
-  }
-}
-
 describe("destructuring patterns match svelte/compiler", () => {
   for (const script of ["", '<script lang="ts"></script>\n']) {
     for (const pattern of PATTERNS) {
       test(`${script ? "TypeScript" : "JavaScript"}: ${pattern}`, () => {
         for (const component of COMPONENTS) {
-          const source = `${script}<p>before</p>\n${component(pattern)}\n<p>after</p>`;
-          const theirs = () => svelteParse(source, { modern: true });
-          expect(outcome(() => parse(source, { loc: true }), false)).toEqual(
-            outcome(theirs, false),
+          const { ours, theirs } = svelteParity(
+            `${script}<p>before</p>\n${component(pattern)}\n<p>after</p>`,
           );
-          expect(outcome(() => parse(source), false)).toEqual(
-            outcome(theirs, true),
-          );
+          expect(ours).toEqual(theirs);
         }
       });
     }
@@ -136,14 +112,10 @@ describe("type annotations match svelte/compiler", () => {
     for (const type of TYPES) {
       test(`${JSON.stringify(type)}${after ? ", a `?:` after" : ""}`, () => {
         for (const component of TYPED) {
-          const source = `<script lang="ts"></script>\n<p>before</p>\n${component(type)}${after}\n<p>after</p>`;
-          const theirs = () => svelteParse(source, { modern: true });
-          expect(outcome(() => parse(source, { loc: true }), false)).toEqual(
-            outcome(theirs, false),
+          const { ours, theirs } = svelteParity(
+            `<script lang="ts"></script>\n<p>before</p>\n${component(type)}${after}\n<p>after</p>`,
           );
-          expect(outcome(() => parse(source), false)).toEqual(
-            outcome(theirs, true),
-          );
+          expect(ours).toEqual(theirs);
         }
       });
     }
