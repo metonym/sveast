@@ -17,6 +17,8 @@ import type { AST } from "./types/svelte-ast";
 
 const REGEX_NON_LF_LINE_BREAK = /\r(?!\n)|[\u2028\u2029]/;
 
+export const REGEX_WHITESPACE_THEN_CLOSING_BRACE = /\s*}/y;
+
 export function scanIdentifier(source: string, from: number): number {
   const code = source.codePointAt(from);
   if (code === undefined || !isIdentifierStart(code, true)) return from;

@@ -23,7 +23,6 @@ export function parseComponent(
   return finishComponent(state);
 }
 
-/** The parser's state for `source`, without a leading byte order mark. */
 export function componentState(
   source: string,
   options: ParseOptions | undefined,
@@ -39,7 +38,6 @@ export function componentState(
   );
 }
 
-/** Rejects what's still open, and moves `<svelte:options>` to `Root.options`. */
 export function finishComponent(state: TemplateParserState): AST.Root {
   if (state.stack.length > 1) {
     const current = state.current();

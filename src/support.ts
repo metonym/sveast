@@ -10,7 +10,6 @@ interface EntityInternals extends EntitySupport {
   readonly names: () => EntityNames;
 }
 
-/** What a parser was created with: the TypeScript parser, if any, and the named character references it decodes. */
 export interface Support {
   typescript: ParserConstructor | undefined;
   entityNames: () => EntityNames;

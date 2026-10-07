@@ -11,7 +11,6 @@ export interface EntityNames {
   longest: number;
 }
 
-/** Decodes the names `scripts/generate-entities.ts` encodes, on the first call. */
 export function lazyEntityNames(encoded: string): () => EntityNames {
   let names: EntityNames | undefined;
   return () => {
@@ -36,7 +35,6 @@ function decodeEntityNames(encoded: string): EntityNames {
   return { table, longest };
 }
 
-/** `&amp;`, `&apos;`, `&gt;`, `&lt;` and `&quot;`, and the four that are also valid without the `;`. */
 export const xmlEntityNames = lazyEntityNames(
   "0amp!12 1pos:13 0gt!1q 0lt!1o 0quot!y",
 );

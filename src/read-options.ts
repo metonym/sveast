@@ -11,9 +11,12 @@ import {
 } from "./errors";
 import type {
   Expression,
+  Identifier,
   Literal,
   ObjectExpression,
   Pattern,
+  Property,
+  SpreadElement,
 } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 
@@ -30,7 +33,6 @@ const NAMESPACES = new Map<LiteralValue, Options["namespace"]>([
   ["http://www.w3.org/1998/Math/MathML", "mathml"],
 ]);
 
-/** Sets the field if `value` is one it allows; reports whether it did. */
 const PROP_READERS = new Map<
   string,
   (prop: PropConfig, value: LiteralValue) => boolean
@@ -146,7 +148,6 @@ export function readOptions(node: AST.SvelteOptionsRaw): Options {
   return options;
 }
 
-/** A value given as text or a literal expression; `true` for a bare attribute, `null` otherwise. */
 function staticValue({ value }: AST.Attribute): LiteralValue {
   if (value === true) return true;
   const chunks = Array.isArray(value) ? value : [value];
@@ -169,20 +170,23 @@ function checkName(
   if (RESERVED_NAMES.has(name)) svelte_options_reserved_tagname(node);
 }
 
-/** Non-computed `key: value` properties, first occurrence of each key; `fail` on anything else. */
+function isNamedProperty(
+  property: Property | SpreadElement,
+): property is Property & { key: Identifier } {
+  return (
+    property.type === "Property" &&
+    !property.computed &&
+    property.key.type === "Identifier"
+  );
+}
+
 function propertiesOf(
   object: ObjectExpression,
   fail: () => never,
 ): Map<string, Expression | Pattern> {
   const properties = new Map<string, Expression | Pattern>();
   for (const property of object.properties) {
-    if (
-      property.type !== "Property" ||
-      property.computed ||
-      property.key.type !== "Identifier"
-    ) {
-      fail();
-    }
+    if (!isNamedProperty(property)) fail();
     if (!properties.has(property.key.name)) {
       properties.set(property.key.name, property.value);
     }
@@ -230,9 +234,7 @@ function readCustomElement(
     customElement.props = {};
     for (const property of props.properties) {
       if (
-        property.type !== "Property" ||
-        property.computed ||
-        property.key.type !== "Identifier" ||
+        !isNamedProperty(property) ||
         property.value.type !== "ObjectExpression"
       ) {
         failProps();
@@ -240,12 +242,7 @@ function readCustomElement(
       const prop: PropConfig = {};
       customElement.props[property.key.name] = prop;
       for (const field of property.value.properties) {
-        if (
-          field.type !== "Property" ||
-          field.computed ||
-          field.key.type !== "Identifier" ||
-          field.value.type !== "Literal"
-        ) {
+        if (!isNamedProperty(field) || field.value.type !== "Literal") {
           failProps();
         }
         if (!PROP_READERS.get(field.key.name)?.(prop, field.value.value)) {
@@ -270,7 +267,6 @@ function readCustomElement(
   }
 
   const extend = properties.get("extend");
-  // svelte assigns it unchecked; its analysis phase validates it
   if (extend) customElement.extend = extend as CustomElement["extend"];
 
   return customElement;

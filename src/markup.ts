@@ -24,7 +24,6 @@ export function skipWhitespace(source: string, from: number): number {
   return index;
 }
 
-/** Whether svelte parses the component as TypeScript: its first `<script>` with a `lang`, outside comments, has `lang="ts"`. */
 export function isTypeScript(source: string): boolean {
   let index = source.indexOf("<");
   while (index !== -1) {
@@ -56,7 +55,6 @@ export function isVoid(name: string): boolean {
   );
 }
 
-/** The offset of the `</style` that ends a `<style>`'s content starting at `from`, past comments and strings, or the source's length. */
 export function styleContentEnd(source: string, from: number): number {
   let index = from;
   while (index < source.length) {
@@ -90,7 +88,6 @@ const GT = 62;
 export const isQuote = (code: number) =>
   code === DOUBLE_QUOTE || code === SINGLE_QUOTE;
 
-/** End of a tag or attribute name: stops at whitespace, `/` and `>`, and for attributes at quotes and `=`. */
 export function nameEnd(
   source: string,
   from: number,

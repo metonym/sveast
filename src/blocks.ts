@@ -13,12 +13,13 @@ import {
 import { readExpression } from "./expression";
 import { mapChildren } from "./nodes";
 import { ParseError } from "./parse-error";
-import type { TemplateParserState } from "./state";
+import {
+  REGEX_WHITESPACE_THEN_CLOSING_BRACE,
+  type TemplateParserState,
+} from "./state";
 import type { Expression, Node, Pattern } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 import type { TSAsExpression } from "./types/typescript";
-
-const REGEX_WHITESPACE_THEN_CLOSING_BRACE = /\s*}/y;
 
 const CLOSING_WORDS: Partial<Record<string, string>> = {
   IfBlock: "if",
@@ -107,12 +108,7 @@ function readAwaitBinding(state: TemplateParserState): Pattern | null {
   return pattern;
 }
 
-/**
- * Without `as`, acorn reads `{#each items as item}` as `items as item`, a
- * type assertion. Unwraps the one ending where the expression does, and
- * returns it so the caller can rewind to its `as`.
- */
-function stripAssertion(root: Expression): {
+function stripTrailingAssertion(root: Expression): {
   expression: Expression;
   assertion: TSAsExpression | null;
 } {
@@ -169,7 +165,7 @@ function openEach(state: TemplateParserState, start: number): void {
       expression = expression.expressions[0];
     }
 
-    const stripped = stripAssertion(expression);
+    const stripped = stripTrailingAssertion(expression);
     expression = stripped.expression;
 
     if (stripped.assertion) {
@@ -271,8 +267,6 @@ function openSnippet(state: TemplateParserState, start: number): void {
       end: -1,
       expression: id,
       typeParams,
-      // svelte reads `params` off whatever parsed, and a type parameter list
-      // TypeScript can't take, such as `<T<U>>`, makes a type assertion without them
       parameters: (node.type === "ArrowFunctionExpression"
         ? node.params
         : undefined) as Pattern[],

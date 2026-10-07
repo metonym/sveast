@@ -6,7 +6,10 @@ import {
   render_tag_invalid_expression,
 } from "./errors";
 import { readExpression } from "./expression";
-import type { TemplateParserState } from "./state";
+import {
+  REGEX_WHITESPACE_THEN_CLOSING_BRACE,
+  type TemplateParserState,
+} from "./state";
 import type {
   Expression,
   Identifier,
@@ -14,8 +17,6 @@ import type {
   VariableDeclarator,
 } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
-
-const REGEX_WHITESPACE_THEN_CLOSING_BRACE = /\s*}/y;
 
 function isCall(
   expression: Expression,
