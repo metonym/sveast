@@ -17,12 +17,6 @@ export function parseComponentSections(
   return finishComponent(state);
 }
 
-/**
- * Reads only the top-level `<script>`, `<style>` and `<svelte:options>`
- * tags. The top-level comments and the text between them stay in the
- * fragment while they're read, as in a full parse, so a section gets the
- * HTML comment before it; markup between them is kept as text.
- */
 function readTopLevelTags(state: TemplateParserState): void {
   const { source } = state;
   const { tags, comments } = topLevelTags(source);

@@ -22,7 +22,6 @@ export function setSource(value: string): void {
   breakEnds = undefined;
 }
 
-/** Finds line starts up to the first one past `index`, so an error near the start doesn't scan the whole source. */
 function scanTo(index: number): void {
   while (scanned <= index) {
     const newline = source.indexOf("\n", scanned);
@@ -45,7 +44,6 @@ function lineStartsOf(text: string): number[] {
   return starts;
 }
 
-/** The 0-based line of `index`, searching from `hint`, the line found last. */
 function lineOf(starts: number[], index: number, hint: number): number {
   let low = 0;
   let high = starts.length - 1;
@@ -73,7 +71,6 @@ export function locate(index: number): Location {
 const REGEX_LINE_BREAK = /\r\n?|\n|\u2028|\u2029/g;
 const REGEX_OTHER_LINE_BREAK = /[\r\u2028\u2029]/;
 
-/** How many line breaks as acorn counts them, `\r\n`, `\r`, `\n`, U+2028 and U+2029, end at or before `offset`. */
 export function lineBreaksBefore(offset: number): number {
   if (breakEnds === undefined) {
     breakEnds = REGEX_OTHER_LINE_BREAK.test(source) ? [] : null;
@@ -101,7 +98,6 @@ export function position(index: number): { line: number; column: number } {
   return { line, column };
 }
 
-/** The text of the 0-based `line`, without its line break, or `undefined` past the last line. */
 export function lineText(line: number): string | undefined {
   while (
     lineStarts.length <= line + 1 &&

@@ -5,10 +5,10 @@ import {
 } from "./component-lexer";
 import { extractIdentifiers } from "./extract-identifiers";
 import { isReference } from "./is-reference";
-import { isWhitespace } from "./markup";
+import { isWhitespace, skipWhitespace } from "./markup";
 import { parse } from "./parse";
 import { parseSections } from "./parse-sections";
-import { closingBracket, isWordCode } from "./scan";
+import { closingBracket, isWordCode, wordCodesEnd } from "./scan";
 import type {
   ArrowFunctionExpression,
   Expression,
@@ -133,13 +133,6 @@ const DECLARING_WORDS = new Set(
   ),
 );
 
-/**
- * Whether a script calls a rune, read without parsing: only when every
- * use of that rune's name in the scripts is a call that can't be a
- * declaration, a method or a type, so no binding shadows it, and its
- * store's name, such as `state` for `$state`, is never written, so it
- * can't be a store subscription.
- */
 function callsRune(source: string, scripts: LexedContent[]): boolean {
   const calls = new Map<string, boolean>();
   for (const { start, end } of scripts) {
@@ -182,33 +175,25 @@ function isRuneCall(source: string, start: number, end: number): boolean {
     if (DECLARING_WORDS.has(source.slice(wordStart, before + 1))) return false;
   }
 
-  let i = skipSpace(source, end);
+  let i = skipWhitespace(source, end);
   while (source.charCodeAt(i) === 46) {
-    const wordStart = skipSpace(source, i + 1);
-    let wordEnd = wordStart;
-    while (isWordCode(source.charCodeAt(wordEnd))) wordEnd++;
+    const wordStart = skipWhitespace(source, i + 1);
+    const wordEnd = wordCodesEnd(source, wordStart);
     if (wordEnd === wordStart) return false;
-    i = skipSpace(source, wordEnd);
+    i = skipWhitespace(source, wordEnd);
   }
   if (source.charCodeAt(i) === 60) {
     i = typeArgumentsEnd(source, i);
     if (i === -1) return false;
-    i = skipSpace(source, i);
+    i = skipWhitespace(source, i);
   }
   if (source.charCodeAt(i) !== 40) return false;
   const close = closingBracket(source, i + 1);
   if (source.charCodeAt(close) !== 41) return false;
-  const next = source.charCodeAt(skipSpace(source, close + 1));
+  const next = source.charCodeAt(skipWhitespace(source, close + 1));
   return next !== 123 && next !== 58;
 }
 
-function skipSpace(source: string, from: number): number {
-  let i = from;
-  while (i < source.length && isWhitespace(source.charCodeAt(i))) i++;
-  return i;
-}
-
-/** The offset after the `>` that closes the `<` at `from`, or -1 if it isn't found nearby or a string gets in the way. */
 function typeArgumentsEnd(source: string, from: number): number {
   let depth = 0;
   const limit = Math.min(source.length, from + 2000);
@@ -263,12 +248,6 @@ function usesRunes(ast: AST.Root): boolean {
   return false;
 }
 
-/**
- * Calls `reference` with each rune's name under `root` that svelte's
- * scopes leave unresolved, so that it reaches the component's scope, and
- * returns whether `root` has an `await` outside a function. `outer` holds
- * the names declared around `root`.
- */
 function collectReferences(
   root: AST.SvelteNode,
   outer: ReadonlyMap<string, Initial>,
@@ -316,18 +295,12 @@ function collectReferences(
 
 const NO_NAMES = new Set<string>();
 
-/**
- * The names `node` declares for its descendants, if it's a function, a
- * catch clause, a snippet or an each block. A function's are its
- * parameters and every declaration in its body outside nested functions,
- * blocks included.
- */
 function declaredIn(
   node: AST.SvelteNode,
   scopes: Map<AST.SvelteNode, Set<string>>,
 ): Set<string> {
-  let names = scopes.get(node);
-  if (names) return names;
+  const cached = scopes.get(node);
+  if (cached) return cached;
   const patterns: Parameters<typeof extractIdentifiers>[0][] = [];
   if (isFunction(node)) {
     patterns.push(...node.params);
@@ -335,7 +308,6 @@ function declaredIn(
   } else if (node.type === "CatchClause" && node.param) {
     patterns.push(node.param);
   } else if (node.type === "SnippetBlock") {
-    // undefined where TypeScript reads the signature as a type assertion
     patterns.push(...(node.parameters ?? []));
   } else if (node.type === "EachBlock" && node.context) {
     patterns.push(node.context);
@@ -344,7 +316,7 @@ function declaredIn(
     scopes.set(node, NO_NAMES);
     return NO_NAMES;
   }
-  names = new Set(
+  const names = new Set(
     patterns
       .flatMap((pattern) => extractIdentifiers(pattern))
       .map((id) => id.name),
@@ -356,15 +328,16 @@ function declaredIn(
         if (inner === body) return;
         if (inner.type === "VariableDeclaration") {
           for (const declarator of inner.declarations) {
-            for (const id of extractIdentifiers(declarator.id))
-              names?.add(id.name);
+            for (const id of extractIdentifiers(declarator.id)) {
+              names.add(id.name);
+            }
           }
         } else if (
           (inner.type === "FunctionDeclaration" ||
             inner.type === "ClassDeclaration") &&
           inner.id
         ) {
-          names?.add(inner.id.name);
+          names.add(inner.id.name);
         }
         return isFunction(inner) ? SKIP : undefined;
       },
@@ -387,11 +360,6 @@ function isFunction(node: AST.SvelteNode): node is FunctionNode {
   );
 }
 
-/**
- * The names a script declares in its own scope, with what svelte keeps
- * as each one's initial value: a `var` outside the top level is hoisted
- * without one, and so is a name the instance script assigns in `$:`.
- */
 function declare(
   program: Program,
   into: Map<string, Initial>,
@@ -449,7 +417,6 @@ function declare(
   }
 }
 
-/** The rune `initial` calls, as svelte's `get_rune` finds it: `null` if it isn't a call, or its callee names a declared binding. */
 function runeOf(
   initial: Initial,
   declared: Map<string, Initial>,

@@ -1,3 +1,5 @@
+import { isWhitespace } from "./markup";
+
 const STATEMENT_START = 0;
 const OPERATOR = 1;
 const BLOCK_OPENER = 2;
@@ -54,7 +56,6 @@ function keywordKey(first: number, length: number): number {
   return first * (LONGEST_KEYWORD + 1) + length;
 }
 
-/** The kind of the word from `start` to `end`: a keyword's, or `VALUE`. */
 function wordKind(source: string, start: number, end: number): number {
   const first = source.charCodeAt(start);
   if (first >= 128 || end - start > LONGEST_KEYWORD) return VALUE;
@@ -67,8 +68,6 @@ function wordKind(source: string, start: number, end: number): number {
   return VALUE;
 }
 
-const UNICODE_SPACE = /\s/;
-
 const ASCII_WORD = new Uint8Array(128);
 for (const range of ["az", "AZ", "09", "__", "$$", "\\\\"]) {
   for (let code = range.charCodeAt(0); code <= range.charCodeAt(1); code++) {
@@ -76,29 +75,10 @@ for (const range of ["az", "AZ", "09", "__", "$$", "\\\\"]) {
   }
 }
 
-/** Whether `code` can be part of a word, read loosely: `false` past the end of the source, where `code` is `NaN`. */
 export function isWordCode(code: number): boolean {
-  return code >= 128
-    ? !UNICODE_SPACE.test(String.fromCharCode(code))
-    : ASCII_WORD[code] === 1;
+  return code >= 128 ? !isWhitespace(code) : ASCII_WORD[code] === 1;
 }
 
-function isSpaceCode(code: number): boolean {
-  return code < 128
-    ? code === 32 || (code >= 9 && code <= 13)
-    : UNICODE_SPACE.test(String.fromCharCode(code));
-}
-
-/**
- * Calls `parseAt` with the start of each top-level `import` or `export`
- * statement, including the decorators before an `export`, and the offset of
- * its keyword, and resumes at the end it returns. With `localExports`
- * false, only exports with a `from` are parsed. The rest is skipped by a
- * tokenizer that only tracks strings, comments, templates, regular
- * expressions and brackets, and guesses regex or division from the
- * previous token, as acorn's does. It stops after the last `import` or
- * `export` word that could start a statement.
- */
 export function scan(
   source: string,
   localExports: boolean,
@@ -113,11 +93,6 @@ export function scan(
   );
 }
 
-/**
- * Calls `literal` with the offsets of each string, quotes included, and of
- * the text of each template literal between its delimiters, read with
- * `scan`'s tokenizer through the whole source.
- */
 export function scanLiterals(
   source: string,
   literal: (start: number, end: number, template: boolean) => void,
@@ -134,7 +109,6 @@ function tokenize(
     | ((start: number, end: number, template: boolean) => void)
     | undefined,
 ): void {
-  const length = source.length;
   const stack: number[] = [];
   let pos = source.startsWith("#!") ? lineEnd(source, 2) : 0;
   let prev = STATEMENT_START;
@@ -149,19 +123,14 @@ function tokenize(
 
   while (pos <= last) {
     const code = source.charCodeAt(pos);
-    if (code === 32 || code === 10 || isSpaceCode(code)) {
+    if (code === 32 || code === 10 || isWhitespace(code)) {
       pos++;
       continue;
     }
     if (code === 47) {
-      const next = source.charCodeAt(pos + 1);
-      if (next === 47) {
-        pos = lineEnd(source, pos + 2);
-        continue;
-      }
-      if (next === 42) {
-        const end = source.indexOf("*/", pos + 2);
-        pos = end === -1 ? length : end + 2;
+      const end = commentEnd(source, pos);
+      if (end !== -1) {
+        pos = end;
         continue;
       }
     }
@@ -172,13 +141,7 @@ function tokenize(
 
     if (isWordCode(code) || code === 35) {
       const start = pos;
-      pos++;
-      while (pos < length) {
-        const next = source.charCodeAt(pos);
-        if (next === 92) pos += 2;
-        else if (isWordCode(next)) pos++;
-        else break;
-      }
+      pos = wordEnd(source, pos + 1);
       const kind = wasAfterDot ? VALUE : wordKind(source, start, pos);
       if (
         parseAt !== undefined &&
@@ -228,8 +191,7 @@ function tokenize(
         if (end === -1) {
           prev = OPERATOR;
         } else {
-          pos = end;
-          while (pos < length && isWordCode(source.charCodeAt(pos))) pos++;
+          pos = wordCodesEnd(source, end);
           prev = VALUE;
         }
         break;
@@ -264,7 +226,7 @@ function tokenize(
         break;
       case 46:
         if (isDigit(source.charCodeAt(pos))) {
-          while (pos < length && isWordCode(source.charCodeAt(pos))) pos++;
+          pos = wordCodesEnd(source, pos);
           prev = VALUE;
         } else if (source.startsWith("..", pos)) {
           pos += 2;
@@ -286,7 +248,7 @@ function tokenize(
         break;
       case 33:
         prev =
-          prev === VALUE && !isSpaceCode(source.charCodeAt(pos - 2))
+          prev === VALUE && !isWhitespace(source.charCodeAt(pos - 2))
             ? VALUE
             : OPERATOR;
         break;
@@ -309,15 +271,6 @@ function tokenize(
   }
 }
 
-/**
- * The offset of the first `)` or `}` after `from` that closes no bracket
- * opened after it, such as the `}` that ends a template expression, read
- * with `scan`'s tokenizer: strings, comments, templates, regular
- * expressions and brackets are skipped. The source's length if there's
- * none. `word` is called with the offsets of each word that doesn't
- * follow `.` or `?.`, and returning `true` from it stops the scan there,
- * at -1.
- */
 export function closingBracket(
   source: string,
   from: number,
@@ -331,19 +284,14 @@ export function closingBracket(
 
   while (pos < length) {
     const code = source.charCodeAt(pos);
-    if (code === 32 || code === 10 || isSpaceCode(code)) {
+    if (code === 32 || code === 10 || isWhitespace(code)) {
       pos++;
       continue;
     }
     if (code === 47) {
-      const next = source.charCodeAt(pos + 1);
-      if (next === 47) {
-        pos = lineEnd(source, pos + 2);
-        continue;
-      }
-      if (next === 42) {
-        const end = source.indexOf("*/", pos + 2);
-        pos = end === -1 ? length : end + 2;
+      const end = commentEnd(source, pos);
+      if (end !== -1) {
+        pos = end;
         continue;
       }
     }
@@ -352,13 +300,7 @@ export function closingBracket(
 
     if (isWordCode(code) || code === 35) {
       const start = pos;
-      pos++;
-      while (pos < length) {
-        const next = source.charCodeAt(pos);
-        if (next === 92) pos += 2;
-        else if (isWordCode(next)) pos++;
-        else break;
-      }
+      pos = wordEnd(source, pos + 1);
       if (!wasAfterDot && word?.(start, pos)) return -1;
       const kind = wasAfterDot ? VALUE : wordKind(source, start, pos);
       prev =
@@ -384,8 +326,7 @@ export function closingBracket(
         if (end === -1) {
           prev = OPERATOR;
         } else {
-          pos = end;
-          while (pos < length && isWordCode(source.charCodeAt(pos))) pos++;
+          pos = wordCodesEnd(source, end);
           prev = VALUE;
         }
         break;
@@ -419,7 +360,7 @@ export function closingBracket(
         break;
       case 46:
         if (isDigit(source.charCodeAt(pos))) {
-          while (pos < length && isWordCode(source.charCodeAt(pos))) pos++;
+          pos = wordCodesEnd(source, pos);
           prev = VALUE;
         } else if (source.startsWith("..", pos)) {
           pos += 2;
@@ -441,7 +382,7 @@ export function closingBracket(
         break;
       case 33:
         prev =
-          prev === VALUE && !isSpaceCode(source.charCodeAt(pos - 2))
+          prev === VALUE && !isWhitespace(source.charCodeAt(pos - 2))
             ? VALUE
             : OPERATOR;
         break;
@@ -465,17 +406,42 @@ export function isDigit(code: number): boolean {
   return code >= 48 && code <= 57;
 }
 
-function lineEnd(source: string, pos: number): number {
+function isLineBreak(code: number): boolean {
+  return code === 10 || code === 13 || code === 0x2028 || code === 0x2029;
+}
+
+export function lineEnd(source: string, pos: number): number {
   for (let i = pos; i < source.length; i++) {
-    const code = source.charCodeAt(i);
-    if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
-      return i;
-    }
+    if (isLineBreak(source.charCodeAt(i))) return i;
   }
   return source.length;
 }
 
-/** The offset after the closing quote, or of the line break an unterminated string stops at. */
+function commentEnd(source: string, slash: number): number {
+  const next = source.charCodeAt(slash + 1);
+  if (next === 47) return lineEnd(source, slash + 2);
+  if (next !== 42) return -1;
+  const end = source.indexOf("*/", slash + 2);
+  return end === -1 ? source.length : end + 2;
+}
+
+function wordEnd(source: string, pos: number): number {
+  let i = pos;
+  while (i < source.length) {
+    const code = source.charCodeAt(i);
+    if (code === 92) i += 2;
+    else if (isWordCode(code)) i++;
+    else break;
+  }
+  return i;
+}
+
+export function wordCodesEnd(source: string, pos: number): number {
+  let i = pos;
+  while (i < source.length && isWordCode(source.charCodeAt(i))) i++;
+  return i;
+}
+
 function stringEnd(source: string, pos: number, quote: number): number {
   for (let i = pos; i < source.length; i++) {
     const code = source.charCodeAt(i);
@@ -487,7 +453,6 @@ function stringEnd(source: string, pos: number, quote: number): number {
   return source.length;
 }
 
-/** The offset after the closing backtick, or after a `${`, which it pushes. */
 function templateEnd(source: string, pos: number, stack: number[]): number {
   for (let i = pos; i < source.length; i++) {
     const code = source.charCodeAt(i);
@@ -501,7 +466,6 @@ function templateEnd(source: string, pos: number, stack: number[]): number {
   return source.length;
 }
 
-/** The end of a template's text that `templateEnd` stopped after: the offset of its backtick or `${`. */
 function quasiEnd(source: string, pos: number): number {
   const code = source.charCodeAt(pos - 1);
   if (code === 96) return pos - 1;
@@ -509,14 +473,11 @@ function quasiEnd(source: string, pos: number): number {
   return pos;
 }
 
-/** The offset after a regular expression's closing `/`, or -1 if the line ends first. */
 function regexEnd(source: string, pos: number): number {
   let inClass = false;
   for (let i = pos; i < source.length; i++) {
     const code = source.charCodeAt(i);
-    if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
-      return -1;
-    }
+    if (isLineBreak(code)) return -1;
     if (code === 92) i++;
     else if (code === 91) inClass = true;
     else if (code === 93) inClass = false;
@@ -525,25 +486,17 @@ function regexEnd(source: string, pos: number): number {
   return -1;
 }
 
-/** The offset of the next token at or after `pos`, past whitespace and comments. */
 export function skipTrivia(source: string, pos: number): number {
-  for (let i = pos; i < source.length; i++) {
+  let i = pos;
+  while (i < source.length) {
     const code = source.charCodeAt(i);
-    if (isSpaceCode(code)) continue;
-    if (code === 47) {
-      const next = source.charCodeAt(i + 1);
-      if (next === 47) {
-        i = lineEnd(source, i + 2) - 1;
-        continue;
-      }
-      if (next === 42) {
-        const end = source.indexOf("*/", i + 2);
-        if (end === -1) return source.length;
-        i = end + 1;
-        continue;
-      }
+    if (isWhitespace(code)) {
+      i++;
+      continue;
     }
-    return i;
+    const end = code === 47 ? commentEnd(source, i) : -1;
+    if (end === -1) return i;
+    i = end;
   }
   return source.length;
 }
@@ -556,13 +509,11 @@ export function isWordAt(source: string, pos: number, word: string): boolean {
   );
 }
 
-/** Whether the `import` that ends at `pos` isn't `import(...)` or `import.meta`. */
 function isImportDeclaration(source: string, pos: number): boolean {
   const code = source.charCodeAt(skipTrivia(source, pos));
   return code !== 40 && code !== 46;
 }
 
-/** Whether the `export` that ends at `pos` exports from another module: `export * from`, `export { a } from`, their `export type` forms, or `export import`. */
 function isReexport(source: string, pos: number): boolean {
   let i = skipTrivia(source, pos);
   if (isWordAt(source, i, "import")) return true;
@@ -581,11 +532,6 @@ function isReexport(source: string, pos: number): boolean {
 
 const STATEMENT_KEYWORD = /import|export/g;
 
-/**
- * The offset of the last `import` or `export` word that `scan` would stop
- * at if it reached it, or -1. A regular expression finds the candidates:
- * `indexOf("export")` is several times slower, in V8 and JavaScriptCore.
- */
 function lastStatementKeyword(source: string, localExports: boolean): number {
   let last = -1;
   STATEMENT_KEYWORD.lastIndex = 0;
