@@ -1,4 +1,5 @@
 import { isValidType, parseModule } from "sveast";
+import { singleEdits } from "./shared";
 
 const VALID = [
   "string",
@@ -68,7 +69,6 @@ test("accepts the types a recognizer would leave to a parser", () => {
     "| 'a' | 'b'",
     "T extends string ? A : B",
     "{ readonly [K in keyof T]?: T[K] }",
-    // split so it isn't read as a placeholder
     ["`a-$", "{B}`"].join(""),
     "<T>(a: T) => T",
     "new () => T",
@@ -111,18 +111,9 @@ test("rejects text that would end the type and start a statement", () => {
 });
 
 test("agrees with parsing `type T = text` on mutated types", () => {
-  const disagreements: string[] = [];
-  const check = (text: string) => {
-    if (isValidType(text) !== asTypeAlias(text)) disagreements.push(text);
-  };
-  for (const text of VALID) {
-    for (let i = 0; i <= text.length; i++) {
-      check(text.slice(0, i) + text.slice(i + 1));
-      for (const insert of INSERTS) {
-        check(text.slice(0, i) + insert + text.slice(i));
-      }
-    }
-  }
+  const disagreements = [...singleEdits(VALID, INSERTS)].filter(
+    (text) => isValidType(text) !== asTypeAlias(text),
+  );
   expect(disagreements).toEqual([]);
 });
 
@@ -156,20 +147,10 @@ test("inline: accepts block comments, `//` in strings and `//` ended by a line b
 });
 
 test("inline: agrees with also parsing `(text)` on mutated types", () => {
-  const disagreements: string[] = [];
-  const check = (text: string) => {
-    const parenthesized = isValidType(text) && isValidType(`(${text})`);
-    if (isValidType(text, { inline: true }) !== parenthesized) {
-      disagreements.push(text);
-    }
-  };
-  for (const text of VALID) {
-    for (let i = 0; i <= text.length; i++) {
-      check(text.slice(0, i) + text.slice(i + 1));
-      for (const insert of INSERTS) {
-        check(text.slice(0, i) + insert + text.slice(i));
-      }
-    }
-  }
+  const disagreements = [...singleEdits(VALID, INSERTS)].filter(
+    (text) =>
+      isValidType(text, { inline: true }) !==
+      (isValidType(text) && isValidType(`(${text})`)),
+  );
   expect(disagreements).toEqual([]);
 });

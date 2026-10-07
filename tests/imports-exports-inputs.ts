@@ -1,49 +1,12 @@
-import path from "node:path";
-import { Glob } from "bun";
-import { parse } from "sveast";
-import { byCodeUnit } from "../scripts/shared";
+import { join } from "node:path";
+import { MODULE_FILES, type Module, modulesIn } from "../scripts/lexed";
+import { CORPUS, corpusFiles, mutated } from "./shared";
+import { SNIPPETS } from "./ts-snippets";
 
-const LANG_TS = /\blang=["']?ts\b/;
-
-const root = path.join(import.meta.dir, "corpus");
-const files: string[] = [];
-for await (const file of new Glob("**/*.{js,ts,svelte}").scan(root)) {
-  files.push(file);
-}
-files.sort(byCodeUnit);
-
-function scripts(source: string): { text: string; typescript: boolean }[] {
-  let ast: ReturnType<typeof parse>;
-  try {
-    ast = parse(source, { script: false });
-  } catch {
-    return [];
-  }
-  return [ast.instance, ast.module].flatMap((script) => {
-    if (!script) return [];
-    const { content } = script;
-    if (!("start" in content && typeof content.start === "number")) return [];
-    if (!("end" in content && typeof content.end === "number")) return [];
-    return [
-      {
-        text: source.slice(content.start, content.end),
-        typescript: LANG_TS.test(source.slice(script.start, content.start)),
-      },
-    ];
-  });
-}
-
-export const inputs = await Promise.all(
-  files.map(async (file) => {
-    const source = await Bun.file(path.join(root, file)).text();
-    return {
-      file,
-      modules: file.endsWith(".svelte")
-        ? scripts(source)
-        : [{ text: source, typescript: file.endsWith(".ts") }],
-    };
-  }),
-);
+export const inputs = corpusFiles(MODULE_FILES).map((file) => ({
+  file,
+  modules: modulesIn(join(CORPUS, file)),
+}));
 
 export const TRICKY: Record<string, string> = {
   "keywords in strings and comments": `
@@ -174,27 +137,19 @@ const EDITS = [
   "\u2028",
 ];
 
-/** `count` modules from the corpus with one to three random edits each, and whether each is TypeScript, the same on every run. */
-export function* mutatedModules(
-  count: number,
-): Generator<{ text: string; typescript: boolean }> {
+export const TRICKY_AND_SNIPPETS: [text: string, typescript: boolean][] = [
+  ...Object.values(TRICKY).map((text): [string, boolean] => [text, false]),
+  ...[...Object.values(TRICKY_TS), ...Object.values(SNIPPETS)].map(
+    (text): [string, boolean] => [text, true],
+  ),
+];
+
+export function* mutatedModules(count: number): Generator<Module> {
   const corpus = inputs.flatMap((input) =>
     input.file.endsWith(".svelte") ? [] : input.modules,
   );
-  let seed = 1;
-  const random = (n: number) => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed % n;
-  };
-  for (let trial = 0; trial < count; trial++) {
-    const { text: original, typescript } = corpus[random(corpus.length)];
-    let text = original.slice(0, 4000);
-    for (let edits = 1 + random(3); edits > 0; edits--) {
-      const at = random(text.length + 1);
-      const edit = EDITS[random(EDITS.length)];
-      const removed = random(3) === 0 ? 0 : 1 + random(5);
-      text = text.slice(0, at) + edit + text.slice(at + removed);
-    }
-    yield { text, typescript };
+  const texts = corpus.map((module) => module.text);
+  for (const [text, index] of mutated(texts, EDITS, count)) {
+    yield { text, typescript: corpus[index].typescript };
   }
 }

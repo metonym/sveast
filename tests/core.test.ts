@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { Glob } from "bun";
 import { ParseError, parse, parseImportsExports, parseModule } from "sveast";
 import { ParseError as CoreParseError, createParser } from "sveast/core";
 import { entities } from "sveast/entities";
@@ -9,14 +6,11 @@ import {
   ParseError as ModuleParseError,
 } from "sveast/module";
 import { typescript } from "sveast/typescript";
+import { MODULE_FILES } from "../scripts/lexed";
 import { byCodeUnit } from "../scripts/shared";
+import { corpusFiles, readCorpus } from "./shared";
 
-const root = path.join(import.meta.dir, "corpus");
-const files: string[] = [];
-for await (const file of new Glob("**/*.{svelte,js,ts}").scan(root)) {
-  files.push(file);
-}
-files.sort(byCodeUnit);
+const files = corpusFiles(MODULE_FILES);
 
 const LANG_TS = /<script[^>]*\blang=["']?ts\b/;
 const NAMED_REFERENCE = /&(?!(?:amp|apos|gt|lt|quot)\b)[A-Za-z]/;
@@ -35,7 +29,7 @@ function sameAsSveast(
   parser: ReturnType<typeof createParser>,
   file: string,
 ): boolean {
-  const source = readFileSync(path.join(root, file), "utf8");
+  const source = readCorpus(file);
   if (file.endsWith(".svelte")) {
     return Bun.deepEquals(
       outcome(() => parser.parse(source, { loc: true })),
@@ -76,7 +70,7 @@ test("createParser without either parses JavaScript components like sveast unles
   const parser = createParser();
   const compared = files.filter((file) => {
     if (!file.endsWith(".svelte")) return false;
-    const source = readFileSync(path.join(root, file), "utf8");
+    const source = readCorpus(file);
     return !LANG_TS.test(source) && !NAMED_REFERENCE.test(source);
   });
   expect(compared.filter((file) => !sameAsSveast(parser, file))).toEqual([]);
@@ -105,7 +99,7 @@ test("createModuleParser with typescript parses modules like sveast", () => {
     createModuleParser({ typescript });
   const modules = files.filter((file) => !file.endsWith(".svelte"));
   const differ = modules.filter((file) => {
-    const source = readFileSync(path.join(root, file), "utf8");
+    const source = readCorpus(file);
     const options = { typescript: file.endsWith(".ts") };
     return (
       !Bun.deepEquals(

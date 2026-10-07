@@ -9,20 +9,18 @@ import {
   walk,
 } from "sveast";
 import { byCodeUnit, isRecord } from "../scripts/shared";
-import { corpusAsts } from "./corpus-asts";
+import { corpusAsts } from "./shared";
 
 const COMMENTS = new Set(["comments", "leadingComments", "trailingComments"]);
-// Children that can come in either order in the source.
 const UNORDERED = new Set([
-  "Root", // walked in scope order: module, instance, fragment, css
-  "TemplateLiteral", // quasis and expressions interleave
-  "SvelteElement", // `this` can be any of the attributes
+  "Root",
+  "TemplateLiteral",
+  "SvelteElement",
   "SvelteComponent",
 ]);
 
 const ASTS = corpusAsts();
 
-/** Where `root` holds a node that `walk` doesn't reach, as `Type.field`. Not its descendants, which it doesn't reach either. */
 function unreached(root: AST.SvelteNode, reached: Set<object>): string[] {
   const found: string[] = [];
   const visit = (value: unknown, owner: string) => {
@@ -47,14 +45,11 @@ function unreached(root: AST.SvelteNode, reached: Set<object>): string[] {
   return found;
 }
 
-/** Where a node's position in the source is: its start, or a fragment's first node's. */
 function position(node: AST.SvelteNode): number | undefined {
   if (node.type === "Fragment") return node.nodes[0]?.start;
   return "start" in node ? node.start : undefined;
 }
 
-// acorn shares one Identifier between both names of `{ a }` in an import or
-// export, so walk visits it once under each.
 const SHARED = new Set(["ImportSpecifier.local", "ExportSpecifier.exported"]);
 
 test("walk reaches every node in the corpus once", () => {

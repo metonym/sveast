@@ -1,18 +1,13 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { lexComponent } from "sveast";
 import { lexComponent as fromEntry } from "sveast/lexer";
 import { expectedSections } from "../scripts/lexed-component";
-import { byCodeUnit } from "../scripts/shared";
+import { SVELTE_FILES } from "../scripts/shared";
+import { corpusFiles, mutated, readCorpus } from "./shared";
 
-const CORPUS = join(import.meta.dir, "corpus");
-const COMPONENTS = readdirSync(CORPUS, { recursive: true, encoding: "utf8" })
-  .filter((path) => path.endsWith(".svelte"))
-  .sort(byCodeUnit)
-  .map((path) => ({
-    path,
-    source: readFileSync(join(CORPUS, path), "utf8"),
-  }));
+const COMPONENTS = corpusFiles(SVELTE_FILES).map((path) => ({
+  path,
+  source: readCorpus(path),
+}));
 
 test("sveast/lexer exports the same function", () => {
   expect(fromEntry).toBe(lexComponent);
@@ -69,21 +64,9 @@ const EDITS = [
 ];
 
 test("matches parse on mutated components, and never throws", () => {
-  let seed = 1;
-  const random = (n: number) => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed % n;
-  };
+  const sources = COMPONENTS.map((component) => component.source);
   let compared = 0;
-  for (let trial = 0; trial < 4000; trial++) {
-    let { source } = COMPONENTS[random(COMPONENTS.length)];
-    source = source.slice(0, 6000);
-    for (let edits = 1 + random(3); edits > 0; edits--) {
-      const at = random(source.length + 1);
-      const edit = EDITS[random(EDITS.length)];
-      const removed = random(3) === 0 ? 0 : 1 + random(5);
-      source = source.slice(0, at) + edit + source.slice(at + removed);
-    }
+  for (const [source] of mutated(sources, EDITS, 4000, 6000)) {
     const lexed = lexComponent(source);
     const expected = expectedSections(source);
     if (expected === undefined) continue;

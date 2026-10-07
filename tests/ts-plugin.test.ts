@@ -1,15 +1,17 @@
-import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tsPlugin as acornTypeScript } from "@sveltejs/acorn-typescript";
 import { type Comment, Parser } from "acorn";
-import { errorMessage } from "../scripts/shared";
+import { errorMessage, toJson } from "../scripts/shared";
 import { tsPlugin } from "../src/ts-plugin";
+import { acornOutcome, CORPUS, corpusFiles, readCorpus } from "./shared";
 import { SNIPPETS } from "./ts-snippets";
 
 const Ours = Parser.extend(tsPlugin);
 const Theirs = Parser.extend(acornTypeScript());
 
 const OPTIONS = { sourceType: "module", ecmaVersion: 16 } as const;
+const LOCATIONS = { ...OPTIONS, locations: true };
+const LOC = new Set(["loc"]);
 
 function parse(
   ParserClass: typeof Parser,
@@ -23,10 +25,7 @@ function parse(
     locations,
     onComment: comments,
   });
-  return JSON.stringify({ ast, comments }, (key, value) => {
-    if (key === "loc" && !keepLoc) return;
-    return typeof value === "bigint" ? `${value}n` : value;
-  });
+  return toJson({ ast, comments }, keepLoc ? undefined : LOC);
 }
 
 describe("ts-plugin matches @sveltejs/acorn-typescript", () => {
@@ -64,15 +63,9 @@ describe("ts-plugin", () => {
     "type T = 1; export { T }",
     "const f = <>(x) => x;",
   ])("declarations: %s", (source) => {
-    const outcome = (ParserClass: typeof Parser) => {
-      try {
-        ParserClass.parse(source, { ...OPTIONS, locations: true });
-        return "ok";
-      } catch (error) {
-        return errorMessage(error);
-      }
-    };
-    expect(outcome(Ours)).toBe(outcome(Theirs));
+    expect(acornOutcome(Ours, source, LOCATIONS)).toBe(
+      acornOutcome(Theirs, source, LOCATIONS),
+    );
   });
 
   test.each([
@@ -89,15 +82,9 @@ describe("ts-plugin", () => {
   ])(
     "only declared functions and class methods may have no body: %s",
     (source) => {
-      const outcome = (ParserClass: typeof Parser) => {
-        try {
-          ParserClass.parse(source, { ...OPTIONS, locations: true });
-          return "ok";
-        } catch (error) {
-          return errorMessage(error);
-        }
-      };
-      expect(outcome(Ours)).toBe(outcome(Theirs));
+      expect(acornOutcome(Ours, source, LOCATIONS)).toBe(
+        acornOutcome(Theirs, source, LOCATIONS),
+      );
     },
   );
 
@@ -110,14 +97,12 @@ describe("ts-plugin", () => {
   });
 });
 
-const CARBON = join(import.meta.dir, "corpus/carbon");
-const MODULES = readdirSync(CARBON, { recursive: true, encoding: "utf8" })
-  .filter((path) => path.endsWith(".js") || path.endsWith(".ts"))
-  .sort();
+const CARBON = join(CORPUS, "carbon");
+const MODULES = corpusFiles(/\.[jt]s$/, CARBON);
 
 describe("ts-plugin matches acorn-typescript on Carbon's modules", () => {
   test.each(MODULES)("%s", (path) => {
-    const source = readFileSync(join(CARBON, path), "utf8");
+    const source = readCorpus(path, CARBON);
     const outcome = (ParserClass: typeof Parser) => {
       try {
         return parse(ParserClass, source, true, true);

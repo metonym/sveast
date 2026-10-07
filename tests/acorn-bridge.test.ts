@@ -1,5 +1,6 @@
 import { parse } from "sveast";
 import { parse as svelteParse } from "svelte/compiler";
+import { attempt } from "../scripts/shared";
 import { declarations, tweaks } from "../src/acorn-bridge";
 import {
   extendParser,
@@ -19,7 +20,6 @@ const INPUT =
   "let a = 1;\r\nconst b = <T,>(x: T) => x;\n  {c + `d${e}`}\u2028f";
 const POSITIONS = [0, 4, INPUT.indexOf("const"), INPUT.indexOf("c +")];
 
-// what a parse leaves behind: scopes, labels, contexts, private names and type state
 const DIRTY = [
   "class A { #x = 1; static { label: for (;;) break label; } }",
   "async function* f<T>(@d a: T): T { yield await a; }",
@@ -47,18 +47,11 @@ function options(
     ecmaVersion: 16,
     locations,
     preserveParens: true,
-    onComment() {
-      // the comparison leaves out the callback
-    },
+    onComment: [],
     ...(startLocation && { startLocation }),
   };
 }
 
-/**
- * A parser's own fields, without the comment callback, which differs by
- * identity, and `startLocation`, which `reset` takes as an argument. acorn
- * sets `inTemplateElement` only once it reads a template.
- */
 function state(parser: ParserInternals) {
   const { options: parserOptions, ...fields } = parser;
   const { onComment: _, startLocation: __, ...rest } = parserOptions;
@@ -83,12 +76,10 @@ describe("reset", () => {
             const parser = new ParserClass(options(locations), "", 0);
             for (const dirty of DIRTY) {
               parser.reset?.(dirty, 0, undefined);
-              try {
+              attempt(() => {
                 parser.nextToken();
                 parser.parseStatement(null, true, Object.create(null));
-              } catch {
-                // a parse that throws leaves its state behind too
-              }
+              });
               parser.reset?.(INPUT, pos, startLocation);
               expect(state(parser)).toEqual(state(fresh));
             }

@@ -1,31 +1,20 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { isRunesMode } from "sveast";
 import { compile } from "svelte/compiler";
-import { byCodeUnit } from "../scripts/shared";
+import { attempt, SVELTE_FILES } from "../scripts/shared";
+import { corpusFiles, readCorpus } from "./shared";
 
-const CORPUS = join(import.meta.dir, "corpus");
-
-/** `compile`'s `metadata.runes`, with `await` allowed, or `undefined` if it throws. */
-function svelteRunes(source: string): boolean | undefined {
-  try {
-    return compile(source, {
-      generate: false,
-      experimental: { async: true },
-    }).metadata.runes;
-  } catch {
-    return undefined;
-  }
-}
+const svelteRunes = (source: string) =>
+  attempt(
+    () =>
+      compile(source, { generate: false, experimental: { async: true } })
+        .metadata.runes,
+  );
 
 test("matches svelte's compile on the corpus", () => {
-  const paths = readdirSync(CORPUS, { recursive: true, encoding: "utf8" })
-    .filter((path) => path.endsWith(".svelte"))
-    .sort(byCodeUnit);
   let compared = 0;
   let runes = 0;
-  for (const path of paths) {
-    const source = readFileSync(join(CORPUS, path), "utf8");
+  for (const path of corpusFiles(SVELTE_FILES)) {
+    const source = readCorpus(path);
     const expected = svelteRunes(source);
     if (expected === undefined) continue;
     compared++;
@@ -102,7 +91,6 @@ test("doesn't parse a component without a rune's name or await", () => {
 });
 
 test("reads a snippet whose signature TypeScript takes for a type assertion", () => {
-  // svelte's `compile` throws on it: the snippet has no `parameters`
   expect(
     isRunesMode(
       '<script lang="ts">let a = 1;</script>{#snippet s<T<U>>(x)}{$state.snapshot(a)}{/snippet}',

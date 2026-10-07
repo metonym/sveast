@@ -1,25 +1,11 @@
-import { type LexedString, lexStrings, parseModule } from "sveast";
+import { type LexedString, lexStrings } from "sveast";
 import { lexStrings as fromEntry } from "sveast/lexer";
 import { expectedStrings } from "../scripts/lexed";
 import {
   inputs,
   mutatedModules,
-  TRICKY,
-  TRICKY_TS,
+  TRICKY_AND_SNIPPETS,
 } from "./imports-exports-inputs";
-import { SNIPPETS } from "./ts-snippets";
-
-/** The strings `parseModule` implies, or `undefined` if it throws. */
-function expected(
-  source: string,
-  typescript: boolean,
-): LexedString[] | undefined {
-  try {
-    return expectedStrings(parseModule(source, { typescript }));
-  } catch {
-    return;
-  }
-}
 
 test("sveast/lexer exports the same function", () => {
   expect(fromEntry).toBe(lexStrings);
@@ -30,7 +16,7 @@ describe("matches parseModule on the corpus", () => {
     if (modules.length === 0) continue;
     test(file, () => {
       for (const { text, typescript } of modules) {
-        const strings = expected(text, typescript);
+        const strings = expectedStrings(text, typescript);
         expect(strings && lexStrings(text)).toEqual(strings);
       }
     });
@@ -38,23 +24,9 @@ describe("matches parseModule on the corpus", () => {
 });
 
 test("matches parseModule on the tricky inputs and TypeScript snippets", () => {
-  const cases: [string, boolean][] = [
-    ...Object.values(TRICKY).map((source): [string, boolean] => [
-      source,
-      false,
-    ]),
-    ...Object.values(TRICKY_TS).map((source): [string, boolean] => [
-      source,
-      true,
-    ]),
-    ...Object.values(SNIPPETS).map((source): [string, boolean] => [
-      source,
-      true,
-    ]),
-  ];
   let compared = 0;
-  for (const [source, typescript] of cases) {
-    const strings = expected(source, typescript);
+  for (const [source, typescript] of TRICKY_AND_SNIPPETS) {
+    const strings = expectedStrings(source, typescript);
     if (strings === undefined) continue;
     compared++;
     expect(lexStrings(source)).toEqual(strings);
@@ -123,7 +95,7 @@ b", " ", "é"];`,
 describe("matches parseModule on each form", () => {
   for (const [name, [source, typescript]] of Object.entries(FORMS)) {
     test(name, () => {
-      const strings = expected(source, typescript);
+      const strings = expectedStrings(source, typescript);
       expect(strings).toBeDefined();
       expect(lexStrings(source)).toEqual(strings as LexedString[]);
     });
@@ -141,7 +113,7 @@ test("matches parseModule on mutated modules, and never throws", () => {
       failures.push(`${error}: ${text}`);
       continue;
     }
-    const strings = expected(text, typescript);
+    const strings = expectedStrings(text, typescript);
     if (strings === undefined) continue;
     compared++;
     if (JSON.stringify(lexed) !== JSON.stringify(strings)) failures.push(text);

@@ -5,7 +5,8 @@ import {
   errorMessage,
   firstDifference,
   isRecord,
-  type Json,
+  LOC_KEYS,
+  plain,
 } from "./shared";
 
 async function readStdin(): Promise<string> {
@@ -39,23 +40,13 @@ function run(parser: () => object): Outcome {
   }
 }
 
-function plain(value: object, dropLoc: boolean): Json {
-  return JSON.parse(
-    JSON.stringify(value, (key, item) => {
-      if (typeof item === "bigint") return `${item}n`;
-      return dropLoc && (key === "loc" || key === "name_loc")
-        ? undefined
-        : item;
-    }),
-  );
-}
-
 function compare(ours: Outcome, theirs: Outcome, dropLoc: boolean) {
   if (ours.ok) {
     if (!theirs.ok) return `accepts what svelte rejects (${theirs.code})`;
+    const drop = dropLoc ? LOC_KEYS : undefined;
     const path = firstDifference(
-      plain(ours.ast, dropLoc),
-      plain(theirs.ast, dropLoc),
+      plain(ours.ast, drop),
+      plain(theirs.ast, drop),
     );
     return path === null
       ? null

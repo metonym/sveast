@@ -1,25 +1,22 @@
 import { lexImportsExports, parseImportsExports } from "sveast";
 import { lexImportsExports as fromEntry } from "sveast/lexer";
 import { comparableLexed, expectedLexed } from "../scripts/lexed";
+import { attempt, mulberry32 } from "../scripts/shared";
 import {
   inputs,
   mutatedModules,
-  TRICKY,
-  TRICKY_TS,
+  TRICKY_AND_SNIPPETS,
 } from "./imports-exports-inputs";
-import { SNIPPETS } from "./ts-snippets";
 
-/** The lexer's statements and the ones `parseImportsExports` implies, or `undefined` if it throws. */
 function compare(source: string, typescript: boolean) {
-  let expected: ReturnType<typeof expectedLexed>;
-  try {
-    expected = expectedLexed(
+  const expected = attempt(() =>
+    expectedLexed(
       parseImportsExports(source, { typescript, localExports: false }),
-    );
-  } catch {
-    return;
-  }
-  return { ours: comparableLexed(lexImportsExports(source)), expected };
+    ),
+  );
+  return (
+    expected && { ours: comparableLexed(lexImportsExports(source)), expected }
+  );
 }
 
 test("sveast/lexer exports the same function", () => {
@@ -39,22 +36,8 @@ describe("matches parseImportsExports on the corpus", () => {
 });
 
 test("matches parseImportsExports on the tricky inputs and TypeScript snippets", () => {
-  const cases: [string, boolean][] = [
-    ...Object.values(TRICKY).map((source): [string, boolean] => [
-      source,
-      false,
-    ]),
-    ...Object.values(TRICKY_TS).map((source): [string, boolean] => [
-      source,
-      true,
-    ]),
-    ...Object.values(SNIPPETS).map((source): [string, boolean] => [
-      source,
-      true,
-    ]),
-  ];
   let compared = 0;
-  for (const [source, typescript] of cases) {
+  for (const [source, typescript] of TRICKY_AND_SNIPPETS) {
     const outcome = compare(source, typescript);
     if (outcome === undefined) continue;
     compared++;
@@ -130,20 +113,9 @@ test("matches parseImportsExports on mutated modules, and never throws", () => {
   expect(compared).toBeGreaterThan(1000);
 });
 
-/** A seeded random integer below `n`: mulberry32, whose low bits, unlike an LCG's, don't repeat with a short period. */
-function seededRandom(seed: number) {
-  let state = seed;
-  return (n: number) => {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
-    return ((t ^ (t >>> 14)) >>> 0) % n;
-  };
-}
-
-/** Modules of random import and export statements, with random trivia, names and strings, some with one random edit. */
 function* generatedModules(count: number): Generator<string> {
-  const random = seededRandom(11);
+  const next = mulberry32(11);
+  const random = (n: number) => next() % n;
   const pick = (items: string[]) => items[random(items.length)];
   const trivia = () =>
     pick(["", " ", " ", "\n", "/* c */", "// c\n", "\t", "\r\n"]);

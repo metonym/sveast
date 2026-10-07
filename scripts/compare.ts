@@ -9,6 +9,10 @@ import {
   errorMessage,
   firstDifference,
   isRecord,
+  LOC_KEYS,
+  printList,
+  SVELTE_FILES,
+  toJson,
 } from "./shared";
 
 const { values, positionals } = parseArgs({
@@ -21,7 +25,6 @@ const { values, positionals } = parseArgs({
   },
 });
 
-const LOC_KEYS = new Set(["loc", "name_loc"]);
 const ignoreList = values.ignore.split(",").filter(Boolean);
 const ignored = new Set(ignoreList.filter((key) => !key.includes(".")));
 const ignoredPaths = ignoreList
@@ -29,7 +32,7 @@ const ignoredPaths = ignoreList
   .map((path) => `.${path}`);
 if (!values.loc) for (const key of LOC_KEYS) ignored.add(key);
 
-const files = collectFiles(positionals, /\.svelte$/);
+const files = collectFiles(positionals, SVELTE_FILES);
 const skip = (path: string, key: string) =>
   ignored.has(key) ||
   ignoredPaths.some((suffix) => `${path}.${key}`.endsWith(suffix));
@@ -104,10 +107,7 @@ for (const file of files) {
   list.push(name);
   mismatches.set(group, list);
   if (examples.length < Number(values.show)) {
-    const replacer = (_: string, value: unknown) =>
-      typeof value === "bigint" ? `${value}n` : value;
-    const shorten = (value: unknown) =>
-      String(JSON.stringify(value, replacer)).slice(0, 400);
+    const shorten = (value: unknown) => String(toJson(value)).slice(0, 400);
     examples.push(
       `${name} at ${difference}\n  sveast: ${shorten(at(actual, difference))}\n  svelte: ${shorten(at(expected, difference))}`,
     );
@@ -139,12 +139,7 @@ for (const [title, list] of [
   ["Only svelte rejects", onlySvelteRejects],
   ["Different error codes", differentCode],
 ] as const) {
-  if (list.length === 0) continue;
-  console.log(`\n${title}:`);
-  for (const line of values.list ? list : list.slice(0, 15))
-    console.log(`  ${line}`);
-  if (!values.list && list.length > 15)
-    console.log(`  ... ${list.length - 15} more`);
+  printList(title, list, values.list, 15, "  ");
 }
 if (examples.length > 0) console.log(`\nExamples:\n${examples.join("\n")}`);
 
