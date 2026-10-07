@@ -1,5 +1,5 @@
+import { isDigit } from "./markup";
 import {
-  isDigit,
   isWordAt,
   isWordCode,
   lineEnd,

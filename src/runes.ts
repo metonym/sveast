@@ -5,7 +5,7 @@ import {
 } from "./component-lexer";
 import { extractIdentifiers } from "./extract-identifiers";
 import { isReference } from "./is-reference";
-import { isWhitespace, skipWhitespace } from "./markup";
+import { isWhitespace, skipWhitespace, withoutByteOrderMark } from "./markup";
 import { parse } from "./parse";
 import { parseSections } from "./parse-sections";
 import { closingBracket, isWordCode, wordCodesEnd } from "./scan";
@@ -81,7 +81,7 @@ export function isRunesMode(source: string): boolean {
   const fromOption = option && booleanValue(option);
   if (fromOption !== undefined) return fromOption;
 
-  const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+  const text = withoutByteOrderMark(source);
   const scripts = [lexed.instance, lexed.module].flatMap((script) =>
     script ? [script.content] : [],
   );
