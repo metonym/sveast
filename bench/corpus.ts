@@ -14,10 +14,6 @@ const ROOT = existsSync(join(process.cwd(), "tests/corpus"))
 const CORPUS = join(ROOT, "tests/corpus");
 export const LANG_TS = /<script[^>]*\blang=["']?ts\b/;
 
-/**
- * The text of each `<script>`'s program in a component. sveast sets `start`
- * and `end` on the program, but the estree types don't declare them.
- */
 export function scriptTexts(source: string): string[] {
   const { instance, module } = sveastParse(source);
   return [instance, module].flatMap((script) => {
@@ -94,5 +90,26 @@ export const CARBON_JS = modules(".js", false);
 
 export const CARBON_TS = modules(".ts", true);
 
+export const kbOf = (sources: string[]) =>
+  `${Math.round(sources.reduce((n, source) => n + source.length, 0) / 1000)} kB`;
+
 export const kb = (components: Component[]) =>
-  `${Math.round(components.reduce((n, c) => n + c.source.length, 0) / 1000)} kB`;
+  kbOf(components.map((c) => c.source));
+
+const JSDOC_TAG =
+  /@(?:type|param|returns?|property|typedef|prop|template|satisfies)\s*\{/g;
+
+export function jsdocTypes(source: string): string[] {
+  const types: string[] = [];
+  for (const { index, 0: tag } of source.matchAll(JSDOC_TAG)) {
+    const start = index + tag.length;
+    let depth = 1;
+    let i = start;
+    for (; i < source.length && depth > 0; i++) {
+      if (source[i] === "{") depth++;
+      else if (source[i] === "}") depth--;
+    }
+    if (depth === 0) types.push(source.slice(start, i - 1));
+  }
+  return types;
+}
