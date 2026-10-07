@@ -7,11 +7,10 @@ import {
   unexpected_eof,
 } from "./errors";
 import { position } from "./locator";
+import { closingScriptTag, closingScriptTagEnd } from "./markup";
 import type { TemplateParserState } from "./state";
 import type { Program } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
-
-const REGEX_CLOSING_SCRIPT_TAG = /<\/script\s*>/g;
 
 const RESERVED_ATTRIBUTES = new Set([
   "server",
@@ -29,17 +28,16 @@ export function readScript(
   const source = state.source;
   const scriptStart = state.index;
   if (scriptStart >= source.length) unexpected_eof(source.length);
-  REGEX_CLOSING_SCRIPT_TAG.lastIndex = scriptStart;
-  const close = REGEX_CLOSING_SCRIPT_TAG.exec(source);
-  if (!close) element_unclosed(source.length, "script");
-  state.index = close.index + close[0].length;
+  const close = closingScriptTag(source, scriptStart);
+  if (close === -1) element_unclosed(source.length, "script");
+  state.index = closingScriptTagEnd(source, close);
 
   const program: Program = state.script
-    ? parseProgram(state, source.slice(0, close.index), scriptStart)
+    ? parseProgram(state, source.slice(0, close), scriptStart)
     : {
         type: "Program",
         start: scriptStart,
-        end: close.index,
+        end: close,
         body: [],
         sourceType: "module",
       };
