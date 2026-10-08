@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.9.3 — 2026-10-07
+
+**Performance**
+
+- `lexComponent` finds `<script`, `<style`, `<svelte:options` and
+  `</script>` with `indexOf` instead of a regular expression over the whole
+  source. On Carbon, the largest components go from 533 µs to 98 µs, all
+  components from 1.73 ms to 0.69 ms, and all files from 2.13 ms to 1.00 ms.
+  `parse` and `parseSections` are unchanged.
+- `isRunesMode` looks for a top-level `await` only when no rune name is a
+  candidate, which is most legacy components that use `await` inside async
+  functions. It skips the rune call check and the reference walk, and walks
+  the instance script and markup only for an `await` outside functions,
+  skipping their bodies. Carbon's components: 31.0 ms → 25.6 ms. All files:
+  34.9 ms → 28.4 ms.
+- `isValidType`'s common-type reader matches `keyof` and `import` in place
+  and skips the parts of a qualified name without slicing them. It used to
+  slice every operand's first word twice. Corpus JSDoc types: 1.45 ms →
+  1.31 ms. With `inline: true`: 1.28 ms → 1.15 ms.
+- Markup expressions without `loc` no longer ask the locator for a column,
+  so it doesn't index every line start up to the expression. acorn reads
+  that position only when `locations` is on. Carbon's components with
+  `script: false`: −5.6% and −8.7% across two runs. With `comments: false`:
+  −1.6% and −2.7%. `loc: true` is unchanged.
+
 ## 0.9.2 — 2026-10-04
 
 **Features**
