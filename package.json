@@ -19,7 +19,7 @@
     "bench:cold": "bun bench/cold.ts",
     "bench:size": "bun bench/size.ts",
     "fuzz": "bun scripts/fuzz-parser.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "knip": "knip-bun",
     "lint": "biome ci --error-on-warnings",
     "lint:fix": "biome check --write --unsafe ."

@@ -14,5 +14,6 @@
     "bench/**/*.ts",
     "examples/**/*.ts"
   ],
+  "ignoreBinaries": ["check"],
   "ignoreDependencies": ["@types/estree"]
 }

@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "noEmit": true,
-    "incremental": true,
     "target": "ESNext",
     "module": "preserve",
     "strict": true,
