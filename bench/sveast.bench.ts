@@ -1,14 +1,18 @@
 import { group, task } from "ostia";
 import {
   type AST,
+  analyzeScopes,
+  children,
   createLocator,
   extractIdentifiers,
+  forEachChild,
   isReference,
   isRunesMode,
   isValidType,
   lexComponent,
   lexImportsExports,
   lexStrings,
+  locate as locateIn,
   markupVisitorKeys,
   ParseError,
   type ParseOptions,
@@ -17,6 +21,7 @@ import {
   parseModule,
   parseSections,
   type VisitorKeys,
+  valueVisitorKeys,
   walk,
 } from "sveast";
 import { createParser } from "sveast/core";
@@ -366,6 +371,25 @@ group("analysis", () => {
     },
   );
 
+  task(
+    "locate, every node's start",
+    () => {
+      let lines = 0;
+      for (const { source, offsets } of starts) {
+        for (const offset of offsets) lines += locateIn(source, offset).line;
+      }
+      return lines;
+    },
+    {
+      description: `${starts.reduce((n, { offsets }) => n + offsets.length, 0)} nodes`,
+    },
+  );
+  task(
+    "analyzeScopes, corpus files",
+    () => CORPUS_ASTS.map((ast) => analyzeScopes(ast)),
+    { description: `${CORPUS_ASTS.length} files` },
+  );
+
   const identifiers: [AST.SvelteNode, AST.SvelteNode | null][] = [];
   const patterns: Parameters<typeof extractIdentifiers>[0][] = [];
   for (const ast of CORPUS_ASTS) {
@@ -472,6 +496,30 @@ group("walk", () => {
   );
   walkTask("corpus files", CORPUS_ASTS);
   walkTask("corpus files, markupVisitorKeys", CORPUS_ASTS, markupVisitorKeys);
+  walkTask("corpus files, valueVisitorKeys", CORPUS_ASTS, valueVisitorKeys);
+
+  let count = 0;
+  const each = (node: AST.SvelteNode): void => {
+    count++;
+    forEachChild(node, each);
+  };
+  const viaForEachChild = () => {
+    count = 0;
+    for (const ast of CORPUS_ASTS) each(ast);
+    return count;
+  };
+  task("forEachChild, corpus files", viaForEachChild, {
+    description: `${viaForEachChild()} nodes`,
+  });
+  const list = (node: AST.SvelteNode): number => {
+    let n = 1;
+    for (const child of children(node)) n += list(child);
+    return n;
+  };
+  const viaChildren = () => CORPUS_ASTS.reduce((n, ast) => n + list(ast), 0);
+  task("children, corpus files", viaChildren, {
+    description: `${viaChildren()} nodes`,
+  });
 });
 
 group("errors", () => {
