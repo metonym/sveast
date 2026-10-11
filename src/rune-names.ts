@@ -1,0 +1,30 @@
+export const RUNES = new Set([
+  "$state",
+  "$state.raw",
+  "$derived",
+  "$derived.by",
+  "$state.eager",
+  "$state.snapshot",
+  "$props",
+  "$props.id",
+  "$bindable",
+  "$effect",
+  "$effect.pre",
+  "$effect.tracking",
+  "$effect.root",
+  "$effect.pending",
+  "$inspect",
+  "$inspect().with",
+  "$inspect.trace",
+  "$host",
+]);
+
+export const RUNE_NAMES = new Set([
+  "$state",
+  "$derived",
+  "$props",
+  "$bindable",
+  "$effect",
+  "$inspect",
+  "$host",
+]);

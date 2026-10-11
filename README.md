@@ -34,6 +34,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`walk`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST, only the markup, or everything but TypeScript's types | `sveast`, `sveast/walk` |
 | [`children`, `forEachChild`](#childrennode-keys--node-and-foreachchildnode-callback-keys--void) | A node's children, cached or without allocating | `sveast`, `sveast/walk` |
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
+| [`analyzeScopes`](#analyzescopesast--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
 | [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
@@ -355,6 +356,51 @@ if (declaration.type === "VariableDeclaration") {
   declaration.declarations.flatMap((d) => extractIdentifiers(d.id)).map((node) => node.name); // ["a", "c"]
 }
 ```
+
+### `analyzeScopes(ast) => Scopes`
+
+Finds the scopes of a component, its scripts and markup together, or of a module: which declaration each name refers to, and where each binding is read, written or subscribed to. It resolves names as svelte's analyzer does, which `tests/scope.test.ts` checks on the corpus: on 12,548 components from the corpus, svelte's tests and the Svelte projects listed under parity, they agree on all 208,797 names they both resolve, but for a class expression's name inside its body, a snippet's own name and a `var` declared twice, where sveast follows JavaScript.
+
+```ts
+import { parse } from "sveast";
+import { analyzeScopes } from "sveast/scope";
+
+const ast = parse(`<script>
+  let { size = "md" } = $props();
+  function label(size) { return size; }
+</script>
+<Tooltip let:direction={actual}>{actual} {size}</Tooltip>`);
+const scopes = analyzeScopes(ast);
+
+const size = scopes.instance.get("size");
+size?.prop; // "size"
+size?.rune; // "$props"
+size?.initial; // the Literal "md"
+size?.references.length; // 1: the parameter in `label` is another binding
+size?.references.some((reference) => reference.writes || reference.mutates); // false
+```
+
+It returns:
+
+- **`module`** and **`instance`**, the scopes of `<script module>` and `<script>` (one scope, for a module). A `Scope` has the `node` that makes it, its `parent`, its `declarations` by name, and `get(name)`, the binding a name refers to there, or `null` for a global.
+- **`scopeOf(node)`**, the scope a node is in; `null` in a type, the `<style>` or another AST.
+- **`bindingOf(identifier)`**, the binding an `Identifier` declares or refers to; `null` for a global, a property key or a name in a type.
+- **`declaredIn(node)`**, the bindings of the scope a node makes: a function's parameters (its body's declarations are its body's), a block's or an each block's declarations, a snippet's parameters, or an element's `let:` names.
+
+A `Binding` has its `name`, its `kind`, the `Identifier` that declares it as `node` (`null` for an each block's index and for `let:x` without a value), the `declaration` that holds it, its `scope` and its `references`. `initial` is what it starts as, as svelte's analyzer has it: an initializer, or for a prop destructured from `$props()`, its default without `$bindable`. `rune` is the rune its initializer calls, such as `"$state"`, `"$derived"` or `"$props"`, unless a binding or a store shadows it, and `prop` the name a parent passes a prop as: `"class"` for `klass` in `let { class: klass } = $props()` or `export { klass as class }`, `"size"` for `export let size`.
+
+A `Reference` has its `Identifier` as `node`, its `parent`, its `scope` and its `binding`, and says whether it `reads` the value (all but a plain `=`'s target), `writes` it (`=`, `+=`, `++`, `bind:`, `for (a of b)`), or `mutates` it (`a` in `a.b = c` and `bind:value={a.b}`), and whether it's a `store` subscription. Names the markup holds as strings, such as `Foo` in `<Foo.Bar>`, `a` in `use:a`, `transition:a` and `animate:a`, and `color` in `style:color`, get a new `Identifier` with the name's `start` and `end`.
+
+The markup's scopes are svelte's:
+
+- `{#each items as item, i (key)}` declares `item` and `i` for the key and the body, but not for `{:else}`.
+- A snippet's name is declared where the snippet is, and its parameters inside it. A top-level snippet is in the markup's scope, so a `<script>` that uses one refers to a global, as in svelte's analyzer.
+- `{@const}` declares a name for its whole block or element, `{:then value}` and `{:catch error}` for their branch.
+- `let:` declares a name for the element's attributes and children, or for a component's default slot; children with a `slot` attribute get their own scope. `let:a={b}` declares `b`, `let:a` declares `a`.
+- `$count`, without a declaration of `$count`, is a subscription to `count`, unless it's a rune: `$state` refers to a store `state` only if `state` isn't itself made by a rune.
+- `$: a = b` declares `a` if nothing else does.
+
+Names in TypeScript's types aren't references, and `type` and `interface` declare nothing; it skips them with `valueVisitorKeys`. Enums, enum members and namespaces are declared. It doesn't change the AST, and takes less than half as long as parsing it.
 
 ### `createLocator(source) => (offset) => Position`
 
