@@ -8,6 +8,7 @@ import { isReference } from "./is-reference";
 import { isWhitespace, skipWhitespace, withoutByteOrderMark } from "./markup";
 import { parse } from "./parse";
 import { parseSections } from "./parse-sections";
+import { RUNE_NAMES, RUNES } from "./rune-names";
 import { closingBracket, isWordCode, wordCodesEnd } from "./scan";
 import type {
   ArrowFunctionExpression,
@@ -21,37 +22,6 @@ import type {
 } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 import { SKIP, STOP, walk } from "./walk";
-
-const RUNES = new Set([
-  "$state",
-  "$state.raw",
-  "$derived",
-  "$derived.by",
-  "$state.eager",
-  "$state.snapshot",
-  "$props",
-  "$props.id",
-  "$bindable",
-  "$effect",
-  "$effect.pre",
-  "$effect.tracking",
-  "$effect.root",
-  "$effect.pending",
-  "$inspect",
-  "$inspect().with",
-  "$inspect.trace",
-  "$host",
-]);
-
-const RUNE_NAMES = new Set([
-  "$state",
-  "$derived",
-  "$props",
-  "$bindable",
-  "$effect",
-  "$inspect",
-  "$host",
-]);
 
 const REGEX_CANDIDATE =
   /(?<![\w$])(?:\$(?:state|derived|props|bindable|effect|inspect|host)(?![\w$])|await(?![\w$]))|\\u/g;

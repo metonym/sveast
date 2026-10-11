@@ -48,7 +48,7 @@ try {
     }
   }
   const acorn = reach("is-valid-type.js");
-  for (const entry of ["walk.js", "lexer.js"]) {
+  for (const entry of ["walk.js", "scope.js", "lexer.js"]) {
     for (const file of reach(entry)) {
       if (file === "parse.js" || acorn.has(file)) {
         throw new Error(`dist/${entry} imports the parser: ${file}`);
@@ -82,6 +82,7 @@ try {
     "typescript",
     "entities",
     "walk",
+    "scope",
     "lexer",
   ]) {
     const types = readFileSync(
@@ -227,6 +228,14 @@ const [declarator] = parseModule("let { a, b: [c, ...d], e = 1, ...f } = x;").bo
 assert.deepEqual(walker.extractIdentifiers(declarator.id).map((node) => node.name), ["a", "c", "d", "e", "f"]);
 assert.deepEqual(walker.children(parse(source).fragment), parse(source).fragment.nodes);
 assert.deepEqual(walker.locate(source, source.indexOf("$props")), { line: 2, column: 35 });
+
+const scope = await import("sveast/scope");
+assert.equal(scope.analyzeScopes, (await import("sveast")).analyzeScopes);
+const scopes = scope.analyzeScopes(parse(source));
+const name = scopes.instance.get("name");
+assert.equal(name.rune, "$props");
+assert.equal(name.prop, "name");
+assert.equal(name.references.length, 3);
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -279,6 +288,7 @@ import {
   visitorKeys as walkVisitorKeys,
   walk as walkOnly,
 } from "sveast/walk";
+import { analyzeScopes, type Binding, type Scopes } from "sveast/scope";
 
 type CoreRoot = CoreAST.Root;
 
@@ -386,6 +396,10 @@ walkOnly(walkRoot, {
   },
 });
 const eachKeys: readonly string[] = walkVisitorKeys.EachBlock;
+const scopes: Scopes = analyzeScopes(walkRoot);
+const binding: Binding | null = scopes.bindingOf({ type: "Identifier", name: "a", start: 0, end: 1 });
+const prop: string | null | undefined = binding?.prop;
+void prop;
 const bindingsOf = (fn: AnyFunction): WalkNode[] => fn.params.flatMap(extractIdentifiers);
 void bindingsOf;
 void walkVisitor;

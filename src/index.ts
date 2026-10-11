@@ -25,6 +25,14 @@ export { parseImportsExports } from "./parse-imports-exports";
 export { ParseError, parseModule } from "./parse-module";
 export { parseSections } from "./parse-sections";
 export { isRunesMode } from "./runes";
+export type {
+  Binding,
+  BindingKind,
+  Reference,
+  Scope,
+  Scopes,
+} from "./scope";
+export { analyzeScopes } from "./scope";
 export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";
