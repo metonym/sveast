@@ -229,7 +229,7 @@ test("finds legacy props, $: declarations and directive names", () => {
   const doubled = scopes.instance.get("doubled");
   expect(doubled?.kind).toBe("reactive");
   expect(doubled?.initial?.type).toBe("BinaryExpression");
-  expect(uses(doubled)).toEqual(["doubled@266 read"]);
+  expect(uses(doubled)).toEqual(["doubled@154 write", "doubled@266 read"]);
   expect(uses(scopes.instance.get("tooltip"))).toEqual(["tooltip@227 read"]);
   expect(uses(scopes.instance.get("fade"))).toEqual([
     "fade@248 read",
@@ -303,6 +303,31 @@ test("visits a snippet parameter's parenthesized default", () => {
   );
   expect(scopes.bindingOf(named("c", 1))).toBe(scopes.instance.get("c"));
   expect(scopes.bindingOf(named("a", 1))?.kind).toBe("snippet-param");
+});
+
+test("gives an identifier's reference", () => {
+  const { scopes, named } = analyze(`<script>
+  import { writable } from "svelte/store";
+  const count = writable(0);
+  $: ({ a, b: c } = $count);
+</script>
+{a}{c}{window}`);
+  expect(scopes.referenceOf(named("count", 0))).toBeNull();
+  const store = scopes.referenceOf(named("$count"));
+  expect(store).toMatchObject({ store: true, reads: true, writes: false });
+  expect(store?.binding).toBe(scopes.instance.get("count"));
+  const a = scopes.instance.get("a");
+  expect(a?.kind).toBe("reactive");
+  expect(scopes.referenceOf(named("a", 1))).toMatchObject({
+    writes: true,
+    binding: a,
+  });
+  expect(scopes.referenceOf(named("a", 2))).toMatchObject({
+    reads: true,
+    binding: a,
+  });
+  expect(scopes.referenceOf(named("b"))).toBeNull();
+  expect(scopes.referenceOf(named("window"))).toMatchObject({ binding: null });
 });
 
 test("analyzes a module", () => {
