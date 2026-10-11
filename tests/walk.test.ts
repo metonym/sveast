@@ -360,3 +360,15 @@ test("visitorKeys lists the fields that hold children", () => {
   expect(visitorKeys.IfBlock).toEqual(["test", "consequent", "alternate"]);
   expect(visitorKeys.Text).toEqual([]);
 });
+
+test("walk visits the parenthesized default of a snippet's parameter", () => {
+  const ast = parse("{#snippet row(a, b = (c, d))}{a}{b}{/snippet}");
+  const types: string[] = [];
+  walk(ast, {
+    enter(node) {
+      types.push(node.type);
+    },
+  });
+  expect(types).toContain("ParenthesizedExpression");
+  expect(types).toContain("SequenceExpression");
+});

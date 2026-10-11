@@ -8,7 +8,7 @@ export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";
 
-type NodeType = Exclude<AST.SvelteNode["type"], "ParenthesizedExpression">;
+type NodeType = AST.SvelteNode["type"];
 type ChildKey<T extends NodeType> = keyof Extract<AST.SvelteNode, { type: T }> &
   string;
 
@@ -150,6 +150,7 @@ export const visitorKeys = {
   AwaitExpression: ["argument"],
   ImportExpression: ["source", "options", "arguments"],
   ChainExpression: ["expression"],
+  ParenthesizedExpression: ["expression"],
   MetaProperty: ["meta", "property"],
   ObjectPattern: ["decorators", "properties", "typeAnnotation"],
   ArrayPattern: ["decorators", "elements", "typeAnnotation"],
