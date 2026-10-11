@@ -27,6 +27,7 @@ test("exports the parsers, the lexers, isRunesMode, analyzeScopes, walk and its 
     "parseImportsExports",
     "parseModule",
     "parseSections",
+    "skipTypeWrappers",
     "valueVisitorKeys",
     "visitorKeys",
     "walk",

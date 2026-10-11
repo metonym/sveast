@@ -5,6 +5,7 @@ export { extractIdentifiers } from "./extract-identifiers";
 export { isReference } from "./is-reference";
 export { locate } from "./locate";
 export { createLocator } from "./locator";
+export { skipTypeWrappers } from "./skip-type-wrappers";
 export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";

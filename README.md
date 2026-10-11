@@ -31,7 +31,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`createParser`, `createModuleParser`](#smaller-bundles-sveastcore-and-sveastmodule) | The parsers without TypeScript, named HTML entities or the template parser, for a smaller bundle | `sveast/core`, `sveast/module` |
 | [`isValidType`](#isvalidtypetext-options--boolean) | Whether a JSDoc type is safe to copy into a `.d.ts` | `sveast` |
 | [`isRunesMode`](#isrunesmodesource--boolean) | Whether svelte compiles a component in runes mode, mostly without parsing it | `sveast` |
-| [`walk`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST, only the markup, or everything but TypeScript's types | `sveast`, `sveast/walk` |
+| [`walk`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `skipTypeWrappers`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST, only the markup, or everything but TypeScript's types | `sveast`, `sveast/walk` |
 | [`children`, `forEachChild`](#childrennode-keys--node-and-foreachchildnode-callback-keys--void) | A node's children, cached or without allocating | `sveast`, `sveast/walk` |
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
 | [`analyzeScopes`](#analyzescopesast--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
@@ -311,7 +311,9 @@ walk(
 
 `valueVisitorKeys` leaves out TypeScript's types: no type annotation, type parameter or type argument, no `implements`, and no type in `as` or `satisfies`. It reaches every value and binding, so an `Identifier` it reaches is never a type's name, and a tool that rewrites values can't fold `size` in `type S = typeof size` or `let a: typeof size`. It still enters a declaration that holds only types, such as `type`, `interface` or an index signature, but not its children, and of `declare function f(): void` it visits only the name. The TypeScript nodes whose children it visits hold values: `as`, `satisfies`, `<T>a`, `a!` and `a<T>` their expression, an enum its members, a namespace its body, `import a = b` and `export =` their value, and a parameter property its parameter. Walking with it takes about as long as walking everything.
 
-`sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `children`, `forEachChild`, `isReference`, `extractIdentifiers`, `createLocator`, `locate` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
+`skipTypeWrappers(node)` gives the value inside those wrappers: `a` for `a as T`, `a satisfies T`, `<T>a`, `a!`, `a<T>` and any nesting of them, and `node` itself for anything else, for code that reads values, such as an evaluator deciding whether `size as Size` is a constant.
+
+`sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `skipTypeWrappers`, `children`, `forEachChild`, `isReference`, `extractIdentifiers`, `createLocator`, `locate` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
 
 ### `children(node, keys?) => Node[]` and `forEachChild(node, callback, keys?) => void`
 
