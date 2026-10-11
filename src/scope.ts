@@ -81,7 +81,9 @@ export interface Binding {
   readonly scope: Scope;
   /**
    * Every use of it, in source order: reads, writes, and `$name`
-   * subscriptions if it's a store. Not the identifiers that declare it.
+   * subscriptions if it's a store. Not the identifiers that declare it,
+   * but for `x` in `$: x = ...`, which declares `x` and writes it each
+   * time the statement runs.
    */
   readonly references: readonly Reference[];
   /**
@@ -174,6 +176,13 @@ export interface Scopes {
    * key or a name in a type.
    */
   bindingOf(node: Identifier): Binding | null;
+  /**
+   * The use an `Identifier` is, with whether it reads, writes or
+   * mutates its binding or subscribes to it as a store; `null` for an
+   * `Identifier` that declares a binding or isn't a reference. A global's
+   * use has no binding.
+   */
+  referenceOf(node: Identifier): Reference | null;
   /**
    * The bindings of the scope `node` makes, by name; empty if it makes
    * none. A function's are its parameters, and a function expression's
@@ -335,7 +344,7 @@ class Analysis implements Scopes {
   private readonly scopeIn = new Map<AST.SvelteNode, ScopeNode>();
   private readonly made = new Map<AST.SvelteNode, ScopeNode>();
   private readonly declared = new Map<Identifier, BindingNode>();
-  private readonly referenceOf = new Map<Identifier, ReferenceNode>();
+  private readonly references = new Map<Identifier, ReferenceNode>();
   private readonly pending: ReferenceNode[] = [];
   private readonly declarators: [VariableDeclarator, ScopeNode][] = [];
   private readonly implicit: [
@@ -385,8 +394,12 @@ class Analysis implements Scopes {
 
   bindingOf(node: Identifier): Binding | null {
     return (
-      this.declared.get(node) ?? this.referenceOf.get(node)?.binding ?? null
+      this.declared.get(node) ?? this.references.get(node)?.binding ?? null
     );
+  }
+
+  referenceOf(node: Identifier): Reference | null {
+    return this.references.get(node) ?? null;
   }
 
   declaredIn(node: AST.SvelteNode): ReadonlyMap<string, Binding> {
@@ -1087,8 +1100,9 @@ class Analysis implements Scopes {
     const unordered = new Set<BindingNode>();
     for (const reference of this.pending) {
       const { node } = reference;
-      if (this.declared.has(node)) continue;
-      this.referenceOf.set(node, reference);
+      const declared = this.declared.get(node);
+      if (declared !== undefined && declared.kind !== "reactive") continue;
+      this.references.set(node, reference);
       let binding = reference.scope.get(node.name);
       if (binding === null && this.component) {
         const store = this.storeOf(node.name);
@@ -1143,7 +1157,7 @@ class Analysis implements Scopes {
 
   private findRunesAndProps(): void {
     for (const [declarator, scope] of this.declarators) {
-      const rune = runeOf(declarator.init ?? null, scope, this.referenceOf);
+      const rune = runeOf(declarator.init ?? null, scope, this.references);
       if (rune === null) continue;
       for (const id of extractIdentifiers(declarator.id)) {
         const binding = this.declared.get(id);

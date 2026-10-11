@@ -385,6 +385,7 @@ It returns:
 - **`module`** and **`instance`**, the scopes of `<script module>` and `<script>` (one scope, for a module). A `Scope` has the `node` that makes it, its `parent`, its `declarations` by name, and `get(name)`, the binding a name refers to there, or `null` for a global.
 - **`scopeOf(node)`**, the scope a node is in; `null` in a type, the `<style>` or another AST.
 - **`bindingOf(identifier)`**, the binding an `Identifier` declares or refers to; `null` for a global, a property key or a name in a type.
+- **`referenceOf(identifier)`**, the `Reference` an `Identifier` is, to tell a read from a write or a store subscription; `null` for one that declares a binding or isn't a reference.
 - **`declaredIn(node)`**, the bindings of the scope a node makes: a function's parameters (its body's declarations are its body's), a block's or an each block's declarations, a snippet's parameters, or an element's `let:` names.
 
 A `Binding` has its `name`, its `kind`, the `Identifier` that declares it as `node` (`null` for an each block's index and for `let:x` without a value), the `declaration` that holds it, its `scope` and its `references`. `initial` is what it starts as, as svelte's analyzer has it: an initializer, or for a prop destructured from `$props()`, its default without `$bindable`. `rune` is the rune its initializer calls, such as `"$state"`, `"$derived"` or `"$props"`, unless a binding or a store shadows it, and `prop` the name a parent passes a prop as: `"class"` for `klass` in `let { class: klass } = $props()` or `export { klass as class }`, `"size"` for `export let size`.
@@ -398,7 +399,7 @@ The markup's scopes are svelte's:
 - `{@const}` declares a name for its whole block or element, `{:then value}` and `{:catch error}` for their branch.
 - `let:` declares a name for the element's attributes and children, or for a component's default slot; children with a `slot` attribute get their own scope. `let:a={b}` declares `b`, `let:a` declares `a`.
 - `$count`, without a declaration of `$count`, is a subscription to `count`, unless it's a rune: `$state` refers to a store `state` only if `state` isn't itself made by a rune.
-- `$: a = b` declares `a` if nothing else does.
+- `$: a = b` declares `a` if nothing else does, and writes it: the assignment is one of its references.
 
 Names in TypeScript's types aren't references, and `type` and `interface` declare nothing; it skips them with `valueVisitorKeys`. Enums, enum members and namespaces are declared. It doesn't change the AST, and takes less than half as long as parsing it.
 
