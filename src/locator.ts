@@ -34,7 +34,7 @@ function scanTo(index: number): void {
   }
 }
 
-function lineStartsOf(text: string): number[] {
+export function lineStartsOf(text: string): number[] {
   const starts = [0];
   let i = text.indexOf("\n");
   while (i !== -1) {
@@ -44,7 +44,7 @@ function lineStartsOf(text: string): number[] {
   return starts;
 }
 
-function lineOf(starts: number[], index: number, hint: number): number {
+export function lineOf(starts: number[], index: number, hint: number): number {
   let low = 0;
   let high = starts.length - 1;
   if (index >= starts[hint]) low = hint;

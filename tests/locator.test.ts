@@ -1,4 +1,4 @@
-import { createLocator, parse, walk } from "sveast";
+import { createLocator, locate as locateIn, parse, walk } from "sveast";
 import { attempt, SVELTE_FILES } from "../scripts/shared";
 import { corpusFiles, readCorpus } from "./shared";
 
@@ -59,4 +59,31 @@ test("keeps each locator's lines apart", () => {
   expect(first(2)).toEqual({ line: 2, column: 0 });
   expect(second(4)).toEqual({ line: 4, column: 0 });
   expect(first(2)).toEqual({ line: 2, column: 0 });
+});
+
+test("locate agrees with createLocator across files, in any order", () => {
+  const sources = corpusFiles(SVELTE_FILES)
+    .slice(0, 100)
+    .map((path) => readCorpus(path));
+  const locators = sources.map((source) => createLocator(source));
+  const mismatches: string[] = [];
+  for (let round = 0; round < 3; round++) {
+    for (let i = 0; i < sources.length; i++) {
+      const source = sources[(i * 37 + round) % sources.length];
+      const at = (i * 7919) % (source.length + 1);
+      const expected = locators[sources.indexOf(source)](at);
+      const found = locateIn(source, at);
+      if (found.line !== expected.line || found.column !== expected.column) {
+        mismatches.push(`${i}@${at}`);
+      }
+    }
+  }
+  expect(mismatches).toEqual([]);
+});
+
+test("locate counts lines from 1 and columns from 0", () => {
+  expect(locateIn("ab\ncd\r\n\nef", 10)).toEqual({ line: 4, column: 2 });
+  expect(locateIn("ab\ncd\r\n\nef", 0)).toEqual({ line: 1, column: 0 });
+  expect(locateIn("ab\ncd\r\n\nef", 6)).toEqual({ line: 2, column: 3 });
+  expect(locateIn("a\rb\u2028c", 4)).toEqual({ line: 1, column: 4 });
 });

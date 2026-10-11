@@ -225,6 +225,8 @@ walk(parse(source), {
 assert.deepEqual(references, ["name", "$props", "name", "name", "name"]);
 const [declarator] = parseModule("let { a, b: [c, ...d], e = 1, ...f } = x;").body[0].declarations;
 assert.deepEqual(walker.extractIdentifiers(declarator.id).map((node) => node.name), ["a", "c", "d", "e", "f"]);
+assert.deepEqual(walker.children(parse(source).fragment), parse(source).fragment.nodes);
+assert.deepEqual(walker.locate(source, source.indexOf("$props")), { line: 2, column: 35 });
 `,
   );
   await $`node smoke.js`.cwd(dir);
