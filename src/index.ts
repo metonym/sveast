@@ -47,6 +47,7 @@ export {
   markupVisitorKeys,
   SKIP,
   STOP,
+  skipTypeWrappers,
   valueVisitorKeys,
   visitorKeys,
   walk,

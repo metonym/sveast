@@ -8,6 +8,7 @@ import {
   parseModule,
   SKIP,
   STOP,
+  skipTypeWrappers,
   type VisitorKeys,
   valueVisitorKeys,
   visitorKeys,
@@ -536,4 +537,24 @@ test("walk visits the parenthesized default of a snippet's parameter", () => {
   });
   expect(types).toContain("ParenthesizedExpression");
   expect(types).toContain("SequenceExpression");
+});
+
+test("skipTypeWrappers gives the value inside TypeScript's wrappers", () => {
+  const values = parseModule(
+    "(a as A)!; b satisfies B; <C>c; d<D>; ((e as unknown) as E)!; f.g as G; h;",
+    { typescript: true },
+  ).body.map((statement) => {
+    if (statement.type !== "ExpressionStatement")
+      throw new Error(statement.type);
+    return skipTypeWrappers(statement.expression);
+  });
+  expect(values.map((value) => value.type)).toEqual([
+    "Identifier",
+    "Identifier",
+    "Identifier",
+    "Identifier",
+    "Identifier",
+    "MemberExpression",
+    "Identifier",
+  ]);
 });
