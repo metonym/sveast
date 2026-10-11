@@ -31,9 +31,10 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`createParser`, `createModuleParser`](#smaller-bundles-sveastcore-and-sveastmodule) | The parsers without TypeScript, named HTML entities or the template parser, for a smaller bundle | `sveast/core`, `sveast/module` |
 | [`isValidType`](#isvalidtypetext-options--boolean) | Whether a JSDoc type is safe to copy into a `.d.ts` | `sveast` |
 | [`isRunesMode`](#isrunesmodesource--boolean) | Whether svelte compiles a component in runes mode, mostly without parsing it | `sveast` |
-| [`walk`, `visitorKeys`, `markupVisitorKeys`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST or only the markup | `sveast`, `sveast/walk` |
+| [`walk`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST, only the markup, or everything but TypeScript's types | `sveast`, `sveast/walk` |
+| [`children`, `forEachChild`](#childrennode-keys--node-and-foreachchildnode-callback-keys--void) | A node's children, cached or without allocating | `sveast`, `sveast/walk` |
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
-| [`createLocator`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
+| [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
 
@@ -307,7 +308,22 @@ walk(
 );
 ```
 
-`sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `markupVisitorKeys`, `isReference`, `extractIdentifiers`, `createLocator` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
+`valueVisitorKeys` leaves out TypeScript's types: no type annotation, type parameter or type argument, no `implements`, and no type in `as` or `satisfies`. It reaches every value and binding, so an `Identifier` it reaches is never a type's name, and a tool that rewrites values can't fold `size` in `type S = typeof size` or `let a: typeof size`. It still enters a declaration that holds only types, such as `type`, `interface` or an index signature, but not its children, and of `declare function f(): void` it visits only the name. The TypeScript nodes whose children it visits hold values: `as`, `satisfies`, `<T>a`, `a!` and `a<T>` their expression, an enum its members, a namespace its body, `import a = b` and `export =` their value, and a parameter property its parameter. Walking with it takes about as long as walking everything.
+
+`sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `children`, `forEachChild`, `isReference`, `extractIdentifiers`, `createLocator`, `locate` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
+
+### `children(node, keys?) => Node[]` and `forEachChild(node, callback, keys?) => void`
+
+The child nodes `walk` would visit next, in source order, for a traversal of your own, such as one that evaluates expressions and decides per node what to visit. `forEachChild(node, (child, key, index) => ...)` calls back with each child, the field that holds it, and its index when the field is an array, and allocates nothing. `children(node)` returns an array that it makes on the first call for each node and returns again after, so a tool that walks the same tree many times lists each node's children once. ASTs don't change after `parse`, so the cache stays right unless you change one, for instance by replacing a node with `walk`; don't change the array. Both take `keys` as `walk` does and throw on a node type it has no entry for.
+
+```ts
+import { forEachChild, valueVisitorKeys } from "sveast/walk";
+
+function visit(node) {
+  if (node.type === "ConditionalExpression") return evaluateBranches(node);
+  forEachChild(node, visit, valueVisitorKeys);
+}
+```
 
 ### `isReference(node, parent) => boolean`
 
@@ -353,6 +369,14 @@ walk(parse(source), {
     if (node.type === "Component") console.log(node.name, locate(node.start).line);
   },
 });
+```
+
+`locate(source, offset)` gives the same `{ line, column }` without keeping a locator: it keeps the lines of the last 64 sources it was called with, so a tool that reports nodes from many files, in any order, looks lines up once per file rather than scanning each from the start.
+
+```ts
+import { locate } from "sveast";
+
+`${file}:${locate(source, node.start).line}`;
 ```
 
 ### Types

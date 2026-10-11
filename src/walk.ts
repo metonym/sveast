@@ -3,6 +3,7 @@ import type { AST } from "./types/svelte-ast";
 
 export { extractIdentifiers } from "./extract-identifiers";
 export { isReference } from "./is-reference";
+export { locate } from "./locate";
 export { createLocator } from "./locator";
 export type * from "./types/estree";
 export type { AST } from "./types/svelte-ast";
@@ -298,10 +299,90 @@ export const markupVisitorKeys = {
   readonly [T in NodeType]?: readonly ChildKey<T>[];
 };
 
+const TYPE = [] as const;
+
+/**
+ * {@link visitorKeys} without TypeScript's types: a {@link walk} with it
+ * reaches every value and binding but no type annotation, type
+ * parameter, type argument, `implements` clause or type in `as` and
+ * `satisfies`, so an `Identifier` it reaches in a TypeScript node is
+ * never a type's name. It still enters a declaration that holds only
+ * types, such as `type T = ...`, `interface I {}` or an index signature,
+ * but not its children, and of `declare function f(): void` it visits
+ * only the name. The
+ * TypeScript nodes it enters children of hold values: `as`,
+ * `satisfies`, `<T>a`, `a!` and `a<T>` hold their expression, an enum
+ * its members, a namespace its body, `import a = b` and `export =` their
+ * value, and a parameter property its parameter.
+ */
+export const valueVisitorKeys = {
+  ...visitorKeys,
+  FunctionDeclaration: ["id", "params", "body"],
+  FunctionExpression: ["id", "params", "body"],
+  ArrowFunctionExpression: ["params", "body"],
+  ClassDeclaration: ["decorators", "id", "superClass", "body"],
+  ClassExpression: ["decorators", "id", "superClass", "body"],
+  MethodDefinition: ["decorators", "key", "value"],
+  PropertyDefinition: ["decorators", "key", "value"],
+  Identifier: ["decorators"],
+  CallExpression: ["callee", "arguments"],
+  NewExpression: ["callee", "arguments"],
+  TaggedTemplateExpression: ["tag", "quasi"],
+  RestElement: ["decorators", "argument"],
+  ObjectPattern: ["decorators", "properties"],
+  ArrayPattern: ["decorators", "elements"],
+
+  TSTypeAnnotation: TYPE,
+  TSTypeParameterDeclaration: TYPE,
+  TSTypeParameterInstantiation: TYPE,
+  TSTypeParameter: TYPE,
+  TSArrayType: TYPE,
+  TSTupleType: TYPE,
+  TSNamedTupleMember: TYPE,
+  TSOptionalType: TYPE,
+  TSRestType: TYPE,
+  TSUnionType: TYPE,
+  TSIntersectionType: TYPE,
+  TSConditionalType: TYPE,
+  TSInferType: TYPE,
+  TSParenthesizedType: TYPE,
+  TSTypeOperator: TYPE,
+  TSIndexedAccessType: TYPE,
+  TSMappedType: TYPE,
+  TSLiteralType: TYPE,
+  TSTypeReference: TYPE,
+  TSTypeQuery: TYPE,
+  TSImportType: TYPE,
+  TSTypeLiteral: TYPE,
+  TSPropertySignature: TYPE,
+  TSMethodSignature: TYPE,
+  TSCallSignatureDeclaration: TYPE,
+  TSConstructSignatureDeclaration: TYPE,
+  TSFunctionType: TYPE,
+  TSConstructorType: TYPE,
+  TSIndexSignature: TYPE,
+  TSTypePredicate: TYPE,
+  TSInterfaceDeclaration: TYPE,
+  TSInterfaceBody: TYPE,
+  TSExpressionWithTypeArguments: TYPE,
+  TSTypeAliasDeclaration: TYPE,
+  TSNamespaceExportDeclaration: TYPE,
+  TSDeclareFunction: ["id"],
+  TSDeclareMethod: TYPE,
+  TSAsExpression: ["expression"],
+  TSSatisfiesExpression: ["expression"],
+  TSTypeAssertion: ["expression"],
+  TSInstantiationExpression: ["expression"],
+} as const satisfies {
+  readonly [T in NodeType]: readonly ChildKey<T>[];
+};
+
 const keysByType: Partial<Record<string, readonly string[]>> = Object.assign(
   Object.create(null),
   visitorKeys,
 );
+const valueKeysByType: Partial<Record<string, readonly string[]>> =
+  Object.assign(Object.create(null), valueVisitorKeys);
 const NO_KEYS: readonly string[] = [];
 
 /**
@@ -356,20 +437,94 @@ export function walk(
   visitor: Visitor,
   keys?: VisitorKeys,
 ): void {
-  visit(
-    node,
-    null,
-    null,
-    null,
-    visitor,
-    keys === undefined || keys === visitorKeys
-      ? keysOf
-      : (child) =>
-          Object.hasOwn(keys, child.type) ? keys[child.type] : undefined,
-  );
+  visit(node, null, null, null, visitor, keysOfTable(keys));
+}
+
+function keysOfTable(keys: VisitorKeys | undefined): KeysOf {
+  if (keys === undefined || keys === visitorKeys) return keysOf;
+  if (keys === valueVisitorKeys) return valueKeysOf;
+  return (node) => ownKeys(keys, node.type);
 }
 
 type KeysOf = (node: AST.SvelteNode) => readonly string[] | undefined;
+
+function ownKeys(
+  keys: VisitorKeys,
+  type: string,
+): readonly string[] | undefined {
+  return Object.hasOwn(keys, type) ? keys[type] : undefined;
+}
+
+function keysIn(
+  keys: VisitorKeys | undefined,
+  node: AST.SvelteNode,
+): readonly string[] | undefined {
+  if (keys === undefined || keys === visitorKeys) return keysOf(node);
+  if (keys === valueVisitorKeys) return valueKeysOf(node);
+  return ownKeys(keys, node.type);
+}
+
+/**
+ * Calls `callback` with each of `node`'s child nodes in source order, as
+ * {@link walk} would visit them, with the field that holds the child and
+ * its index when the field is an array. Allocates nothing. `keys` is as
+ * in {@link walk}.
+ */
+export function forEachChild(
+  node: AST.SvelteNode,
+  callback: (child: AST.SvelteNode, key: string, index: number | null) => void,
+  keys?: VisitorKeys,
+): void {
+  const fieldKeys = keysIn(keys, node);
+  if (fieldKeys === undefined) {
+    throw new Error(`unknown node type: ${node.type}`);
+  }
+  const fields = fieldsOf(node);
+  for (let k = 0; k < fieldKeys.length; k++) {
+    const field = fieldKeys[k];
+    const value = fields[field];
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        const child: unknown = value[i];
+        if (isNode(child)) callback(child, field, i);
+      }
+    } else if (isNode(value)) {
+      callback(value, field, null);
+    }
+  }
+}
+
+const NO_CHILDREN: readonly AST.SvelteNode[] = Object.freeze([]);
+const childrenByKeys = new WeakMap<
+  VisitorKeys,
+  WeakMap<AST.SvelteNode, readonly AST.SvelteNode[]>
+>();
+const childrenOf = new WeakMap<AST.SvelteNode, readonly AST.SvelteNode[]>();
+
+/**
+ * `node`'s child nodes in source order, as {@link walk} would visit them.
+ * The array is made on the first call for each node and `keys`, and the
+ * same one is returned after, so don't change it; a node that
+ * {@link walk} replaces later isn't in it. `keys` is as in {@link walk}.
+ */
+export function children(
+  node: AST.SvelteNode,
+  keys: VisitorKeys = visitorKeys,
+): readonly AST.SvelteNode[] {
+  let cache = keys === visitorKeys ? childrenOf : childrenByKeys.get(keys);
+  if (cache === undefined) {
+    cache = new WeakMap();
+    childrenByKeys.set(keys, cache);
+  }
+  let list = cache.get(node);
+  if (list === undefined) {
+    const found: AST.SvelteNode[] = [];
+    forEachChild(node, (child) => found.push(child), keys);
+    list = found.length === 0 ? NO_CHILDREN : found;
+    cache.set(node, list);
+  }
+  return list;
+}
 
 function visit(
   node: AST.SvelteNode,
@@ -419,6 +574,18 @@ function keysOf(node: AST.SvelteNode): readonly string[] | undefined {
   if (type === "Literal") return visitorKeys.Literal;
   if (type === "Text") return visitorKeys.Text;
   return keysByType[type];
+}
+
+function valueKeysOf(node: AST.SvelteNode): readonly string[] | undefined {
+  const type = node.type;
+  if (type === "Identifier") {
+    return node.decorators === undefined
+      ? NO_KEYS
+      : valueVisitorKeys.Identifier;
+  }
+  if (type === "Literal") return valueVisitorKeys.Literal;
+  if (type === "Text") return valueVisitorKeys.Text;
+  return valueKeysByType[type];
 }
 
 function replace(

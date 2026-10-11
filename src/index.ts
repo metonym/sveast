@@ -30,12 +30,16 @@ export type { AST } from "./types/svelte-ast";
 export type * from "./types/typescript";
 export type { Visitor, VisitorKeys } from "./walk";
 export {
+  children,
   createLocator,
   extractIdentifiers,
+  forEachChild,
   isReference,
+  locate,
   markupVisitorKeys,
   SKIP,
   STOP,
+  valueVisitorKeys,
   visitorKeys,
   walk,
 } from "./walk";

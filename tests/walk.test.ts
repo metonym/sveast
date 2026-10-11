@@ -1,10 +1,15 @@
 import {
   type AST,
+  children,
+  forEachChild,
+  isReference,
   markupVisitorKeys,
   parse,
   parseModule,
   SKIP,
   STOP,
+  type VisitorKeys,
+  valueVisitorKeys,
   visitorKeys,
   walk,
 } from "sveast";
@@ -359,6 +364,166 @@ test("walk throws on a node type it doesn't know", () => {
 test("visitorKeys lists the fields that hold children", () => {
   expect(visitorKeys.IfBlock).toEqual(["test", "consequent", "alternate"]);
   expect(visitorKeys.Text).toEqual([]);
+});
+
+test("children and forEachChild list what walk visits next", () => {
+  for (const keys of [visitorKeys, markupVisitorKeys, valueVisitorKeys]) {
+    let mismatched = 0;
+    for (const ast of ASTS) {
+      if (keys === markupVisitorKeys && ast.type !== "Root") continue;
+      const stack: AST.SvelteNode[][] = [[]];
+      walk(
+        ast,
+        {
+          enter(node) {
+            stack.at(-1)?.push(node);
+            stack.push([]);
+          },
+          leave(node) {
+            const visited = stack.pop() ?? [];
+            const listed = children(node, keys);
+            const each: [AST.SvelteNode, string, number | null][] = [];
+            forEachChild(node, (...entry) => each.push(entry), keys);
+            const same =
+              listed.length === visited.length &&
+              listed.every((child, i) => child === visited[i]) &&
+              each.every(([child, key, index], i) => {
+                const field: unknown = Reflect.get(node, key);
+                const held =
+                  index === null ? field : Reflect.get(Object(field), index);
+                return child === visited[i] && held === child;
+              }) &&
+              each.length === visited.length &&
+              children(node, keys) === listed;
+            if (!same) mismatched++;
+          },
+        },
+        keys,
+      );
+    }
+    expect(mismatched).toBe(0);
+  }
+});
+
+test("children throws on a node its keys have no entry for", () => {
+  const ast = parse("<script>let a;</script>");
+  const keys: VisitorKeys = markupVisitorKeys;
+  expect(() => children(ast.instance?.content ?? ast, keys)).toThrow(
+    "unknown node type: Program",
+  );
+  expect(() =>
+    forEachChild(ast.instance?.content ?? ast, () => undefined, keys),
+  ).toThrow("unknown node type: Program");
+});
+
+const VALUE_TS_NODES = new Set([
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
+  "TSNonNullExpression",
+  "TSInstantiationExpression",
+  "TSEnumDeclaration",
+  "TSEnumMember",
+  "TSModuleDeclaration",
+  "TSModuleBlock",
+  "TSImportEqualsDeclaration",
+  "TSExternalModuleReference",
+  "TSQualifiedName",
+  "TSExportAssignment",
+  "TSParameterProperty",
+]);
+const TYPE_DECLARATIONS = new Set([
+  "TSTypeAliasDeclaration",
+  "TSInterfaceDeclaration",
+  "TSDeclareFunction",
+  "TSDeclareMethod",
+  "TSIndexSignature",
+  "TSNamespaceExportDeclaration",
+]);
+
+test("valueVisitorKeys reaches every reference and no type", () => {
+  const found = new Set<string>();
+  let references = 0;
+  for (const ast of ASTS) {
+    const reached = new Set<AST.SvelteNode>();
+    walk(
+      ast,
+      {
+        enter(node, parent) {
+          reached.add(node);
+          if (!node.type.startsWith("TS") || VALUE_TS_NODES.has(node.type)) {
+            return;
+          }
+          if (!TYPE_DECLARATIONS.has(node.type)) {
+            found.add(`${parent?.type} holds ${node.type}`);
+          } else if (
+            children(node, valueVisitorKeys).some(
+              (child) => child.type !== "Identifier",
+            )
+          ) {
+            found.add(`${node.type} has children`);
+          }
+        },
+      },
+      valueVisitorKeys,
+    );
+    let inType = 0;
+    const isType = (node: AST.SvelteNode) =>
+      node.type.startsWith("TS") && !VALUE_TS_NODES.has(node.type);
+    walk(ast, {
+      enter(node, parent) {
+        if (isType(node)) inType++;
+        if (
+          inType > 0 ||
+          node.type !== "Identifier" ||
+          !parent ||
+          !isReference(node, parent)
+        ) {
+          return;
+        }
+        references++;
+        if (!reached.has(node)) found.add(`${parent.type} holds ${node.name}`);
+      },
+      leave(node) {
+        if (isType(node)) inType--;
+      },
+    });
+  }
+  expect([...found].sort(byCodeUnit)).toEqual([]);
+  expect(references).toBeGreaterThan(40_000);
+});
+
+test("valueVisitorKeys skips annotations, type parameters and type arguments", () => {
+  const ast = parseModule(
+    "class A<T> extends B<T> implements C { d: D = e as F; m<G>(h: H): I { return j<K>(l!) satisfies M; } }\nfunction n(this: O, ...p: P[]): void {}\ntype Q = typeof r;\nlet { s }: S = t;",
+    { typescript: true },
+  );
+  const names: string[] = [];
+  walk(
+    ast,
+    {
+      enter(node) {
+        if (node.type === "Identifier") names.push(node.name);
+      },
+    },
+    valueVisitorKeys,
+  );
+  expect(names).toEqual([
+    "A",
+    "B",
+    "d",
+    "e",
+    "m",
+    "h",
+    "j",
+    "l",
+    "n",
+    "this",
+    "p",
+    "s",
+    "s",
+    "t",
+  ]);
 });
 
 test("walk visits the parenthesized default of a snippet's parameter", () => {
