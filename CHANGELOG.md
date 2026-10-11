@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.9.4 — 2026-10-11
+
+**Features**
+
+- `analyzeScopes(ast)`, from `sveast/scope` and `sveast`, finds the scopes of
+  a component, its scripts and markup together, or of a module, as svelte's
+  analyzer does. `bindingOf` is the binding a name refers to, `scopeOf` the
+  scope a node is in, `declaredIn` what a function, block, element or block
+  of markup declares, and each binding's `references` are its reads, writes,
+  mutations and store subscriptions. `referenceOf(identifier)` is the
+  `Reference` an `Identifier` is, so a consumer can tell a read from a write
+  or a store subscription without indexing every binding's references. The
+  markup's scopes are svelte's: an each block's item and index, also in its
+  key; `let:`, renamed or not, on elements and on a component's slots;
+  snippet parameters; `{@const}`; `{:then}` and `{:catch}`; `bind:` targets
+  as writes; `$store` as a read of `store` unless it's a rune; and `$:`.
+  `x` in `$: x = ...` declares `x` when nothing else does, and is also one
+  of its references, a write. A binding records the rune that initializes it
+  and the name a prop is passed as, from `$props()` or `export let`, with
+  its default as `initial`. Names in TypeScript's types aren't references.
+  `sveast/scope` loads no parser. `Binding`, `BindingKind`, `Reference`,
+  `Scope` and `Scopes` are exported.
+- `children(node, keys?)` returns a node's child nodes, kept per node and
+  table after the first call, since ASTs don't change after parse.
+  `forEachChild(node, callback, keys?)` calls back with each child, its
+  field and index, and allocates nothing. Both throw on a node type the
+  table has no entry for, as `walk` does.
+- `valueVisitorKeys` is `visitorKeys` without TypeScript's types: no
+  annotations, type parameters or arguments, `implements` clauses, or types
+  in `as` and `satisfies`, so an `Identifier` a walk with it reaches is
+  never a type's name. It has its own fast lookup, as the default table
+  does. Walking with it takes about as long as walking everything.
+- `skipTypeWrappers(node)` gives the value inside TypeScript's wrappers:
+  `a` for `a as T`, `a satisfies T`, `<T>a`, `a!`, `a<T>` and any nesting of
+  them, and the node itself otherwise.
+- `locate(text, offset)` gives `createLocator`'s line and column without
+  keeping a locator, and keeps the lines of the last 64 texts. All of these
+  are in `sveast` and `sveast/walk`, which still loads no parser.
+
+**Fixes**
+
+- `walk` visits a snippet parameter's parenthesized default, as in
+  `{#snippet row(a, b = (c, d))}`. svelte keeps those parentheses, so
+  `parse` returns a `ParenthesizedExpression` there, and `walk` threw on it
+  as an unknown node type. `visitorKeys` now lists it.
+
+**Performance**
+
+- On the corpus, `analyzeScopes` takes less than half the time parsing does.
+  On 12,548 components from the corpus, svelte's tests and Svelte projects,
+  it agrees with svelte's analyzer on all 208,797 names they both resolve,
+  except a class expression's own name, a snippet's name and a `var`
+  declared twice, where sveast follows JavaScript.
+
 ## 0.9.3 — 2026-10-07
 
 **Performance**
