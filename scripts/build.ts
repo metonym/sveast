@@ -122,7 +122,7 @@ async function buildProject() {
     naming: { entry: "[name].[ext]", chunk: "shared-[hash].[ext]" },
     format: "esm",
     target: "browser",
-    minify: true,
+    minify: { whitespace: true, syntax: true, identifiers: false },
     splitting: true,
     packages: "bundle",
     plugins: [reexportEntries, shrinkParser],
