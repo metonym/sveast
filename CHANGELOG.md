@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.5 — 2026-10-13
+
+**Performance**
+
+- `analyzeScopes` records each node's scope only the first time `scopeOf` is
+  called, by walking the AST again. It used to keep a map from every node it
+  visited. Names the markup holds as strings still get theirs right away. On
+  Carbon's 334 components, `analyzeScopes` takes 9.1 ms instead of 11.5 ms,
+  and the analyses retain 10.7 MB instead of 21.6 MB.
+
+**Changes**
+
+- The published bundle keeps function names. Bun's `keepNames` leaves names
+  mangled as of 1.4.3, so the build minifies whitespace and syntax but not
+  identifiers. CPU profiles of consumers now show `walk`, `children` or
+  `locate` instead of `E`, `It` or `Nt`.
+
 ## 0.9.4 — 2026-10-11
 
 **Features**
