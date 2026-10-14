@@ -367,3 +367,24 @@ test("gives every node outside types and styles a scope", () => {
     expect([path, missing]).toEqual([path, []]);
   }
 });
+
+test("gives scopes that resolve names to its own bindings", () => {
+  const { scopes, named } = analyze(
+    `<script>
+  let act = () => {};
+  function f(a) { return a; }
+</script>
+{#each [1] as item}<p use:act={item}>{item}</p>{/each}`,
+  );
+  const reads = [named("a", 1), named("item", 2)];
+  for (const node of reads) {
+    expect(scopes.scopeOf(node)?.get(node.name)).toBe(scopes.bindingOf(node));
+  }
+  const act = scopes.instance.get("act");
+  const directive = act?.references.find(
+    (reference) => reference.parent.type === "UseDirective",
+  );
+  if (!directive) throw new Error("no use:act reference");
+  expect(scopes.scopeOf(directive.node)?.get("act")).toBe(act);
+  expect(scopes.scopeOf(named("f"))).toBe(scopes.instance);
+});

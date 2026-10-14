@@ -167,7 +167,9 @@ export interface Scopes {
   /**
    * The scope `node` is in: for a function, the scope around it, while
    * its parameters are in its own. `null` for a node in a type, in the
-   * `<style>` or outside the AST.
+   * `<style>` or outside the AST. The first call walks the AST again to
+   * record every node's scope, which the rest of the analysis doesn't
+   * need.
    */
   scopeOf(node: AST.SvelteNode): Scope | null;
   /**
@@ -195,16 +197,19 @@ class ScopeNode implements Scope {
   readonly node: AST.SvelteNode | null;
   readonly parent: ScopeNode | null;
   readonly porous: boolean;
+  readonly index: number;
   readonly declarations = new Map<string, BindingNode>();
 
   constructor(
     node: AST.SvelteNode | null,
     parent: ScopeNode | null,
     porous: boolean,
+    index: number,
   ) {
     this.node = node;
     this.parent = parent;
     this.porous = porous;
+    this.index = index;
   }
 
   get(name: string): BindingNode | null {
@@ -333,7 +338,7 @@ const NO_BINDINGS: ReadonlyMap<string, Binding> = new Map();
  * It reads the AST but doesn't change it.
  */
 export function analyzeScopes(ast: AST.Root | Program): Scopes {
-  return new Analysis(ast);
+  return new Analysis(ast, false);
 }
 
 class Analysis implements Scopes {
@@ -341,7 +346,11 @@ class Analysis implements Scopes {
   readonly instance: ScopeNode;
   private readonly instanceProgram: Program | null = null;
   private readonly component: boolean;
-  private readonly scopeIn = new Map<AST.SvelteNode, ScopeNode>();
+  private readonly ast: AST.Root | Program;
+  private readonly scopes: ScopeNode[] = [];
+  private readonly scopeIn: Map<AST.SvelteNode, ScopeNode> | null;
+  private readonly synthetic = new Map<AST.SvelteNode, ScopeNode>();
+  private recorded: Analysis | undefined;
   private readonly made = new Map<AST.SvelteNode, ScopeNode>();
   private readonly declared = new Map<Identifier, BindingNode>();
   private readonly references = new Map<Identifier, ReferenceNode>();
@@ -354,10 +363,12 @@ class Analysis implements Scopes {
   ][] = [];
   private readonly stores = new Map<string, BindingNode | null | false>();
 
-  constructor(ast: AST.Root | Program) {
+  constructor(ast: AST.Root | Program, record: boolean) {
+    this.ast = ast;
+    this.scopeIn = record ? new Map() : null;
     if (ast.type === "Program") {
       this.component = false;
-      this.module = new ScopeNode(ast, null, false);
+      this.module = this.scope(ast, null, false);
       this.instance = this.module;
       this.made.set(ast, this.module);
       this.visit(ast, null, this.module);
@@ -365,16 +376,16 @@ class Analysis implements Scopes {
       this.component = true;
       const module = ast.module?.content ?? null;
       const instance = ast.instance?.content ?? null;
-      this.module = new ScopeNode(module, null, false);
-      this.instance = new ScopeNode(instance, this.module, false);
+      this.module = this.scope(module, null, false);
+      this.instance = this.scope(instance, this.module, false);
       this.instanceProgram = instance;
-      this.scopeIn.set(ast, this.module);
+      this.scopeIn?.set(ast, this.module);
       for (const [script, scope] of [
         [ast.module, this.module],
         [ast.instance, this.instance],
       ] as const) {
         if (script === undefined) continue;
-        this.scopeIn.set(script, scope);
+        this.scopeIn?.set(script, scope);
         this.made.set(script.content, scope);
         for (const attribute of script.attributes) {
           this.visit(attribute, script, scope);
@@ -389,7 +400,22 @@ class Analysis implements Scopes {
   }
 
   scopeOf(node: AST.SvelteNode): Scope | null {
-    return this.scopeIn.get(node) ?? null;
+    const synthetic = this.synthetic.get(node);
+    if (synthetic !== undefined) return synthetic;
+    if (this.scopeIn !== null) return this.scopeIn.get(node) ?? null;
+    this.recorded ??= new Analysis(this.ast, true);
+    const recorded = this.recorded.scopeIn?.get(node);
+    return recorded === undefined ? null : this.scopes[recorded.index];
+  }
+
+  private scope(
+    node: AST.SvelteNode | null,
+    parent: ScopeNode | null,
+    porous: boolean,
+  ): ScopeNode {
+    const scope = new ScopeNode(node, parent, porous, this.scopes.length);
+    this.scopes.push(scope);
+    return scope;
   }
 
   bindingOf(node: Identifier): Binding | null {
@@ -411,7 +437,7 @@ class Analysis implements Scopes {
     node: AST.SvelteNode,
     porous: boolean,
   ): ScopeNode {
-    const made = new ScopeNode(node, scope, porous);
+    const made = this.scope(node, scope, porous);
     this.made.set(node, made);
     return made;
   }
@@ -474,7 +500,7 @@ class Analysis implements Scopes {
       start,
       end: start + root.length,
     };
-    this.scopeIn.set(node, scope);
+    this.synthetic.set(node, scope);
     this.reference(node, parent, scope, true, false, false);
   }
 
@@ -483,7 +509,7 @@ class Analysis implements Scopes {
     parent: AST.SvelteNode | null,
     scope: ScopeNode,
   ): void {
-    this.scopeIn.set(node, scope);
+    this.scopeIn?.set(node, scope);
     switch (node.type) {
       case "Identifier":
         if (parent !== null && isReference(node, parent)) {
@@ -493,10 +519,10 @@ class Analysis implements Scopes {
         return;
       case "ImportDeclaration":
         for (const specifier of node.specifiers) {
-          this.scopeIn.set(specifier, scope);
-          this.scopeIn.set(specifier.local, scope);
+          this.scopeIn?.set(specifier, scope);
+          this.scopeIn?.set(specifier.local, scope);
           if (specifier.type === "ImportSpecifier") {
-            this.scopeIn.set(specifier.imported, scope);
+            this.scopeIn?.set(specifier.imported, scope);
           }
           this.declare(
             scope,
@@ -515,9 +541,9 @@ class Analysis implements Scopes {
       case "ExportNamedDeclaration":
         if (node.declaration) this.visit(node.declaration, node, scope);
         for (const specifier of node.specifiers) {
-          this.scopeIn.set(specifier, scope);
-          this.scopeIn.set(specifier.local, scope);
-          this.scopeIn.set(specifier.exported, scope);
+          this.scopeIn?.set(specifier, scope);
+          this.scopeIn?.set(specifier.local, scope);
+          this.scopeIn?.set(specifier.exported, scope);
           if (!node.source && specifier.local.type === "Identifier") {
             this.reference(
               specifier.local,
@@ -539,7 +565,7 @@ class Analysis implements Scopes {
         return;
       case "FunctionDeclaration":
         if (node.id) {
-          this.scopeIn.set(node.id, scope);
+          this.scopeIn?.set(node.id, scope);
           this.declare(scope, node.id, node.id.name, "function", node, node);
         }
         this.visitFunction(node, this.child(scope, node, true));
@@ -547,7 +573,7 @@ class Analysis implements Scopes {
       case "FunctionExpression": {
         const inner = this.child(scope, node, true);
         if (node.id) {
-          this.scopeIn.set(node.id, inner);
+          this.scopeIn?.set(node.id, inner);
           this.declare(inner, node.id, node.id.name, "function", node, node);
         }
         this.visitFunction(node, inner);
@@ -563,7 +589,7 @@ class Analysis implements Scopes {
           if (node.type === "ClassExpression") {
             inner = this.child(scope, node, false);
           }
-          this.scopeIn.set(node.id, inner);
+          this.scopeIn?.set(node.id, inner);
           this.declare(inner, node.id, node.id.name, "class", node, node);
         }
         for (const decorator of node.decorators ?? []) {
@@ -623,12 +649,12 @@ class Analysis implements Scopes {
         }
         break;
       case "TSEnumDeclaration": {
-        this.scopeIn.set(node.id, scope);
+        this.scopeIn?.set(node.id, scope);
         this.declare(scope, node.id, node.id.name, "enum", node, node);
         const inner = this.child(scope, node, false);
         for (const member of node.members) {
-          this.scopeIn.set(member, inner);
-          this.scopeIn.set(member.id, inner);
+          this.scopeIn?.set(member, inner);
+          this.scopeIn?.set(member.id, inner);
           if (member.id.type === "Identifier") {
             this.declare(
               inner,
@@ -646,7 +672,7 @@ class Analysis implements Scopes {
         return;
       }
       case "TSModuleDeclaration":
-        this.scopeIn.set(node.id, scope);
+        this.scopeIn?.set(node.id, scope);
         if (node.id.type === "Identifier" && !node.global) {
           this.declare(scope, node.id, node.id.name, "namespace", node, node);
         }
@@ -655,7 +681,7 @@ class Analysis implements Scopes {
         }
         return;
       case "TSImportEqualsDeclaration": {
-        this.scopeIn.set(node.id, scope);
+        this.scopeIn?.set(node.id, scope);
         this.declare(
           scope,
           node.id,
@@ -666,12 +692,12 @@ class Analysis implements Scopes {
         );
         let name: AST.SvelteNode = node.moduleReference;
         while (name.type === "TSQualifiedName") {
-          this.scopeIn.set(name, scope);
-          this.scopeIn.set(name.right, scope);
+          this.scopeIn?.set(name, scope);
+          this.scopeIn?.set(name.right, scope);
           name = name.left;
         }
         if (name.type === "Identifier") {
-          this.scopeIn.set(name, scope);
+          this.scopeIn?.set(name, scope);
           this.reference(name, node, scope, true, false, false);
         } else {
           this.visit(name, node, scope);
@@ -680,7 +706,7 @@ class Analysis implements Scopes {
       }
       case "TSDeclareFunction":
         if (node.id) {
-          this.scopeIn.set(node.id, scope);
+          this.scopeIn?.set(node.id, scope);
           if (!scope.declarations.has(node.id.name)) {
             this.declare(scope, node.id, node.id.name, "function", node, node);
           }
@@ -710,7 +736,7 @@ class Analysis implements Scopes {
         this.visitAwait(node, scope);
         return;
       case "SnippetBlock": {
-        this.scopeIn.set(node.expression, scope);
+        this.scopeIn?.set(node.expression, scope);
         const { name } = node.expression;
         this.declare(scope, node.expression, name, "snippet", node, node);
         const inner = this.child(scope, node, false);
@@ -776,7 +802,7 @@ class Analysis implements Scopes {
     let kind: BindingKind = node.kind === "await using" ? "using" : node.kind;
     if (parent?.type === "ConstTag") kind = "const-tag";
     for (const declarator of node.declarations) {
-      this.scopeIn.set(declarator, scope);
+      this.scopeIn?.set(declarator, scope);
       this.declarePattern(
         declarator.id,
         declarator,
@@ -793,7 +819,7 @@ class Analysis implements Scopes {
   private visitFunction(node: FunctionNode, scope: ScopeNode): void {
     for (const param of node.params) {
       if (param.type === "Identifier" && param.name === "this") {
-        this.scopeIn.set(param, scope);
+        this.scopeIn?.set(param, scope);
         continue;
       }
       this.declarePattern(param, node, scope, "param", node, null);
@@ -809,14 +835,14 @@ class Analysis implements Scopes {
     declaration: AST.SvelteNode,
     initial: AST.SvelteNode | null,
   ): void {
-    this.scopeIn.set(pattern, scope);
+    this.scopeIn?.set(pattern, scope);
     switch (pattern.type) {
       case "Identifier":
         this.declare(scope, pattern, pattern.name, kind, declaration, initial);
         break;
       case "ObjectPattern":
         for (const property of pattern.properties) {
-          this.scopeIn.set(property, scope);
+          this.scopeIn?.set(property, scope);
           if (property.type === "RestElement") {
             this.declarePattern(
               property,
@@ -829,7 +855,7 @@ class Analysis implements Scopes {
             continue;
           }
           if (property.computed) this.visit(property.key, property, scope);
-          else this.scopeIn.set(property.key, scope);
+          else this.scopeIn?.set(property.key, scope);
           this.declarePattern(
             property.value,
             property,
@@ -902,7 +928,7 @@ class Analysis implements Scopes {
     scope: ScopeNode,
     reads: boolean,
   ): void {
-    this.scopeIn.set(target, scope);
+    this.scopeIn?.set(target, scope);
     switch (target.type) {
       case "Identifier":
         this.reference(target, parent, scope, reads, true, false);
@@ -911,14 +937,14 @@ class Analysis implements Scopes {
         let object: AST.SvelteNode = target;
         let holder: AST.SvelteNode = parent;
         while (object.type === "MemberExpression") {
-          this.scopeIn.set(object, scope);
+          this.scopeIn?.set(object, scope);
           if (object.computed) this.visit(object.property, object, scope);
-          else this.scopeIn.set(object.property, scope);
+          else this.scopeIn?.set(object.property, scope);
           holder = object;
           object = object.object;
         }
         if (object.type === "Identifier") {
-          this.scopeIn.set(object, scope);
+          this.scopeIn?.set(object, scope);
           this.reference(object, holder, scope, true, false, true);
         } else {
           this.visit(object, holder, scope);
@@ -927,13 +953,13 @@ class Analysis implements Scopes {
       }
       case "ObjectPattern":
         for (const property of target.properties) {
-          this.scopeIn.set(property, scope);
+          this.scopeIn?.set(property, scope);
           if (property.type === "RestElement") {
             this.visitTarget(property, target, scope, false);
             continue;
           }
           if (property.computed) this.visit(property.key, property, scope);
-          else this.scopeIn.set(property.key, scope);
+          else this.scopeIn?.set(property.key, scope);
           this.visitTarget(property.value, property, scope, false);
         }
         return;
@@ -967,7 +993,7 @@ class Analysis implements Scopes {
     scope: ScopeNode,
   ): void {
     const inner = this.child(scope, node, false);
-    this.scopeIn.set(node.label, scope);
+    this.scopeIn?.set(node.label, scope);
     const { body } = node;
     if (
       body.type === "ExpressionStatement" &&
@@ -989,7 +1015,7 @@ class Analysis implements Scopes {
       this.referenceName(node.name, node.start + 1, node, scope);
     }
     const slotted = slotOf(node) !== null;
-    const defaults = new ScopeNode(node, scope, false);
+    const defaults = this.scope(node, scope, false);
     const lets = slotted ? scope : defaults;
     this.made.set(node, lets);
     if (node.type === "SvelteComponent") {
@@ -1002,7 +1028,7 @@ class Analysis implements Scopes {
         attribute.type === "LetDirective" ? lets : scope,
       );
     }
-    this.scopeIn.set(node.fragment, defaults);
+    this.scopeIn?.set(node.fragment, defaults);
     for (const child of node.fragment.nodes) {
       const slot = slotOf(child);
       this.visit(
@@ -1019,7 +1045,7 @@ class Analysis implements Scopes {
       return;
     }
     const declare = (expression: LetExpression | Expression | Pattern) => {
-      this.scopeIn.set(expression, scope);
+      this.scopeIn?.set(expression, scope);
       switch (expression.type) {
         case "Identifier":
           this.declare(
@@ -1033,11 +1059,11 @@ class Analysis implements Scopes {
           return;
         case "ObjectExpression":
           for (const property of expression.properties) {
-            this.scopeIn.set(property, scope);
+            this.scopeIn?.set(property, scope);
             if (property.type === "SpreadElement") {
               declare(property.argument);
             } else {
-              this.scopeIn.set(property.key, scope);
+              this.scopeIn?.set(property.key, scope);
               declare(property.value);
             }
           }
@@ -1046,7 +1072,7 @@ class Analysis implements Scopes {
           for (const element of expression.elements) {
             if (element === null) continue;
             if (element.type === "SpreadElement") {
-              this.scopeIn.set(element, scope);
+              this.scopeIn?.set(element, scope);
               declare(element.argument);
             } else {
               declare(element);
@@ -1068,7 +1094,7 @@ class Analysis implements Scopes {
       this.declare(inner, null, node.index, "each-index", node, node);
     }
     if (node.key) this.visit(node.key, node, inner);
-    this.scopeIn.set(node.body, inner);
+    this.scopeIn?.set(node.body, inner);
     for (const child of node.body.nodes) this.visit(child, node.body, inner);
   }
 
