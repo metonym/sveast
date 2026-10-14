@@ -385,7 +385,7 @@ size?.references.some((reference) => reference.writes || reference.mutates); // 
 It returns:
 
 - **`module`** and **`instance`**, the scopes of `<script module>` and `<script>` (one scope, for a module). A `Scope` has the `node` that makes it, its `parent`, its `declarations` by name, and `get(name)`, the binding a name refers to there, or `null` for a global.
-- **`scopeOf(node)`**, the scope a node is in; `null` in a type, the `<style>` or another AST.
+- **`scopeOf(node)`**, the scope a node is in; `null` in a type, the `<style>` or another AST. The first call walks the AST again to record every node's scope, so a tool that only resolves names doesn't keep a map of every node.
 - **`bindingOf(identifier)`**, the binding an `Identifier` declares or refers to; `null` for a global, a property key or a name in a type.
 - **`referenceOf(identifier)`**, the `Reference` an `Identifier` is, to tell a read from a write or a store subscription; `null` for one that declares a binding or isn't a reference.
 - **`declaredIn(node)`**, the bindings of the scope a node makes: a function's parameters (its body's declarations are its body's), a block's or an each block's declarations, a snippet's parameters, or an element's `let:` names.
