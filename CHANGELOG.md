@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.9.6 — 2026-10-15
+
+**Features**
+
+- `lexDynamicImports(source)`, from `sveast/lexer` and `sveast`, returns a
+  module's `import(...)` and `require(...)` calls and Vite's
+  `import.meta.glob(...)`, at any depth, with their offsets and their first
+  argument when it's a string or a template without `${...}`, `null` when
+  it's computed. It runs the same tokenizer as `lexStrings`, so comments,
+  strings, templates and regular expressions are skipped, and a method named
+  `import` or `require` isn't a call. It doesn't check syntax and never
+  throws. `kind` is `"import"`, `"require"` or `"glob"`. Type arguments are
+  skipped, as in `import.meta.glob<Module>("./*.ts")`. Where `parseModule`
+  accepts the module, the calls are its `ImportExpression`s, its calls of an
+  identifier `require` (`new require(...)` included) and of
+  `import.meta.glob`, and in TypeScript also `import("a")` types and
+  `import a = require("a")`. `LexedDynamicImport` is exported. It matched
+  `parseModule` on 33,001 modules and component scripts.
+- `lexImportsExports(source, { exportLists: true })` also returns each
+  top-level `export { a as b }` without `from`, with `source` null and
+  specifiers of kind `"local"`, so following a binding through an `index.js`
+  no longer needs a full parse. Default `false`. `export const`,
+  `export function` and `export default` still aren't returned. A module
+  that ends with an export list is read to its end.
+  `LexImportsExportsOptions` is exported.
+
 ## 0.9.5 — 2026-10-13
 
 **Performance**
