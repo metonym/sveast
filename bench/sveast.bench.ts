@@ -10,6 +10,7 @@ import {
   isRunesMode,
   isValidType,
   lexComponent,
+  lexDynamicImports,
   lexImportsExports,
   lexStrings,
   locate as locateIn,
@@ -253,6 +254,12 @@ group("parseImportsExports", () => {
 group("lexImportsExports", () => {
   mapTask("carbon .js", sourcesOf(CARBON_JS), lexImportsExports, kb(CARBON_JS));
   mapTask(
+    "carbon .js, exportLists",
+    sourcesOf(CARBON_JS),
+    (source) => lexImportsExports(source, { exportLists: true }),
+    kb(CARBON_JS),
+  );
+  mapTask(
     "carbon .d.ts",
     sourcesOf(CARBON_TS),
     lexImportsExports,
@@ -269,6 +276,16 @@ group("lexImportsExports", () => {
     [LARGEST_CARBON_SCRIPT],
     lexImportsExports,
     kbOf([LARGEST_CARBON_SCRIPT]),
+  );
+});
+
+group("lexDynamicImports", () => {
+  mapTask("carbon .js", sourcesOf(CARBON_JS), lexDynamicImports, kb(CARBON_JS));
+  mapTask(
+    "carbon scripts",
+    CARBON_SCRIPTS,
+    lexDynamicImports,
+    scriptsDescription(CARBON_SCRIPTS),
   );
 });
 

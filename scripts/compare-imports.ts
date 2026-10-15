@@ -10,6 +10,7 @@ import {
   expectedLexed,
   MODULE_FILES,
   modulesIn,
+  withExportLists,
 } from "./lexed";
 import { attempt, compareArgs, errorMessage, report, toJson } from "./shared";
 
@@ -65,12 +66,18 @@ for (const file of files) {
         } catch (error) {
           actual = `throws ${errorMessage(error)}`;
         }
-        if (actual === expected && !localExports) {
-          const lexed = toJson(comparableLexed(lexImportsExports(text)));
-          const parsed = toJson(expectedLexed(nodes));
+        if (actual === expected) {
+          const lexed = toJson(
+            comparableLexed(
+              lexImportsExports(text, { exportLists: localExports }),
+            ),
+          );
+          const parsed = toJson(
+            expectedLexed(localExports ? withExportLists(nodes) : nodes),
+          );
           if (lexed !== parsed) {
             mismatches.push(
-              `${name}, lexImportsExports\n  sveast: ${lexed.slice(0, 240)}\n  parseImportsExports: ${parsed.slice(0, 240)}`,
+              `${name}, lexImportsExports, exportLists: ${localExports}\n  sveast: ${lexed.slice(0, 240)}\n  parseImportsExports: ${parsed.slice(0, 240)}`,
             );
             continue;
           }
@@ -88,7 +95,7 @@ for (const file of files) {
 }
 
 report(
-  `${files.length} files: ${matched} match, ${mismatches.length} mismatch, ${rejected} modules parseModule rejects (localExports: false also checks lexImportsExports)`,
+  `${files.length} files: ${matched} match, ${mismatches.length} mismatch, ${rejected} modules parseModule rejects (each also checks lexImportsExports, with exportLists for localExports: true)`,
   mismatches,
   list,
 );
