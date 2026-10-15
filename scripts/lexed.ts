@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import {
   type Identifier,
+  type LexedDynamicImport,
   type LexedStatement,
   type LexedString,
   type ModuleDeclaration,
@@ -96,6 +97,17 @@ export function expectedImportsExports(
   );
 }
 
+/** What `lexImportsExports` returns with `exportLists`: imports, re-exports and `export { … }`. */
+export function withExportLists(
+  nodes: ModuleDeclaration[],
+): ModuleDeclaration[] {
+  return nodes.filter(
+    (node) =>
+      isImportOrReexport(node) ||
+      (node.type === "ExportNamedDeclaration" && !node.declaration),
+  );
+}
+
 export function comparableLexed(statements: LexedStatement[]): Comparable[] {
   return statements.map((statement) => ({
     kind: statement.kind,
@@ -116,7 +128,7 @@ export function comparableLexed(statements: LexedStatement[]): Comparable[] {
             kind: specifier.kind,
             names: [specifier.local, specifier.exported],
             typeOnly: specifier.typeOnly,
-            ...(specifier.kind === "named" && {
+            ...((specifier.kind === "named" || specifier.kind === "local") && {
               start: specifier.start,
               end: specifier.end,
             }),
@@ -160,6 +172,27 @@ export function expectedLexed(nodes: ModuleDeclaration[]): Comparable[] {
             typeOnly ||
             (specifier.type === "ImportSpecifier" &&
               specifier.importKind === "type"),
+          start: specifier.start,
+          end: specifier.end,
+        })),
+      };
+    }
+    if (
+      node.type === "ExportNamedDeclaration" &&
+      !node.source &&
+      !node.declaration
+    ) {
+      const typeOnly = node.exportKind === "type";
+      return {
+        kind: "export",
+        start: node.start,
+        end: node.end,
+        source: null,
+        typeOnly,
+        specifiers: node.specifiers.map((specifier) => ({
+          kind: "local",
+          names: [nameOf(specifier.local), nameOf(specifier.exported)],
+          typeOnly: typeOnly || specifier.exportKind === "type",
           start: specifier.start,
           end: specifier.end,
         })),
@@ -232,4 +265,97 @@ export function expectedStrings(
     },
   });
   return strings.sort((a, b) => a.start - b.start);
+}
+
+function literalSource(node: Node | undefined): LexedDynamicImport["source"] {
+  if (node?.type === "Literal" && typeof node.value === "string") {
+    return { value: node.value, start: node.start, end: node.end };
+  }
+  if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+    const value = node.quasis[0].value.cooked;
+    return value == null ? null : { value, start: node.start, end: node.end };
+  }
+  return null;
+}
+
+function isGlob(callee: Node): boolean {
+  return (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    !callee.optional &&
+    callee.object.type === "MetaProperty" &&
+    callee.object.meta.name === "import" &&
+    callee.property.type === "Identifier" &&
+    callee.property.name === "glob"
+  );
+}
+
+export function expectedDynamicImports(
+  source: string,
+  typescript: boolean,
+): LexedDynamicImport[] | undefined {
+  const program = attempt(() =>
+    parseModule(source, { typescript, comments: false }),
+  );
+  if (!program) return;
+  const imports: LexedDynamicImport[] = [];
+  walk(program, {
+    enter(node) {
+      if (node.type === "ImportExpression") {
+        imports.push({
+          kind: "import",
+          source: literalSource(node.source),
+          start: node.start,
+          end: node.end,
+        });
+      } else if (
+        node.type === "CallExpression" ||
+        node.type === "NewExpression"
+      ) {
+        const { callee } = node;
+        const parenthesized =
+          node.type === "CallExpression"
+            ? callee.start !== node.start
+            : source.slice(node.start, callee.start).trim() !== "new";
+        if (
+          parenthesized ||
+          (node.type === "CallExpression" && node.optional)
+        ) {
+          return;
+        }
+        let kind: LexedDynamicImport["kind"];
+        if (callee.type === "Identifier" && callee.name === "require") {
+          kind = "require";
+        } else if (node.type === "CallExpression" && isGlob(callee)) {
+          kind = "glob";
+        } else {
+          return;
+        }
+        const argument = node.arguments[0] as Node | undefined;
+        imports.push({
+          kind,
+          source:
+            argument?.type === "SpreadElement" ? null : literalSource(argument),
+          start: callee.start,
+          end: node.end,
+        });
+      } else if (node.type === "TSImportType") {
+        const argument = node.argument as Node;
+        imports.push({
+          kind: "import",
+          source: literalSource(argument),
+          start: node.start,
+          end: source.indexOf(")", argument.end) + 1,
+        });
+      } else if (node.type === "TSExternalModuleReference") {
+        imports.push({
+          kind: "require",
+          source: literalSource(node.expression as Node),
+          start: node.start,
+          end: node.end,
+        });
+      }
+    },
+  });
+  return imports.sort((a, b) => a.start - b.start);
 }

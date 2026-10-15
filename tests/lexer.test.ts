@@ -1,6 +1,10 @@
 import { lexImportsExports, parseImportsExports } from "sveast";
 import { lexImportsExports as fromEntry } from "sveast/lexer";
-import { comparableLexed, expectedLexed } from "../scripts/lexed";
+import {
+  comparableLexed,
+  expectedLexed,
+  withExportLists,
+} from "../scripts/lexed";
 import { attempt, mulberry32 } from "../scripts/shared";
 import {
   inputs,
@@ -8,14 +12,21 @@ import {
   TRICKY_AND_SNIPPETS,
 } from "./imports-exports-inputs";
 
-function compare(source: string, typescript: boolean) {
+function compare(source: string, typescript: boolean, exportLists = false) {
   const expected = attempt(() =>
     expectedLexed(
-      parseImportsExports(source, { typescript, localExports: false }),
+      exportLists
+        ? withExportLists(
+            parseImportsExports(source, { typescript, localExports: true }),
+          )
+        : parseImportsExports(source, { typescript, localExports: false }),
     ),
   );
   return (
-    expected && { ours: comparableLexed(lexImportsExports(source)), expected }
+    expected && {
+      ours: comparableLexed(lexImportsExports(source, { exportLists })),
+      expected,
+    }
   );
 }
 
@@ -28,8 +39,10 @@ describe("matches parseImportsExports on the corpus", () => {
     if (modules.length === 0) continue;
     test(file, () => {
       for (const { text, typescript } of modules) {
-        const outcome = compare(text, typescript);
-        expect(outcome?.ours).toEqual(outcome?.expected);
+        for (const exportLists of [false, true]) {
+          const outcome = compare(text, typescript, exportLists);
+          expect(outcome?.ours).toEqual(outcome?.expected);
+        }
       }
     });
   }
@@ -38,12 +51,14 @@ describe("matches parseImportsExports on the corpus", () => {
 test("matches parseImportsExports on the tricky inputs and TypeScript snippets", () => {
   let compared = 0;
   for (const [source, typescript] of TRICKY_AND_SNIPPETS) {
-    const outcome = compare(source, typescript);
-    if (outcome === undefined) continue;
-    compared++;
-    expect(outcome.ours).toEqual(outcome.expected);
+    for (const exportLists of [false, true]) {
+      const outcome = compare(source, typescript, exportLists);
+      if (outcome === undefined) continue;
+      compared++;
+      expect(outcome.ours).toEqual(outcome.expected);
+    }
   }
-  expect(compared).toBeGreaterThan(30);
+  expect(compared).toBeGreaterThan(60);
 });
 
 const FORMS: Record<string, string> = {
@@ -81,9 +96,11 @@ C";
 describe("matches parseImportsExports on each form", () => {
   for (const [name, source] of Object.entries(FORMS)) {
     test(name, () => {
-      const outcome = compare(source, true);
-      expect(outcome).toBeDefined();
-      expect(outcome?.ours).toEqual(outcome?.expected);
+      for (const exportLists of [false, true]) {
+        const outcome = compare(source, true, exportLists);
+        expect(outcome).toBeDefined();
+        expect(outcome?.ours).toEqual(outcome?.expected);
+      }
     });
   }
 });
@@ -92,25 +109,27 @@ test("matches parseImportsExports on mutated modules, and never throws", () => {
   let compared = 0;
   const failures: string[] = [];
   for (const { text, typescript } of mutatedModules(6000)) {
-    let lexed: ReturnType<typeof lexImportsExports>;
-    try {
-      lexed = lexImportsExports(text);
-    } catch (error) {
-      failures.push(`${error}: ${text}`);
-      continue;
-    }
-    const outcome = compare(text, typescript);
-    if (outcome === undefined) continue;
-    compared++;
-    if (
-      JSON.stringify(comparableLexed(lexed)) !==
-      JSON.stringify(outcome.expected)
-    ) {
-      failures.push(text);
+    for (const exportLists of [false, true]) {
+      let lexed: ReturnType<typeof lexImportsExports>;
+      try {
+        lexed = lexImportsExports(text, { exportLists });
+      } catch (error) {
+        failures.push(`${error}: ${text}`);
+        continue;
+      }
+      const outcome = compare(text, typescript, exportLists);
+      if (outcome === undefined) continue;
+      compared++;
+      if (
+        JSON.stringify(comparableLexed(lexed)) !==
+        JSON.stringify(outcome.expected)
+      ) {
+        failures.push(text);
+      }
     }
   }
   expect(failures).toEqual([]);
-  expect(compared).toBeGreaterThan(1000);
+  expect(compared).toBeGreaterThan(2000);
 });
 
 function* generatedModules(count: number): Generator<string> {
@@ -354,6 +373,80 @@ test("finds the statements after one it can't read", () => {
       (statement) => statement.source?.value ?? null,
     ),
   ).toEqual([null, "b"]);
+});
+
+test("returns export lists with exportLists", () => {
+  const source =
+    'export { a as b, "c" as d }; export type { E }\nexport { f } from "f"; export {};';
+  expect(lexImportsExports(source, { exportLists: true })).toEqual([
+    {
+      kind: "export",
+      start: 0,
+      end: 28,
+      source: null,
+      typeOnly: false,
+      specifiers: [
+        {
+          kind: "local",
+          local: "a",
+          exported: "b",
+          typeOnly: false,
+          start: 9,
+          end: 15,
+        },
+        {
+          kind: "local",
+          local: "c",
+          exported: "d",
+          typeOnly: false,
+          start: 17,
+          end: 25,
+        },
+      ],
+    },
+    {
+      kind: "export",
+      start: 29,
+      end: 46,
+      source: null,
+      typeOnly: true,
+      specifiers: [
+        {
+          kind: "local",
+          local: "E",
+          exported: "E",
+          typeOnly: true,
+          start: 43,
+          end: 44,
+        },
+      ],
+    },
+    {
+      kind: "export",
+      start: 47,
+      end: 69,
+      source: { value: "f", start: 65, end: 68 },
+      typeOnly: false,
+      specifiers: [
+        {
+          kind: "named",
+          local: "f",
+          exported: "f",
+          typeOnly: false,
+          start: 56,
+          end: 57,
+        },
+      ],
+    },
+    {
+      kind: "export",
+      start: 70,
+      end: 80,
+      source: null,
+      typeOnly: false,
+      specifiers: [],
+    },
+  ]);
 });
 
 test("skips local exports, dynamic imports and import.meta", () => {

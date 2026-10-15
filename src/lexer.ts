@@ -1,9 +1,11 @@
 import { isDigit } from "./markup";
 import {
+  closingBracket,
   isWordAt,
   isWordCode,
   lineEnd,
   scan,
+  scanCalls,
   scanLiterals,
   skipTrivia,
 } from "./scan";
@@ -44,11 +46,11 @@ export interface LexedImportSpecifier {
   end: number;
 }
 
-/** A name an `export … from` re-exports. */
+/** A name an `export … from` re-exports, or, with `exportLists`, one an `export { … }` without `from` exports. */
 export interface LexedExportSpecifier {
-  /** `"all"` for `export *`, `"namespace"` for `export * as a`, `"named"` for a name in braces. */
-  kind: "all" | "namespace" | "named";
-  /** The name in the other module: `"*"` for `all` and `namespace`, or the name before `as`, with a string's value for `"a-b" as c`. */
+  /** `"all"` for `export *`, `"namespace"` for `export * as a`, `"named"` for a name in braces, `"local"` for a name in an `export { … }` without `from`. */
+  kind: "all" | "namespace" | "named" | "local";
+  /** The name in the other module: `"*"` for `all` and `namespace`, or the name before `as`, with a string's value for `"a-b" as c`; for `local`, the binding in this module. */
   local: string;
   /** The name it's exported as, or `null` for `export *`. */
   exported: string | null;
@@ -65,7 +67,7 @@ interface LexedStatementBase {
   start: number;
   /** The offset after the statement's `;`, or its last token without one. */
   end: number;
-  /** The module it imports from, or `null` for a statement the lexer doesn't recognize. */
+  /** The module it imports from, or `null` for an `export { … }` without `from`, or a statement the lexer doesn't recognize. */
   source: LexedSource | null;
   /** Whether it's `import type` or `export type`. */
   typeOnly: boolean;
@@ -77,13 +79,31 @@ export interface LexedImport extends LexedStatementBase {
   specifiers: LexedImportSpecifier[];
 }
 
-/** An `export … from` statement. */
+/** An `export … from` statement, or, with `exportLists`, an `export { … }` without `from`. */
 export interface LexedExport extends LexedStatementBase {
   kind: "export";
   specifiers: LexedExportSpecifier[];
 }
 
 export type LexedStatement = LexedImport | LexedExport;
+
+/** Options for {@link lexImportsExports}. */
+export interface LexImportsExportsOptions {
+  /** Also return the module's `export { a, b as c }` statements without `from`, whose specifiers have kind `"local"`. Default `false`. */
+  exportLists?: boolean;
+}
+
+/** An `import(…)`, a `require(…)` or Vite's `import.meta.glob(…)`. */
+export interface LexedDynamicImport {
+  /** `"import"` for `import(…)`, `"require"` for `require(…)`, `"glob"` for `import.meta.glob(…)`. */
+  kind: "import" | "require" | "glob";
+  /** The first argument, if it's a string or a template without `${…}` followed by `)` or `,`; `null` for a computed one. A template's `start` and `end` include its backticks. */
+  source: LexedSource | null;
+  /** The offset of `import` or `require`. */
+  start: number;
+  /** The offset after the closing `)`, or the end of the module without one. */
+  end: number;
+}
 
 /** A string literal, or the text of a template literal between two of its delimiters. */
 export interface LexedString {
@@ -108,15 +128,46 @@ export interface LexedString {
  * `source: null` and no specifiers, ending where it stopped reading.
  * TypeScript's `type` forms are always read.
  */
-export function lexImportsExports(source: string): LexedStatement[] {
+export function lexImportsExports(
+  source: string,
+  options: LexImportsExportsOptions = {},
+): LexedStatement[] {
   const lexer = new Lexer(source);
+  lexer.exportLists = options.exportLists ?? false;
   const statements: LexedStatement[] = [];
-  scan(source, false, (_start, keyword) => {
-    const statement = lexer.statement(keyword);
-    statements.push(statement);
-    return statement.end;
-  });
+  scan(
+    source,
+    false,
+    (_start, keyword) => {
+      const statement = lexer.statement(keyword);
+      statements.push(statement);
+      return statement.end;
+    },
+    lexer.exportLists,
+  );
   return statements;
+}
+
+/**
+ * A module's `import(…)` and `require(…)` calls and Vite's
+ * `import.meta.glob(…)`, at any depth, in source order, read without a
+ * parser: each call's offsets and its first argument, if it's a string or
+ * a template without `${…}`. Comments, strings, templates and regular
+ * expressions are skipped, as {@link lexStrings} skips them, and it never
+ * throws. Where {@link parseModule} accepts the module, they are its
+ * `ImportExpression`s, its calls of an identifier `require` and of
+ * `import.meta.glob`, and, in TypeScript, its `import("a")` types and
+ * `import a = require("a")`. A method named `import` or `require` isn't a
+ * call.
+ */
+export function lexDynamicImports(source: string): LexedDynamicImport[] {
+  const lexer = new Lexer(source);
+  const imports: LexedDynamicImport[] = [];
+  scanCalls(source, (start, member) => {
+    const call = lexer.dynamicImport(start, member);
+    if (call !== null) imports.push(call);
+  });
+  return imports;
 }
 
 /**
@@ -150,6 +201,7 @@ class Lexer {
   pos = 0;
   end = 0;
   escapeEnd = 0;
+  exportLists = false;
 
   constructor(source: string) {
     this.source = source;
@@ -308,7 +360,87 @@ class Lexer {
       });
       if (!this.eat(44) && this.at() !== 125) return false;
     }
+    if (this.exportLists && !this.isWord("from")) {
+      for (const specifier of specifiers) specifier.kind = "local";
+      this.eat(59);
+      return true;
+    }
     return this.from(statement);
+  }
+
+  dynamicImport(start: number, member: boolean): LexedDynamicImport | null {
+    const isImport = this.source.charCodeAt(start) === 105;
+    this.pos = this.end = start + (isImport ? 6 : 7);
+    let kind: LexedDynamicImport["kind"] = isImport ? "import" : "require";
+    if (isImport && this.eat(46)) {
+      if (
+        !this.eatWord("meta") ||
+        !this.eat(46) ||
+        !this.eatWord("glob") ||
+        !this.typeArguments()
+      ) {
+        return null;
+      }
+      kind = "glob";
+    }
+    if (!this.eat(40)) return null;
+    const argument = this.skip();
+    let source = this.string() ?? this.template();
+    let close = this.at() === 41 ? this.pos : -1;
+    if (close === -1) {
+      if (this.at() !== 44) source = null;
+      close = closingBracket(this.source, argument);
+    }
+    if (member && kind !== "glob") {
+      const after = this.source.charCodeAt(skipTrivia(this.source, close + 1));
+      if (after === 123 || after === 58) return null;
+    }
+    return {
+      kind,
+      source,
+      start,
+      end: Math.min(close + 1, this.source.length),
+    };
+  }
+
+  typeArguments(): boolean {
+    if (this.at() !== 60) return true;
+    const source = this.source;
+    let depth = 0;
+    for (let i = this.pos; i < source.length; i = skipTrivia(source, i + 1)) {
+      const code = source.charCodeAt(i);
+      if (code === 34 || code === 39 || code === 96) {
+        const end = source.indexOf(source[i], i + 1);
+        if (end === -1) return false;
+        i = end;
+      } else if (code === 60) {
+        depth++;
+      } else if (code === 62 && source.charCodeAt(i - 1) !== 61) {
+        if (--depth === 0) {
+          this.advance(i + 1 - this.pos);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  template(): LexedSource | null {
+    const source = this.source;
+    const start = this.skip();
+    if (source.charCodeAt(start) !== 96) return null;
+    for (let i = start + 1; i < source.length; i++) {
+      const code = source.charCodeAt(i);
+      if (code === 96) {
+        const value = this.cooked(start + 1, i, true);
+        if (value === null) return null;
+        this.advance(i + 1 - start);
+        return { value, start, end: i + 1 };
+      }
+      if (code === 92) i++;
+      else if (code === 36 && source.charCodeAt(i + 1) === 123) return null;
+    }
+    return null;
   }
 
   typeModifier(): boolean {

@@ -3,6 +3,7 @@ export type {
   LexedAttribute,
   LexedComponent,
   LexedContent,
+  LexedDynamicImport,
   LexedExport,
   LexedExportSpecifier,
   LexedImport,
@@ -13,8 +14,14 @@ export type {
   LexedStatement,
   LexedString,
   LexedStyle,
+  LexImportsExportsOptions,
 } from "./lexer";
-export { lexComponent, lexImportsExports, lexStrings } from "./lexer";
+export {
+  lexComponent,
+  lexDynamicImports,
+  lexImportsExports,
+  lexStrings,
+} from "./lexer";
 export type {
   ParseImportsExportsOptions,
   ParseModuleOptions,

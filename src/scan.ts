@@ -14,6 +14,7 @@ const TEMPLATE = 4;
 const HEAD = 4;
 const IMPORT = 5;
 const EXPORT = 6;
+const REQUIRE = 7;
 
 const KEYWORDS: Record<string, number> = {
   await: OPERATOR,
@@ -40,6 +41,7 @@ const KEYWORDS: Record<string, number> = {
   with: HEAD,
   import: IMPORT,
   export: EXPORT,
+  require: REQUIRE,
 };
 const LONGEST_KEYWORD = 10;
 const KEYWORDS_BY_KEY: ([string, number][] | null)[] = new Array(
@@ -83,12 +85,15 @@ export function scan(
   source: string,
   localExports: boolean,
   parseAt: (start: number, keyword: number) => number,
+  exportLists = false,
 ): void {
   tokenize(
     source,
-    lastStatementKeyword(source, localExports),
+    lastStatementKeyword(source, localExports, exportLists),
     localExports,
+    exportLists,
     parseAt,
+    undefined,
     undefined,
   );
 }
@@ -97,17 +102,34 @@ export function scanLiterals(
   source: string,
   literal: (start: number, end: number, template: boolean) => void,
 ): void {
-  tokenize(source, source.length - 1, false, undefined, literal);
+  tokenize(
+    source,
+    source.length - 1,
+    false,
+    false,
+    undefined,
+    literal,
+    undefined,
+  );
+}
+
+export function scanCalls(
+  source: string,
+  call: (start: number, member: boolean) => void,
+): void {
+  tokenize(source, source.length - 1, false, false, undefined, undefined, call);
 }
 
 function tokenize(
   source: string,
   last: number,
   localExports: boolean,
+  exportLists: boolean,
   parseAt: ((start: number, keyword: number) => number) | undefined,
   literal:
     | ((start: number, end: number, template: boolean) => void)
     | undefined,
+  call: ((start: number, member: boolean) => void) | undefined,
 ): void {
   const stack: number[] = [];
   let pos = source.startsWith("#!") ? lineEnd(source, 2) : 0;
@@ -143,11 +165,14 @@ function tokenize(
       const start = pos;
       pos = wordEnd(source, pos + 1);
       const kind = wasAfterDot ? VALUE : wordKind(source, start, pos);
+      if (call !== undefined && (kind === IMPORT || kind === REQUIRE)) {
+        call(start, prev === STATEMENT_START || prev === VALUE);
+      }
       if (
         parseAt !== undefined &&
         stack.length === 0 &&
         (kind === EXPORT
-          ? localExports || isReexport(source, pos)
+          ? localExports || isReexport(source, pos, exportLists)
           : kind === IMPORT && isImportDeclaration(source, pos))
       ) {
         pos = Math.max(
@@ -220,6 +245,9 @@ function tokenize(
       }
       case 59:
         statementEnd();
+        break;
+      case 44:
+        prev = stack[stack.length - 1] === OBJECT ? STATEMENT_START : OPERATOR;
         break;
       case 93:
         prev = VALUE;
@@ -510,13 +538,14 @@ function isImportDeclaration(source: string, pos: number): boolean {
   return code !== 40 && code !== 46;
 }
 
-function isReexport(source: string, pos: number): boolean {
+function isReexport(source: string, pos: number, lists: boolean): boolean {
   let i = skipTrivia(source, pos);
   if (isWordAt(source, i, "import")) return true;
   if (isWordAt(source, i, "type")) i = skipTrivia(source, i + 4);
   const code = source.charCodeAt(i);
   if (code === 42) return true;
   if (code !== 123) return false;
+  if (lists) return true;
   for (i++; i < source.length; i++) {
     const inner = source.charCodeAt(i);
     if (inner === 125) break;
@@ -528,7 +557,11 @@ function isReexport(source: string, pos: number): boolean {
 
 const STATEMENT_KEYWORD = /import|export/g;
 
-function lastStatementKeyword(source: string, localExports: boolean): number {
+function lastStatementKeyword(
+  source: string,
+  localExports: boolean,
+  exportLists: boolean,
+): number {
   let last = -1;
   STATEMENT_KEYWORD.lastIndex = 0;
   for (
@@ -543,7 +576,7 @@ function lastStatementKeyword(source: string, localExports: boolean): number {
       !isWordCode(source.charCodeAt(end)) &&
       (source.charCodeAt(start) === 105
         ? isImportDeclaration(source, end)
-        : localExports || isReexport(source, end))
+        : localExports || isReexport(source, end, exportLists))
     ) {
       last = start;
     }

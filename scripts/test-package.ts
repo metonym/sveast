@@ -211,6 +211,15 @@ assert.deepEqual(
   lexer.lexStrings('a = "b\\\\n" + \`c\${d}e\`;').map((string) => [string.kind, string.value, string.start, string.end]),
   [["string", "b\\n", 4, 9], ["template", "c", 13, 14], ["template", "e", 18, 19]],
 );
+assert.equal(lexer.lexDynamicImports, (await import("sveast")).lexDynamicImports);
+assert.deepEqual(
+  lexer.lexDynamicImports('import("a"); require(b);').map((call) => [call.kind, call.source?.value ?? null, call.start, call.end]),
+  [["import", "a", 0, 11], ["require", null, 13, 23]],
+);
+assert.deepEqual(
+  lexer.lexImportsExports("export { a as b };", { exportLists: true })[0].specifiers.map((specifier) => [specifier.kind, specifier.local, specifier.exported]),
+  [["local", "a", "b"]],
+);
 
 const walker = await import("sveast/walk");
 assert.equal(walker.walk, walk);
@@ -277,7 +286,7 @@ import {
   type ModuleParser,
   type Program as ModuleProgram,
 } from "sveast/module";
-import { type LexedStatement, type LexedString, lexImportsExports, lexStrings } from "sveast/lexer";
+import { type LexedDynamicImport, type LexedStatement, type LexedString, lexDynamicImports, lexImportsExports, lexStrings } from "sveast/lexer";
 import { typescript } from "sveast/typescript";
 import {
   type AST as WalkAST,
@@ -409,7 +418,10 @@ void eachKeys;
 const strings: LexedString[] = lexStrings("a = 'b';");
 const values: (string | null)[] = strings.map((string) => string.value);
 void values;
-const lexed: LexedStatement[] = lexImportsExports("import a from 'a';");
+const dynamicImports: LexedDynamicImport[] = lexDynamicImports("import('a');");
+const dynamicSources: (string | undefined)[] = dynamicImports.map((call) => call.source?.value);
+void dynamicSources;
+const lexed: LexedStatement[] = lexImportsExports("import a from 'a';", { exportLists: true });
 for (const statement of lexed) {
   const from: string | undefined = statement.source?.value;
   if (statement.kind === "import") {

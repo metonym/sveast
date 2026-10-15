@@ -25,7 +25,8 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`parseSections`](#parsesectionssource-options--astroot) | A component's AST without the markup: its `<script>`s, `<style>` and `<svelte:options>` | `sveast` |
 | [`parseModule`](#parsemodulesource-options--program) | A `.js` or `.ts` module's AST, the same as a component's `<script>` | `sveast` |
 | [`parseImportsExports`](#parseimportsexportssource-options--moduledeclaration) | A module's `import` and `export` statements, without parsing the rest | `sveast` |
-| [`lexImportsExports`](#leximportsexportssource--lexedstatement) | Their offsets, sources and names, without loading a parser | `sveast/lexer` |
+| [`lexImportsExports`](#leximportsexportssource-options--lexedstatement) | Their offsets, sources and names, without loading a parser | `sveast/lexer` |
+| [`lexDynamicImports`](#lexdynamicimportssource--lexeddynamicimport) | A module's `import(…)`, `require(…)` and `import.meta.glob(…)`, with their offsets and sources, without loading a parser | `sveast/lexer` |
 | [`lexComponent`](#lexcomponentsource--lexedcomponent) | A component's `<script>`s, `<style>` and `<svelte:options>`, with their attributes and offsets, without loading a parser | `sveast/lexer` |
 | [`lexStrings`](#lexstringssource--lexedstring) | A module's string and template literals, with their offsets and values, without loading a parser | `sveast/lexer` |
 | [`createParser`, `createModuleParser`](#smaller-bundles-sveastcore-and-sveastmodule) | The parsers without TypeScript, named HTML entities or the template parser, for a smaller bundle | `sveast/core`, `sveast/module` |
@@ -145,7 +146,7 @@ Parses a JavaScript or TypeScript module, such as a `.ts` file a component impor
 
 ### `parseImportsExports(source, options?) => ModuleDeclaration[]`
 
-A module's top-level `import` and `export` statements, without parsing the rest, e.g. to rewrite a component's imports or follow a module graph. Each node is the one `parseModule(source, { comments: false })` has for that statement: `ImportDeclaration`, `ExportNamedDeclaration`, `ExportDefaultDeclaration` and `ExportAllDeclaration`, and, in TypeScript, `TSImportEqualsDeclaration`, `TSExportAssignment` and `TSNamespaceExportDeclaration`. `import(...)` and `import.meta` are expressions, so they aren't returned. Unlike a regex, it never matches an `import` in a comment, a string, a template or a nested block such as `declare module "a" { ... }`.
+A module's top-level `import` and `export` statements, without parsing the rest, e.g. to rewrite a component's imports or follow a module graph. Each node is the one `parseModule(source, { comments: false })` has for that statement: `ImportDeclaration`, `ExportNamedDeclaration`, `ExportDefaultDeclaration` and `ExportAllDeclaration`, and, in TypeScript, `TSImportEqualsDeclaration`, `TSExportAssignment` and `TSNamespaceExportDeclaration`. `import(...)` and `import.meta` are expressions, so they aren't returned; [`lexDynamicImports`](#lexdynamicimportssource--lexeddynamicimport) finds them. Unlike a regex, it never matches an `import` in a comment, a string, a template or a nested block such as `declare module "a" { ... }`.
 
 It stops after the last `import` or `export` that could start a statement, so the code after a component's imports is never read: on Carbon's component scripts, it takes a third of `parseModule`'s time, and about a seventh with `localExports: false`. A syntax error in a statement it returns throws a `ParseError`, including a name exported twice; errors elsewhere aren't reported.
 
@@ -164,11 +165,13 @@ function dependencies(source: string, typescript = false): string[] {
 }
 ```
 
-### `lexImportsExports(source) => LexedStatement[]`
+### `lexImportsExports(source, options?) => LexedStatement[]`
 
 From `sveast/lexer`, and also `sveast`. A module's top-level `import` statements and `export … from` re-exports, read by hand instead of parsed, for a tool on a hot or eagerly loaded path, such as a preprocessor that rewrites a component's imports, that needs each statement's offsets, source and names, but not the AST. `sveast/lexer` loads no parser, so a fresh process imports it in 1.4 ms, and on Carbon's component scripts it takes 40% of the time `parseImportsExports` takes with `localExports: false`.
 
 It finds the statements `parseImportsExports` returns with `localExports: false`, with the same offsets, sources and names. It doesn't check syntax and never throws: a statement it can't read, such as `import { a from "a"` or `import a = require("a")`, has `source: null` and no specifiers, and ends where it stopped reading. `import type` and `type` before a name are always read.
+
+With `exportLists: true`, it also returns each top-level `export { a, b as c }` without `from`, e.g. to follow a binding through an `index.js` that imports it and exports it again: `source` is `null`, and each specifier has kind `local`, with `local` the binding in this module. Those are the `ExportNamedDeclaration`s without a declaration that `parseImportsExports` returns with `localExports: true`; `export const a`, `export function b` and `export default` still aren't returned. A module that ends with an export list is read to its end.
 
 ```ts
 import { lexImportsExports } from "sveast/lexer";
@@ -181,7 +184,7 @@ for (const statement of lexImportsExports(source)) {
   statement.typeOnly; // `import type …` or `export type …`
   statement.specifiers;
   // import: { kind: "default" | "namespace" | "named", imported, local, typeOnly, start, end }
-  // export: { kind: "all" | "namespace" | "named", local, exported, typeOnly, start, end }
+  // export: { kind: "all" | "namespace" | "named" | "local", local, exported, typeOnly, start, end }
 }
 ```
 
@@ -191,8 +194,28 @@ for (const statement of lexImportsExports(source)) {
 | `* as a` | `namespace`, `imported: "*"`, `local: "a"` | `namespace`, `local: "*"`, `exported: "a"` |
 | `*` | | `all`, `local: "*"`, `exported: null` |
 | `b as c`, `"b-c" as d` | `named`, `imported: "b"`, `local: "c"` | `named`, `local: "b"`, `exported: "c"` |
+| `b as c` in `export { … }`, with `exportLists` | | `local`, `local: "b"`, `exported: "c"` |
 
 Names are as the module sees them: escapes decoded, and a string name without its quotes. A specifier's `typeOnly` is also `true` in an `import type` or `export type`. Its `start` is that of `type` before the name, if any, and `end` is after the last name; for `export *`, after the `*`.
+
+### `lexDynamicImports(source) => LexedDynamicImport[]`
+
+From `sveast/lexer`, and also `sveast`. A module's `import(…)` and `require(…)` calls and Vite's `import.meta.glob(…)`, at any depth, in source order, read without parsing, e.g. to follow the lazily loaded part of a module graph. Unlike a regular expression, it never matches in a comment, a string, a template or a regular expression, and it tells a literal argument from a computed one. `lexImportsExports` finds the static imports; together they're a module's dependencies.
+
+```ts
+import { lexDynamicImports } from "sveast/lexer";
+
+for (const call of lexDynamicImports(source)) {
+  call.kind; // "import" | "require" | "glob"
+  call.start; // offset of `import` or `require`
+  call.end; // after the `)`
+  call.source; // { value: "./Chart.svelte", start, end } (quotes or backticks included), or null
+}
+```
+
+`source` is the first argument if it's a string or a template without `${…}` and it's followed by `)` or `,`, as in `import("a", { with: { type: "json" } })`; it's `null` for a computed argument such as `` import(`./${name}.js`) `` or `import.meta.glob(["a", "b"])`, and for a call without arguments. Type arguments are skipped, as in `import.meta.glob<Module>("./*.ts")`.
+
+Where `parseModule` accepts the module, the calls are its `ImportExpression`s, its calls of an identifier `require`, `new require(…)` included, and of `import.meta.glob`, and in TypeScript also its `import("a")` types, as in `typeof import("a")`, and the `require("a")` of `import a = require("a")`. A method named `import` or `require`, such as `{ import() {} }`, isn't a call, and neither are `a.require(…)`, `require?.(…)` or `(require)(…)`. It doesn't check syntax and never throws. It matched `parseModule` on all 33,001 modules and component scripts it accepts from the projects under [Parity and performance](#parity-and-performance), svelte's tests and TypeScript's conformance tests.
 
 ### `lexComponent(source) => LexedComponent`
 
