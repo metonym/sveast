@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -11,6 +11,11 @@
   },
   "formatter": {
     "indentStyle": "space"
+  },
+  "markdown": {
+    "formatter": {
+      "enabled": false
+    }
   },
   "linter": {
     "rules": {
@@ -50,7 +55,8 @@
         "noEvolvingTypes": "error",
         "noMisplacedAssertion": "error",
         "noShadow": "error",
-        "useArraySortCompare": "error"
+        "useArraySortCompare": "error",
+        "noConditionalExpect": "error"
       },
       "style": {
         "noCommonJs": "error",
@@ -84,7 +90,6 @@
         "useShorthandAssign": "error"
       },
       "nursery": {
-        "noConditionalExpect": "error",
         "noMisleadingReturnType": "error",
         "useNullishCoalescing": "error",
         "useRegexpExec": "error",
