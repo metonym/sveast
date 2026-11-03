@@ -33,7 +33,7 @@
     "@types/jest": "^30.0.0",
     "@typescript/typescript6": "^6.0.2",
     "acorn": "^8.19.0",
-    "bivium": "^0.3.1",
+    "bivium": "^0.3.2",
     "knip": "^6.43.0",
     "ostia": "^0.2.12",
     "svelte": "5.57.2",

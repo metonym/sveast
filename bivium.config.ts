@@ -9,8 +9,8 @@ export default defineConfig({
       // `bun test` runs the code: an `import type` or a declaration file
       // can't change what a test does.
       types: false,
-      // How `bun test` runs, and how `sveast` resolves (tsconfig `paths`).
-      wiring: ["bunfig.toml", "tsconfig.json"],
+      // How `bun test` runs.
+      wiring: ["bunfig.toml"],
     },
   },
   roots: [
