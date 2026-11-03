@@ -9,6 +9,7 @@ This guide covers how sveast is built, the rules every change must keep, and how
 ```sh
 bun ci
 bun run test          # svelte/compiler and acorn-typescript parity, API, fuzzer smoke test
+bun run test:changed  # only the tests your branch's changes can reach (bivium.config.ts)
 bun run test:package  # build, pack, install, and use it as a consumer would
 bun run typecheck
 bun run lint          # biome; `bun run lint:fix` formats and applies fixes
@@ -82,6 +83,8 @@ The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` on
 | `tests/examples.test.ts` | `examples/`: each example's functions and CLI, on fixtures and on Carbon's components |
 | `tests/fuzz.test.ts` | The fuzzer reports findings and exits non-zero |
 | `scripts/test-package.ts` | `bun run test:package`: packs `dist/`, checks it has no dependencies (types included), installs it into a scratch project, runs it in Node, and type-checks a consumer against the published types |
+
+CI runs only the tests a pull request's changes can reach, planned by [bivium](https://github.com/metonym/bivium) from `bivium.config.ts`. A test that reads a file from disk, or runs a script as a subprocess, declares it there (`reads`, `edges` or `hermetic`); `bunx bivium check` fails CI until it does, and says how.
 
 `tests/corpus` holds all of carbon-components-svelte, the reference real-world codebase, plus the smallest set of svelte's test inputs and sveld's fixtures that covers everything else: every line of `src/`, every AST node type and field, and every error code (see its README). `bun scripts/minimize-corpus.ts` reports files that add nothing; `--apply` deletes them.
 
