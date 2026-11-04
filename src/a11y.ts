@@ -121,55 +121,64 @@ interface Schema {
   }[];
 }
 
+// The tables keyed by names from the markup are Maps, so a name such as
+// `constructor` finds nothing rather than what Object.prototype holds.
+const toMap = <T>(
+  record: Readonly<Record<string, T>>,
+): ReadonlyMap<string, T> => new Map(Object.entries(record));
+
 const distractingElements: readonly string[] = a11yDistractingElements;
-const implicitSemantics: Readonly<Record<string, string>> =
-  a11yImplicitSemantics;
+const implicitSemantics: ReadonlyMap<string, string> = toMap(
+  a11yImplicitSemantics,
+);
 const interactiveHandlers: readonly string[] = a11yInteractiveHandlers;
 const labelable: readonly string[] = a11yLabelable;
-const nestedImplicitSemantics: Readonly<Record<string, string>> =
-  a11yNestedImplicitSemantics;
-const toInteractiveRoleExceptions: Readonly<Record<string, readonly string[]>> =
-  a11yNonInteractiveElementToInteractiveRoleExceptions;
+const nestedImplicitSemantics: ReadonlyMap<string, string> = toMap(
+  a11yNestedImplicitSemantics,
+);
+const toInteractiveRoleExceptions: ReadonlyMap<string, readonly string[]> =
+  toMap(a11yNonInteractiveElementToInteractiveRoleExceptions);
 const recommendedInteractiveHandlers: readonly string[] =
   a11yRecommendedInteractiveHandlers;
-const requiredAttributes: Readonly<Record<string, readonly string[]>> =
-  a11yRequiredAttributes;
+const requiredAttributes: ReadonlyMap<string, readonly string[]> = toMap(
+  a11yRequiredAttributes,
+);
 const requiredContent: readonly string[] = a11yRequiredContent;
 const abstractRoles: readonly string[] = abstractRolesData;
 const addressTypeTokens: readonly string[] = addressTypeTokensData;
 const ariaAttributes: readonly string[] = ariaAttributesData;
-const ariaProperties: Readonly<
-  Record<string, { readonly type: string; readonly values?: readonly string[] }>
-> = ariaPropertiesData;
-const ariaPropertyNames = Object.keys(ariaProperties);
+const ariaProperties: ReadonlyMap<
+  string,
+  { readonly type: string; readonly values?: readonly string[] }
+> = toMap(ariaPropertiesData);
 const ariaRoles: readonly string[] = ariaRolesData;
 const autofillContactFieldNameTokens: readonly string[] =
   autofillContactFieldNameTokensData;
 const autofillFieldNameTokens: readonly string[] = autofillFieldNameTokensData;
 const comboboxIfList: readonly string[] = comboboxIfListData;
 const contactTypeTokens: readonly string[] = contactTypeTokensData;
-const inputTypeToImplicitRole: Readonly<Record<string, string>> =
-  inputTypeToImplicitRoleData;
+const inputTypeToImplicitRole: ReadonlyMap<string, string> = toMap(
+  inputTypeToImplicitRoleData,
+);
 const interactiveElementAxObjectSchemas: readonly Schema[] =
   interactiveElementAxObjectSchemasData;
 const interactiveElementRoleSchemas: readonly Schema[] =
   interactiveElementRoleSchemasData;
 const interactiveRoles: readonly string[] = interactiveRolesData;
 const invisibleElements: readonly string[] = invisibleElementsData;
-const menuitemTypeToImplicitRole: Readonly<Record<string, string>> =
-  menuitemTypeToImplicitRoleData;
+const menuitemTypeToImplicitRole: ReadonlyMap<string, string> = toMap(
+  menuitemTypeToImplicitRoleData,
+);
 const nonInteractiveElementAxObjectSchemas: readonly Schema[] =
   nonInteractiveElementAxObjectSchemasData;
 const nonInteractiveElementRoleSchemas: readonly Schema[] =
   nonInteractiveElementRoleSchemasData;
 const nonInteractiveRoles: readonly string[] = nonInteractiveRolesData;
 const presentationRoles: readonly string[] = presentationRolesData;
-const roleProps: Readonly<
-  Record<
-    string,
-    { readonly props: readonly string[]; readonly required: readonly string[] }
-  >
-> = rolePropsData;
+const roleProps: ReadonlyMap<
+  string,
+  { readonly props: readonly string[]; readonly required: readonly string[] }
+> = toMap(rolePropsData);
 const semanticRoleElements: readonly (Schema & {
   readonly roles: readonly string[];
 })[] = semanticRoleElementsData;
@@ -351,7 +360,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
         warn(attribute, "a11y_hidden", a11y_hidden(node.name));
       }
       const value = staticValue(attribute);
-      const schema = ariaProperties[name];
+      const schema = ariaProperties.get(name);
       if (schema !== undefined)
         validateAriaAttributeValue(attribute, name, schema, value, warn);
       if (
@@ -414,7 +423,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
           // A footer's or header's role is redundant unless it's in a section or an article.
           if (
             !isParent(path, ["section", "article"]) &&
-            currentRole === nestedImplicitSemantics[node.name]
+            currentRole === nestedImplicitSemantics.get(node.name)
           ) {
             warn(
               attribute,
@@ -426,7 +435,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
             !isDynamicElement &&
             !isSemanticRoleElement(currentRole, node.name, attributeMap)
           ) {
-            const role = roleProps[currentRole];
+            const role = roleProps.get(currentRole);
             if (role) {
               const missing =
                 !hasSpread &&
@@ -485,7 +494,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
             !hasSpread &&
             isNonInteractive &&
             isInteractiveRole(currentRole) &&
-            !toInteractiveRoleExceptions[node.name]?.includes(currentRole)
+            !toInteractiveRoleExceptions.get(node.name)?.includes(currentRole)
           ) {
             warn(
               node,
@@ -568,14 +577,12 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
     }
   }
 
-  if (typeof roleValue === "string" && roleProps[roleValue]) {
-    const { props } = roleProps[roleValue];
-    const invalid = ariaPropertyNames.filter(
-      (attribute) => !props.includes(attribute),
-    );
+  const props = roleValue ? roleProps.get(roleValue)?.props : undefined;
+  if (roleValue && props) {
     const isImplicit = role === undefined;
     for (const attr of attributes) {
-      if (!invalid.includes(attr.name)) continue;
+      // An aria-* attribute the role doesn't support.
+      if (!ariaProperties.has(attr.name) || props.includes(attr.name)) continue;
       if (isImplicit) {
         warn(
           attr,
@@ -786,7 +793,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
   }
 
   if (!hasSpread && node.name !== "a") {
-    const required = requiredAttributes[node.name];
+    const required = requiredAttributes.get(node.name);
     if (required && !required.some((name) => attributeMap.has(name))) {
       warnMissingAttribute(node, [...required], warn);
     }
@@ -935,16 +942,16 @@ function implicitRole(
 ): string | undefined {
   if (name === "menuitem") {
     const type = staticTextValue(attributeMap.get("type"));
-    return type ? menuitemTypeToImplicitRole[type] : undefined;
+    return type ? menuitemTypeToImplicitRole.get(type) : undefined;
   }
   if (name === "input") {
     const type = staticTextValue(attributeMap.get("type"));
     if (!type) return undefined;
     if (attributeMap.has("list") && comboboxIfList.includes(type))
       return "combobox";
-    return inputTypeToImplicitRole[type];
+    return inputTypeToImplicitRole.get(type);
   }
-  return implicitSemantics[name];
+  return implicitSemantics.get(name);
 }
 
 /** Role tokens are split on ASCII whitespace and compared ASCII case-insensitively. */

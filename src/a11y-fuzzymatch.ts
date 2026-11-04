@@ -9,6 +9,9 @@ type Match = [score: number, match: string];
 const GRAM_SIZE_LOWER = 2;
 const GRAM_SIZE_UPPER = 3;
 const NON_WORD = /[^\w, ]+/;
+// svelte keeps the exact names in an object, so a name such as
+// `constructor` or `__proto__` matches what Object.prototype holds.
+const OBJECT: Record<string, unknown> = {};
 
 /** The name in `names` closest to `name`, if it's close enough. */
 export function fuzzymatch(
@@ -97,7 +100,10 @@ class FuzzySet {
   }
 
   get(value: string): Match[] | null {
-    const exact = this.exact.get(value.toLowerCase());
+    const normalized = value.toLowerCase();
+    const exact =
+      this.exact.get(normalized) ??
+      (normalized in OBJECT ? String(OBJECT[normalized]) : undefined);
     if (exact) return [[1, exact]];
     // The largest grams first, then smaller ones if they match nothing.
     for (let size = GRAM_SIZE_UPPER; size >= GRAM_SIZE_LOWER; --size) {

@@ -80,6 +80,12 @@ const CASES: Record<string, string> = {
     '<svelte:element this="div" on:click={() => {}} role="button">a</svelte:element>',
   "a spread silences most checks":
     "<img {...props} /><div {...props} on:click={() => {}}>a</div>",
+  "roles named after Object.prototype's members":
+    '<div role="constructor">a</div><div role="__proto__">a</div><div role="toString">a</div><div {...props} role="valueOf">a</div>',
+  "an aria attribute named after Object.prototype's member":
+    '<div aria-constructor="a">a</div>',
+  "input and menuitem types named after Object.prototype's members":
+    '<input type="toString" aria-checked="true" /><menuitem type="constructor" aria-checked="true"></menuitem>',
 };
 
 for (const [name, source] of Object.entries(CASES)) {
@@ -89,3 +95,8 @@ for (const [name, source] of Object.entries(CASES)) {
     expect(sveastWarnings(source)).toEqual(expected as string[]);
   });
 }
+
+// svelte's compile throws here, as it looks the element up in an object.
+test("an element named after Object.prototype's member", () => {
+  expect(sveastWarnings("<constructor></constructor>")).toEqual([]);
+});
