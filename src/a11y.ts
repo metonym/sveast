@@ -225,17 +225,19 @@ export function a11yWarnings(
   const visit = (
     node: Node,
     parent: Node | undefined,
+    index: number | null,
     ignored: ReadonlySet<string>,
   ): void => {
     let ignores = ignored;
     if (
       parent?.type === "Fragment" &&
+      index !== null &&
       node.type !== "Comment" &&
       node.type !== "Text"
     ) {
       const codes = ignoredBefore(
         parent as unknown as AST.Fragment,
-        node,
+        index,
         runes,
       );
       if (codes.length > 0) ignores = new Set([...ignored, ...codes]);
@@ -249,23 +251,27 @@ export function a11yWarnings(
     path.push(node);
     forEachChild(
       node as never,
-      (child) => visit(child as Node, node, ignores),
+      (child, _, i) => visit(child as Node, node, i, ignores),
       markupVisitorKeys,
     );
     path.pop();
   };
-  visit(ast.fragment as unknown as Node, ast as unknown as Node, new Set());
+  visit(
+    ast.fragment as unknown as Node,
+    ast as unknown as Node,
+    null,
+    new Set(),
+  );
   return warnings;
 }
 
-/** The codes the comments right before `node` in its fragment ignore. */
+/** The codes the comments right before the node at `index` in its fragment ignore. */
 function ignoredBefore(
   fragment: AST.Fragment,
-  node: Node,
+  index: number,
   runes: boolean,
 ): string[] {
   const codes: string[] = [];
-  const index = fragment.nodes.indexOf(node as never);
   for (let i = index - 1; i >= 0; i--) {
     const previous = fragment.nodes[i];
     if (previous.type === "Comment")
@@ -1029,9 +1035,17 @@ function hasInputChild(label: Element): boolean {
       found = true;
       return;
     }
-    forEachChild(node as never, (child) => visit(child as Node));
+    forEachChild(
+      node as never,
+      (child) => visit(child as Node),
+      markupVisitorKeys,
+    );
   };
-  forEachChild(label as never, (child) => visit(child as Node));
+  forEachChild(
+    label as never,
+    (child) => visit(child as Node),
+    markupVisitorKeys,
+  );
   return found;
 }
 
