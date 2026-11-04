@@ -25,6 +25,7 @@ import {
   valueVisitorKeys,
   walk,
 } from "sveast";
+import { a11yWarnings } from "sveast/a11y";
 import { createParser } from "sveast/core";
 import { createModuleParser } from "sveast/module";
 import { isCommonType } from "../src/common-type";
@@ -404,6 +405,14 @@ group("analysis", () => {
   task(
     "analyzeScopes, corpus files",
     () => CORPUS_ASTS.map((ast) => analyzeScopes(ast)),
+    { description: `${CORPUS_ASTS.length} files` },
+  );
+  task(
+    "a11yWarnings, corpus files",
+    () =>
+      CORPUS_ASTS.filter((ast) => ast.type === "Root").map((ast) =>
+        a11yWarnings(ast),
+      ),
     { description: `${CORPUS_ASTS.length} files` },
   );
 

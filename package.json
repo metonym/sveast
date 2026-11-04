@@ -34,7 +34,7 @@
     "acorn": "^8.19.0",
     "knip": "^6.43.0",
     "ostia": "^0.2.12",
-    "svelte": "5.57.2",
+    "svelte": "5.57.3",
     "typescript": "^7.0.2"
   },
   "repository": {

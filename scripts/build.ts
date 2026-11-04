@@ -39,6 +39,7 @@ const SUBPATHS = [
   "walk",
   "scope",
   "lexer",
+  "a11y",
 ];
 
 async function emitTypeDeclarations() {

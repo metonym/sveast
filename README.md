@@ -36,6 +36,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`children`, `forEachChild`](#childrennode-keys--node-and-foreachchildnode-callback-keys--void) | A node's children, cached or without allocating | `sveast`, `sveast/walk` |
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
 | [`analyzeScopes`](#analyzescopesast--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
+| [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `sveast/a11y` |
 | [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
@@ -427,6 +428,27 @@ The markup's scopes are svelte's:
 - `$: a = b` declares `a` if nothing else does, and writes it: the assignment is one of its references.
 
 Names in TypeScript's types aren't references, and `type` and `interface` declare nothing; it skips them with `valueVisitorKeys`. Enums, enum members and namespaces are declared. It doesn't change the AST, and takes less than half as long as parsing it.
+
+### `a11yWarnings(ast, options?) => A11yWarning[]`
+
+From `sveast/a11y`. The `a11y_…` warnings svelte's compiler gives for a component, with the same `code`, `message` and offsets, and without the ones a `<!-- svelte-ignore -->` comment before an element, or one of its ancestors, silences. For a linter that already has the AST: on Carbon's 2,202 components it takes 60 ms, against 735 ms for `compile(source, { generate: false })`. It loads neither acorn nor the parser.
+
+| Option | Default | Description |
+|:---|:---|:---|
+| `runes` | `false` | Whether the component compiles in runes mode, as [`isRunesMode`](#isrunesmodesource--boolean) says. In runes mode, `svelte-ignore` takes only svelte 5's codes, separated by commas; in legacy mode, svelte 4's `a11y-…` codes too, as svelte does. |
+
+```ts
+import { isRunesMode, parse } from "sveast";
+import { a11yWarnings } from "sveast/a11y";
+
+for (const warning of a11yWarnings(parse(source), { runes: isRunesMode(source) })) {
+  warning.code; // "a11y_missing_attribute"
+  warning.message; // "`<img>` element should have an alt attribute\nhttps://svelte.dev/e/a11y_missing_attribute"
+  warning.start; // offsets of the element or attribute
+}
+```
+
+The ARIA tables come from svelte's, which read aria-query and axobject-query, generated into the package, so it has no dependencies. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich and SvelteKit, it gives the warnings `compile` gives for all 13,276 components both accept, 899 warnings, and for 13,163 with their `svelte-ignore` comments and common a11y attributes removed, 2,185 warnings.
 
 ### `createLocator(source) => (offset) => Position`
 
