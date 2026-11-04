@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.7 — 2026-11-04
+
+**Features**
+
+- `a11yWarnings(ast, { runes })`, from the new `sveast/a11y` entry, returns
+  the `a11y_…` warnings svelte's `compile` gives for a component, with the
+  same `code`, `message` and offsets, minus the ones a
+  `<!-- svelte-ignore -->` comment before an element or one of its ancestors
+  silences. `runes`, as `isRunesMode` gives it, decides which
+  `svelte-ignore` codes count, as in svelte. A linter that already has the
+  AST no longer compiles each component for them: on Carbon's 2,202
+  components it takes 60 ms against 735 ms for
+  `compile(source, { generate: false })`. The ARIA tables and messages are
+  generated from svelte 5.57.3's, so the package still has no
+  dependencies, and the entry loads neither acorn nor the parser. It
+  matched `compile` on 13,276 components. `A11yWarning` and `A11yOptions`
+  are exported.
+
 ## 0.9.6 — 2026-10-15
 
 **Features**
