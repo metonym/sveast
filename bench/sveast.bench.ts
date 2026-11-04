@@ -409,10 +409,7 @@ group("analysis", () => {
   );
   task(
     "a11yWarnings, corpus files",
-    () =>
-      CORPUS_ASTS.filter((ast) => ast.type === "Root").map((ast) =>
-        a11yWarnings(ast),
-      ),
+    () => CORPUS_ASTS.map((ast) => a11yWarnings(ast)),
     { description: `${CORPUS_ASTS.length} files` },
   );
 
