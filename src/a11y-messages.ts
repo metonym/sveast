@@ -206,7 +206,7 @@ export function a11y_role_supports_aria_props_implicit(
 
 export function a11y_unknown_aria_attribute(
   attribute: string,
-  suggestion: string,
+  suggestion?: string | undefined | null,
 ): string {
   return `${
     suggestion
@@ -215,7 +215,10 @@ export function a11y_unknown_aria_attribute(
   }\nhttps://svelte.dev/e/a11y_unknown_aria_attribute`;
 }
 
-export function a11y_unknown_role(role: string, suggestion: string): string {
+export function a11y_unknown_role(
+  role: string,
+  suggestion?: string | undefined | null,
+): string {
   return `${
     suggestion
       ? `Unknown role '${role}'. Did you mean '${suggestion}'?`

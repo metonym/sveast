@@ -344,7 +344,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
         warn(
           attribute,
           "a11y_unknown_aria_attribute",
-          a11y_unknown_aria_attribute(type, match as string),
+          a11y_unknown_aria_attribute(type, match),
         );
       }
       if (name === "aria-hidden" && HEADING_TAGS.test(node.name)) {
@@ -392,7 +392,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
             warn(
               attribute,
               "a11y_unknown_role",
-              a11y_unknown_role(currentRole, match as string),
+              a11y_unknown_role(currentRole, match),
             );
           }
           if (
