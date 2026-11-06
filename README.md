@@ -35,7 +35,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`walk`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `skipTypeWrappers`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST, only the markup, or everything but TypeScript's types | `sveast`, `sveast/walk` |
 | [`children`, `forEachChild`](#childrennode-keys--node-and-foreachchildnode-callback-keys--void) | A node's children, cached or without allocating | `sveast`, `sveast/walk` |
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
-| [`analyzeScopes`](#analyzescopesast--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
+| [`analyzeScopes`](#analyzescopesast-options--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
 | [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `sveast/a11y` |
 | [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
@@ -383,7 +383,7 @@ if (declaration.type === "VariableDeclaration") {
 }
 ```
 
-### `analyzeScopes(ast) => Scopes`
+### `analyzeScopes(ast, options?) => Scopes`
 
 Finds the scopes of a component, its scripts and markup together, or of a module: which declaration each name refers to, and where each binding is read, written or subscribed to. It resolves names as svelte's analyzer does, which `tests/scope.test.ts` checks on the corpus: on 12,548 components from the corpus, svelte's tests and the Svelte projects listed under parity, they agree on all 208,797 names they both resolve, but for a class expression's name inside its body, a snippet's own name and a `var` declared twice, where sveast follows JavaScript.
 
@@ -408,7 +408,7 @@ size?.references.some((reference) => reference.writes || reference.mutates); // 
 
 It returns:
 
-- **`module`** and **`instance`**, the scopes of `<script module>` and `<script>` (one scope, for a module). A `Scope` has the `node` that makes it, its `parent`, its `declarations` by name, and `get(name)`, the binding a name refers to there, or `null` for a global.
+- **`module`** and **`instance`**, the scopes of `<script module>` and `<script>` (one scope, for a module). A `Scope` has the `node` that makes it, its `parent`, its `declarations` by name, and `get(name)`, the binding a name refers to there, or `null` for a global. With `types: true`, its `types` holds its `type`, `interface` and type parameter bindings, and `getType(name)` is the binding a name refers to in a type.
 - **`scopeOf(node)`**, the scope a node is in; `null` in a type, the `<style>` or another AST. The first call walks the AST again to record every node's scope, so a tool that only resolves names doesn't keep a map of every node.
 - **`bindingOf(identifier)`**, the binding an `Identifier` declares or refers to; `null` for a global, a property key or a name in a type.
 - **`referenceOf(identifier)`**, the `Reference` an `Identifier` is, to tell a read from a write or a store subscription; `null` for one that declares a binding or isn't a reference.
@@ -428,6 +428,21 @@ The markup's scopes are svelte's:
 - `$: a = b` declares `a` if nothing else does, and writes it: the assignment is one of its references.
 
 Names in TypeScript's types aren't references, and `type` and `interface` declare nothing; it skips them with `valueVisitorKeys`. Enums, enum members and namespaces are declared. It doesn't change the AST, and takes less than half as long as parsing it.
+
+| Option | Default | Description |
+|:---|:---|:---|
+| `types` | `false` | Resolve the names in types too, for a tool that asks which declarations some code uses, such as one that copies a statement with the imports it needs. |
+
+With `types: true`, `type` and `interface` declare bindings of those kinds, and a type parameter or `infer U` one of kind `"type-param"`, in a scope's `types`, apart from its values, so `type A` and `const A` are two bindings. A name in a type is a `Reference` with `type: true` that neither reads, writes nor mutates: `A` in `let a: A`, `a` in `typeof a`, `I` in `implements I` and `extends I`, `N` in `N.T`, and the local name in `export type { A }`. A name in a type refers to a type, an import, a class or an enum; `typeof a` to a value; `N` in `N.T` to a namespace, an enum or an import, so `import type { A }` and `import { type A }` get the references. Property and method names in type literals and interfaces aren't references, but for a computed key's value. Type parameters are in scope for their function, class, method, type alias, interface or function type, `infer U` for its conditional type's true branch, and the parameters of a function type or signature are bindings of kind `"param"`, for `typeof x` and `x is T`. `<script generics="...">`'s names aren't declared. The value references are those it finds without `types`.
+
+```ts
+const ast = parse(`<script lang="ts">
+  import type { DataTableHeader } from "carbon-components-svelte";
+  let headers: DataTableHeader[] = [];
+</script>`);
+const { instance } = analyzeScopes(ast, { types: true });
+instance.get("DataTableHeader")?.references[0]?.type; // true
+```
 
 ### `a11yWarnings(ast, options?) => A11yWarning[]`
 

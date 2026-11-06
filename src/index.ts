@@ -33,6 +33,7 @@ export { ParseError, parseModule } from "./parse-module";
 export { parseSections } from "./parse-sections";
 export { isRunesMode } from "./runes";
 export type {
+  AnalyzeScopesOptions,
   Binding,
   BindingKind,
   Reference,
