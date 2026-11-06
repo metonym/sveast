@@ -14,8 +14,16 @@ import type {
   VariableDeclarator,
 } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
-import type { TSParameterProperty } from "./types/typescript";
-import { valueVisitorKeys } from "./walk";
+import type {
+  EntityName,
+  SignatureParameter,
+  TSImportType,
+  TSParameterProperty,
+  TSTypeAnnotation,
+  TSTypeParameterDeclaration,
+  TSTypePredicate,
+} from "./types/typescript";
+import { valueVisitorKeys, visitorKeys } from "./walk";
 
 /** How a {@link Binding} is declared. */
 export type BindingKind =
@@ -39,7 +47,21 @@ export type BindingKind =
   | "snippet-param"
   | "const-tag"
   | "await-value"
-  | "await-error";
+  | "await-error"
+  | "type"
+  | "interface"
+  | "type-param";
+
+/** Options for {@link analyzeScopes}. */
+export interface AnalyzeScopesOptions {
+  /**
+   * Resolve the names in TypeScript's types too: `type`, `interface` and
+   * type parameters declare bindings, in a scope's `types`, and a name in
+   * a type is a {@link Reference} with `type: true`. Defaults to `false`,
+   * which resolves values only, as svelte's analyzer does.
+   */
+  types?: boolean;
+}
 
 /** A name declared in a {@link Scope}. */
 export interface Binding {
@@ -52,12 +74,15 @@ export interface Binding {
    * `"each"` and `"each-index"` (`item` and `i` in `{#each items as item,
    * i}`), `"let-directive"`, `"snippet"` (its name), `"snippet-param"`,
    * `"const-tag"` (`{@const}`), `"await-value"` and `"await-error"` (`{:then
-   * value}` and `{:catch error}`).
+   * value}` and `{:catch error}`). With `{ types: true }`, `"type"`,
+   * `"interface"` and `"type-param"` (a type parameter or `infer U`), which
+   * are in a scope's `types`, not its `declarations`, and `"param"` for a
+   * parameter of a function type or signature too.
    */
   readonly kind: BindingKind;
   /**
-   * The `Identifier` that declares it; `null` for an each block's index
-   * and `let:x` without a value, whose names are strings.
+   * The `Identifier` that declares it; `null` for an each block's index,
+   * `let:x` without a value and a type parameter, whose names are strings.
    */
   readonly node: Identifier | null;
   /**
@@ -65,14 +90,17 @@ export interface Binding {
    * `VariableDeclarator`, the function or class, the function a
    * parameter belongs to, the `CatchClause`, the `LabeledStatement` of
    * `$:`, the `EachBlock`, `LetDirective`, `SnippetBlock` or `AwaitBlock`,
-   * the enum, enum member or namespace, or `import a = b`.
+   * the enum, enum member or namespace, or `import a = b`; the type
+   * alias, interface or `TSTypeParameter`, or the function type or
+   * signature a parameter belongs to.
    */
   readonly declaration: AST.SvelteNode;
   /**
    * What it starts as, as svelte's analyzer has it: a variable's
    * initializer, the function or class, the `ImportDeclaration`, the
    * `SnippetBlock` for a snippet's name, the `EachBlock` for an index,
-   * the right side of `$: x = ...`, an enum member's initializer. For a
+   * the right side of `$: x = ...`, an enum member's initializer, the type
+   * alias or interface. For a
    * prop destructured from `$props()`, its default, without `$bindable`:
    * `"md"` in `let { size = "md" } = $props()` or in `let { size =
    * $bindable("md") } = $props()`. `null` otherwise.
@@ -136,6 +164,12 @@ export interface Reference {
    * `$count = 1` mutates it.
    */
   readonly store: boolean;
+  /**
+   * Whether it's in a type, or in `export type { a }`, where it neither
+   * reads, writes nor mutates. Only with `{ types: true }`: `A` in `let
+   * a: A`, `a` in `typeof a`, `I` in `implements I`, `N` in `N.T`.
+   */
+  readonly type: boolean;
 }
 
 /**
@@ -149,13 +183,26 @@ export interface Scope {
    */
   readonly node: AST.SvelteNode | null;
   readonly parent: Scope | null;
-  /** Its own bindings, by name, in the order they're declared. */
+  /**
+   * Its own bindings, by name, in the order they're declared: the values,
+   * including imports, classes, enums and namespaces, which are types too.
+   */
   readonly declarations: ReadonlyMap<string, Binding>;
   /**
-   * The binding `name` refers to here, declared in this scope or one
-   * around it; `null` if none does.
+   * Its own type-only bindings, by name: `type`, `interface` and type
+   * parameters. Empty unless `{ types: true }`.
+   */
+  readonly types: ReadonlyMap<string, Binding>;
+  /**
+   * The binding `name` refers to here as a value, declared in this scope
+   * or one around it; `null` if none does.
    */
   get(name: string): Binding | null;
+  /**
+   * The binding `name` refers to here as a type: a `type`, `interface` or
+   * type parameter, or an import, class or enum; `null` if none does.
+   */
+  getType(name: string): Binding | null;
 }
 
 /** What {@link analyzeScopes} found. */
@@ -199,6 +246,7 @@ class ScopeNode implements Scope {
   readonly porous: boolean;
   readonly index: number;
   readonly declarations = new Map<string, BindingNode>();
+  readonly types = new Map<string, BindingNode>();
 
   constructor(
     node: AST.SvelteNode | null,
@@ -216,6 +264,24 @@ class ScopeNode implements Scope {
     for (let scope: ScopeNode | null = this; scope; scope = scope.parent) {
       const binding = scope.declarations.get(name);
       if (binding !== undefined) return binding;
+    }
+    return null;
+  }
+
+  getType(name: string): BindingNode | null {
+    return this.lookup(name, TYPE);
+  }
+
+  lookup(name: string, meaning: Meaning): BindingNode | null {
+    if (meaning === VALUE) return this.get(name);
+    const kinds = meaning === TYPE ? TYPE_KINDS : NAMESPACE_KINDS;
+    for (let scope: ScopeNode | null = this; scope; scope = scope.parent) {
+      if (meaning === TYPE) {
+        const type = scope.types.get(name);
+        if (type !== undefined) return type;
+      }
+      const binding = scope.declarations.get(name);
+      if (binding !== undefined && kinds.has(binding.kind)) return binding;
     }
     return null;
   }
@@ -258,6 +324,8 @@ class ReferenceNode implements Reference {
   writes: boolean;
   mutates: boolean;
   store = false;
+  type: boolean;
+  readonly meaning: Meaning;
 
   constructor(
     node: Identifier,
@@ -266,6 +334,8 @@ class ReferenceNode implements Reference {
     reads: boolean,
     writes: boolean,
     mutates: boolean,
+    type: boolean,
+    meaning: Meaning,
   ) {
     this.node = node;
     this.parent = parent;
@@ -273,8 +343,31 @@ class ReferenceNode implements Reference {
     this.reads = reads;
     this.writes = writes;
     this.mutates = mutates;
+    this.type = type;
+    this.meaning = meaning;
   }
 }
+
+/**
+ * What a name refers to: a value, a type, the namespace on the left of
+ * `N.T` in a type, or either a value or a type, for an export specifier.
+ */
+type Meaning = 0 | 1 | 2 | 3;
+const VALUE = 0;
+const TYPE = 1;
+const NAMESPACE = 2;
+const ANY = 3;
+
+const TYPE_KINDS: ReadonlySet<BindingKind> = new Set([
+  "import",
+  "class",
+  "enum",
+]);
+const NAMESPACE_KINDS: ReadonlySet<BindingKind> = new Set([
+  "import",
+  "enum",
+  "namespace",
+]);
 
 type FunctionNode =
   | ArrowFunctionExpression
@@ -285,10 +378,41 @@ type DeclaredPattern = Pattern | TSParameterProperty;
 
 type LetExpression = NonNullable<AST.LetDirective["expression"]>;
 
-const keysByType: Partial<Record<string, readonly string[]>> = Object.assign(
+type KeyTable = Partial<Record<string, readonly string[]>>;
+
+/**
+ * Whether `{ types: true }` may visit a node differently: a method, which
+ * can have type parameters, or a TypeScript node.
+ */
+function holdsTypes(type: string): boolean {
+  return type === "MethodDefinition" || type.startsWith("TS");
+}
+
+const keysByType: KeyTable = Object.assign(
   Object.create(null),
   valueVisitorKeys,
 );
+
+interface TypedKeys {
+  /** The fields that hold values. */
+  readonly values: readonly string[];
+  /** The fields that hold only types, or `null` if none do. */
+  readonly types: readonly string[] | null;
+  /** Every field, for a node in a type. */
+  readonly all: readonly string[];
+}
+
+/** The fields of each node type, for `{ types: true }`. */
+const typedKeysByType: Partial<Record<string, TypedKeys>> = Object.create(null);
+for (const [type, all] of Object.entries(visitorKeys)) {
+  const values: readonly string[] = keysByType[type] ?? [];
+  const types = all.filter((key) => !values.includes(key));
+  typedKeysByType[type] = {
+    values,
+    types: types.length > 0 ? types : null,
+    all,
+  };
+}
 
 const ELEMENTS = new Set([
   "SvelteElement",
@@ -320,7 +444,8 @@ const NO_BINDINGS: ReadonlyMap<string, Binding> = new Map();
  * prop is passed as.
  *
  * Names in TypeScript types aren't references, and types aren't
- * declarations: `interface` and `type` declare nothing. A top-level
+ * declarations: `interface` and `type` declare nothing, unless `{ types:
+ * true }`, which resolves the names in types too. A top-level
  * snippet is declared in the markup's scope, as in svelte's analyzer, so
  * a `<script>` that uses it refers to a global.
  *
@@ -337,8 +462,11 @@ const NO_BINDINGS: ReadonlyMap<string, Binding> = new Map();
  *
  * It reads the AST but doesn't change it.
  */
-export function analyzeScopes(ast: AST.Root | Program): Scopes {
-  return new Analysis(ast, false);
+export function analyzeScopes(
+  ast: AST.Root | Program,
+  options?: AnalyzeScopesOptions,
+): Scopes {
+  return new Analysis(ast, false, options?.types === true);
 }
 
 class Analysis implements Scopes {
@@ -362,10 +490,16 @@ class Analysis implements Scopes {
     AST.SvelteNode | null,
   ][] = [];
   private readonly stores = new Map<string, BindingNode | null | false>();
+  private readonly types: boolean;
+  /** Whether it's visiting a type, where every reference has `type: true`. */
+  private inType = false;
+  /** The scope `infer U` declares `U` in: its conditional type's. */
+  private inferScope: ScopeNode | null = null;
 
-  constructor(ast: AST.Root | Program, record: boolean) {
+  constructor(ast: AST.Root | Program, record: boolean, types: boolean) {
     this.ast = ast;
     this.scopeIn = record ? new Map() : null;
+    this.types = types;
     if (ast.type === "Program") {
       this.component = false;
       this.module = this.scope(ast, null, false);
@@ -403,7 +537,7 @@ class Analysis implements Scopes {
     const synthetic = this.synthetic.get(node);
     if (synthetic !== undefined) return synthetic;
     if (this.scopeIn !== null) return this.scopeIn.get(node) ?? null;
-    this.recorded ??= new Analysis(this.ast, true);
+    this.recorded ??= new Analysis(this.ast, true, this.types);
     const recorded = this.recorded.scopeIn?.get(node);
     return recorded === undefined ? null : this.scopes[recorded.index];
   }
@@ -454,7 +588,11 @@ class Analysis implements Scopes {
     if (kind === "var") {
       while (target.porous && target.parent !== null) target = target.parent;
     }
-    const existing = target.declarations.get(name);
+    const declarations =
+      kind === "type" || kind === "interface" || kind === "type-param"
+        ? target.types
+        : target.declarations;
+    const existing = declarations.get(name);
     if (
       existing !== undefined &&
       existing.declaration.type !== "TSDeclareFunction"
@@ -470,7 +608,7 @@ class Analysis implements Scopes {
       initial,
       target,
     );
-    target.declarations.set(name, binding);
+    declarations.set(name, binding);
     if (node !== null) this.declared.set(node, binding);
   }
 
@@ -481,9 +619,31 @@ class Analysis implements Scopes {
     reads: boolean,
     writes: boolean,
     mutates: boolean,
+    meaning: Meaning = VALUE,
+    type = this.inType,
   ): void {
     this.pending.push(
-      new ReferenceNode(node, parent, scope, reads, writes, mutates),
+      type
+        ? new ReferenceNode(
+            node,
+            parent,
+            scope,
+            false,
+            false,
+            false,
+            true,
+            meaning,
+          )
+        : new ReferenceNode(
+            node,
+            parent,
+            scope,
+            reads,
+            writes,
+            mutates,
+            false,
+            meaning,
+          ),
     );
   }
 
@@ -512,7 +672,12 @@ class Analysis implements Scopes {
     this.scopeIn?.set(node, scope);
     switch (node.type) {
       case "Identifier":
-        if (parent !== null && isReference(node, parent)) {
+        if (
+          parent !== null &&
+          (this.inType
+            ? isReferenceInType(node, parent)
+            : isReference(node, parent))
+        ) {
           this.reference(node, parent, scope, true, false, false);
         }
         this.visitFields(node, scope);
@@ -552,6 +717,9 @@ class Analysis implements Scopes {
               true,
               false,
               false,
+              this.types ? ANY : VALUE,
+              this.types &&
+                (node.exportKind === "type" || specifier.exportKind === "type"),
             );
           }
         }
@@ -584,18 +752,23 @@ class Analysis implements Scopes {
         return;
       case "ClassDeclaration":
       case "ClassExpression": {
-        let inner = scope;
+        const generic = this.types && node.typeParameters !== undefined;
+        const inner =
+          (node.id && node.type === "ClassExpression") || generic
+            ? this.child(scope, node, false)
+            : scope;
         if (node.id) {
-          if (node.type === "ClassExpression") {
-            inner = this.child(scope, node, false);
-          }
-          this.scopeIn?.set(node.id, inner);
-          this.declare(inner, node.id, node.id.name, "class", node, node);
+          const at = node.type === "ClassExpression" ? inner : scope;
+          this.scopeIn?.set(node.id, at);
+          this.declare(at, node.id, node.id.name, "class", node, node);
         }
         for (const decorator of node.decorators ?? []) {
           this.visit(decorator, node, scope);
         }
+        this.declareTypeParameters(node.typeParameters, inner);
         if (node.superClass) this.visit(node.superClass, node, inner);
+        this.visitType(node.superTypeParameters, node, inner);
+        this.visitType(node.implements, node, inner);
         this.visit(node.body, node, inner);
         return;
       }
@@ -711,6 +884,15 @@ class Analysis implements Scopes {
             this.declare(scope, node.id, node.id.name, "function", node, node);
           }
         }
+        if (this.types) {
+          this.visitSignature(
+            node,
+            node.typeParameters,
+            node.params,
+            node.returnType,
+            scope,
+          );
+        }
         return;
       case "Fragment":
         this.visitFields(node, this.child(scope, node, false));
@@ -774,10 +956,153 @@ class Analysis implements Scopes {
         }
         break;
     }
+    if (this.types && holdsTypes(node.type) && this.visitTyped(node, scope)) {
+      return;
+    }
     this.visitFields(node, scope);
   }
 
+  /**
+   * Visits what only `{ types: true }` visits differently: the nodes that
+   * name, declare or make scopes for types. Returns whether it visited
+   * `node`.
+   */
+  private visitTyped(node: AST.SvelteNode, scope: ScopeNode): boolean {
+    switch (node.type) {
+      case "MethodDefinition": {
+        if (node.typeParameters === undefined) return false;
+        this.visitChild(node.decorators, node, scope);
+        this.visit(node.key, node, scope);
+        const inner = this.child(scope, node, false);
+        this.declareTypeParameters(node.typeParameters, inner);
+        this.visit(node.value, node, inner);
+        return true;
+      }
+      case "TSDeclareMethod":
+        this.visitSignature(
+          node,
+          node.typeParameters,
+          node.params,
+          node.returnType,
+          scope,
+        );
+        return true;
+      case "TSFunctionType":
+      case "TSConstructorType":
+      case "TSCallSignatureDeclaration":
+      case "TSConstructSignatureDeclaration":
+        this.visitSignature(
+          node,
+          node.typeParameters,
+          node.parameters,
+          node.typeAnnotation,
+          scope,
+        );
+        return true;
+      case "TSMethodSignature":
+        if (node.computed) this.visit(node.key, node, scope);
+        else this.scopeIn?.set(node.key, scope);
+        this.visitSignature(
+          node,
+          node.typeParameters,
+          node.parameters,
+          node.typeAnnotation,
+          scope,
+        );
+        return true;
+      case "TSTypeAliasDeclaration":
+      case "TSInterfaceDeclaration": {
+        const kind =
+          node.type === "TSTypeAliasDeclaration" ? "type" : "interface";
+        this.scopeIn?.set(node.id, scope);
+        this.declare(scope, node.id, node.id.name, kind, node, node);
+        const inner = node.typeParameters
+          ? this.child(scope, node, false)
+          : scope;
+        this.declareTypeParameters(node.typeParameters, inner);
+        if (node.type === "TSTypeAliasDeclaration") {
+          this.visitType(node.typeAnnotation, node, inner);
+        } else {
+          this.visitType(node.extends, node, inner);
+          this.visitType(node.body, node, inner);
+        }
+        return true;
+      }
+      case "TSTypeReference":
+        this.visitEntityName(node.typeName, node, scope, TYPE);
+        this.visitChild(node.typeArguments, node, scope);
+        return true;
+      case "TSExpressionWithTypeArguments":
+        this.visitEntityName(node.expression, node, scope, TYPE);
+        this.visitChild(node.typeParameters, node, scope);
+        return true;
+      case "TSTypeQuery":
+        this.visitEntityName(node.exprName, node, scope, VALUE);
+        this.visitChild(node.typeArguments, node, scope);
+        return true;
+      case "TSImportType": {
+        this.visit(node.argument, node, scope);
+        let name: AST.SvelteNode | undefined = node.qualifier;
+        while (name !== undefined) {
+          this.scopeIn?.set(name, scope);
+          if (name.type !== "TSQualifiedName") break;
+          this.scopeIn?.set(name.right, scope);
+          name = name.left;
+        }
+        this.visitChild(node.typeArguments, node, scope);
+        return true;
+      }
+      case "TSMappedType": {
+        const parameter = node.typeParameter;
+        this.scopeIn?.set(parameter, scope);
+        this.visitChild(parameter.constraint, parameter, scope);
+        const inner = this.child(scope, node, false);
+        this.declare(
+          inner,
+          null,
+          parameter.name,
+          "type-param",
+          parameter,
+          null,
+        );
+        this.visitChild(node.nameType, node, inner);
+        this.visitChild(node.typeAnnotation, node, inner);
+        return true;
+      }
+      case "TSConditionalType": {
+        this.visit(node.checkType, node, scope);
+        const inner = this.child(scope, node, false);
+        const outer = this.inferScope;
+        this.inferScope = inner;
+        this.visit(node.extendsType, node, inner);
+        this.inferScope = outer;
+        this.visit(node.trueType, node, inner);
+        this.visit(node.falseType, node, scope);
+        return true;
+      }
+      case "TSInferType": {
+        const parameter = node.typeParameter;
+        this.scopeIn?.set(parameter, scope);
+        this.declare(
+          this.inferScope ?? scope,
+          null,
+          parameter.name,
+          "type-param",
+          parameter,
+          null,
+        );
+        this.visitChild(parameter.constraint, parameter, scope);
+        return true;
+      }
+    }
+    return false;
+  }
+
   private visitFields(node: AST.SvelteNode, scope: ScopeNode): void {
+    if (this.types) {
+      this.visitTypedFields(node, scope);
+      return;
+    }
     const keys = keysByType[node.type];
     if (keys === undefined) throw new Error(`unknown node type: ${node.type}`);
     const fields = fieldsOf(node);
@@ -792,6 +1117,163 @@ class Analysis implements Scopes {
         this.visit(value, node, scope);
       }
     }
+  }
+
+  /**
+   * With `{ types: true }`: in a type, every field; outside one, the
+   * fields that hold types as types, then the others.
+   */
+  private visitTypedFields(node: AST.SvelteNode, scope: ScopeNode): void {
+    const keys = typedKeysByType[node.type];
+    if (keys === undefined) throw new Error(`unknown node type: ${node.type}`);
+    if (this.inType) {
+      this.visitKeys(node, keys.all, scope);
+      return;
+    }
+    if (keys.types !== null) {
+      const fields = fieldsOf(node);
+      for (let k = 0; k < keys.types.length; k++) {
+        const value = fields[keys.types[k]];
+        if (value != null) this.visitType(value, node, scope);
+      }
+    }
+    this.visitKeys(node, keys.values, scope);
+  }
+
+  private visitKeys(
+    node: AST.SvelteNode,
+    keys: readonly string[],
+    scope: ScopeNode,
+  ): void {
+    const fields = fieldsOf(node);
+    for (let k = 0; k < keys.length; k++) {
+      const value = fields[keys[k]];
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          const child: unknown = value[i];
+          if (isNode(child)) this.visit(child, node, scope);
+        }
+      } else if (isNode(value)) {
+        this.visit(value, node, scope);
+      }
+    }
+  }
+
+  private visitChild(
+    value: unknown,
+    parent: AST.SvelteNode,
+    scope: ScopeNode,
+  ): void {
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        const child: unknown = value[i];
+        if (isNode(child)) this.visit(child, parent, scope);
+      }
+    } else if (isNode(value)) {
+      this.visit(value, parent, scope);
+    }
+  }
+
+  /** Visits a type, with `{ types: true }`; otherwise skips it. */
+  private visitType(
+    value: unknown,
+    parent: AST.SvelteNode,
+    scope: ScopeNode,
+  ): void {
+    if (!this.types || value === undefined || value === null) return;
+    const outer = this.inType;
+    this.inType = true;
+    this.visitChild(value, parent, scope);
+    this.inType = outer;
+  }
+
+  /**
+   * Declares type parameters in `scope`, then visits their constraints
+   * and defaults, which can refer to each other.
+   */
+  private declareTypeParameters(
+    declaration: TSTypeParameterDeclaration | undefined,
+    scope: ScopeNode,
+  ): void {
+    if (!this.types || declaration === undefined) return;
+    this.scopeIn?.set(declaration, scope);
+    for (const parameter of declaration.params) {
+      this.scopeIn?.set(parameter, scope);
+      this.declare(scope, null, parameter.name, "type-param", parameter, null);
+    }
+    for (const parameter of declaration.params) {
+      this.visitType(parameter.constraint, parameter, scope);
+      this.visitType(parameter.default, parameter, scope);
+    }
+  }
+
+  /**
+   * A function type, signature or declared function or method: its own
+   * scope, with its type parameters and parameters, which its types can
+   * refer to as in `(x: string) => typeof x`.
+   */
+  private visitSignature(
+    node: AST.SvelteNode,
+    typeParameters: TSTypeParameterDeclaration | undefined,
+    parameters: readonly (SignatureParameter | DeclaredPattern)[],
+    returnType: TSTypeAnnotation | TSTypePredicate | undefined,
+    scope: ScopeNode,
+  ): void {
+    const inner = this.child(scope, node, true);
+    this.declareTypeParameters(typeParameters, inner);
+    this.declareParameters(parameters, node, inner);
+    this.visitType(returnType, node, inner);
+  }
+
+  private declareParameters(
+    parameters: readonly (SignatureParameter | DeclaredPattern)[],
+    node: AST.SvelteNode,
+    scope: ScopeNode,
+  ): void {
+    for (const param of parameters) {
+      if (param.type === "Identifier" && param.name === "this") {
+        this.scopeIn?.set(param, scope);
+        if (this.types) this.visitType(param.typeAnnotation, param, scope);
+        continue;
+      }
+      this.declarePattern(param, node, scope, "param", node, null);
+    }
+  }
+
+  /**
+   * The name in a type reference, `typeof`, `extends` or `implements`:
+   * its leftmost `Identifier` is a reference, `N` in `N.T` to a namespace.
+   */
+  private visitEntityName(
+    entity: EntityName | TSImportType,
+    parent: AST.SvelteNode,
+    scope: ScopeNode,
+    meaning: Meaning,
+  ): void {
+    if (entity.type === "TSImportType") {
+      this.visit(entity, parent, scope);
+      return;
+    }
+    let name = entity;
+    let holder = parent;
+    while (name.type === "TSQualifiedName") {
+      this.scopeIn?.set(name, scope);
+      this.scopeIn?.set(name.right, scope);
+      holder = name;
+      name = name.left;
+    }
+    this.scopeIn?.set(name, scope);
+    if (name.name === "this") return;
+    const qualified = name !== entity && meaning === TYPE;
+    this.reference(
+      name,
+      holder,
+      scope,
+      true,
+      false,
+      false,
+      qualified ? NAMESPACE : meaning,
+    );
   }
 
   private visitDeclaration(
@@ -817,13 +1299,9 @@ class Analysis implements Scopes {
   }
 
   private visitFunction(node: FunctionNode, scope: ScopeNode): void {
-    for (const param of node.params) {
-      if (param.type === "Identifier" && param.name === "this") {
-        this.scopeIn?.set(param, scope);
-        continue;
-      }
-      this.declarePattern(param, node, scope, "param", node, null);
-    }
+    if (this.types) this.declareTypeParameters(node.typeParameters, scope);
+    this.declareParameters(node.params, node, scope);
+    if (this.types) this.visitType(node.returnType, node, scope);
     this.visit(node.body, node, scope);
   }
 
@@ -920,6 +1398,9 @@ class Analysis implements Scopes {
         this.visit(decorator, pattern, scope);
       }
     }
+    if (this.types && "typeAnnotation" in pattern && pattern.typeAnnotation) {
+      this.visitType(pattern.typeAnnotation, pattern, scope);
+    }
   }
 
   private visitTarget(
@@ -983,6 +1464,9 @@ class Analysis implements Scopes {
       target.type === "TSTypeAssertion"
     ) {
       this.visitTarget(target.expression, target, scope, reads);
+      if (target.type !== "TSNonNullExpression") {
+        this.visitType(target.typeAnnotation, target, scope);
+      }
       return;
     }
     this.visit(target, parent, scope);
@@ -1129,13 +1613,31 @@ class Analysis implements Scopes {
       const declared = this.declared.get(node);
       if (declared !== undefined && declared.kind !== "reactive") continue;
       this.references.set(node, reference);
-      let binding = reference.scope.get(node.name);
-      if (binding === null && this.component) {
+      const { meaning } = reference;
+      let binding: BindingNode | null;
+      if (meaning === VALUE) {
+        binding = reference.scope.get(node.name);
+      } else if (meaning !== ANY) {
+        binding = reference.scope.lookup(node.name, meaning);
+      } else if (reference.type) {
+        binding =
+          reference.scope.getType(node.name) ?? reference.scope.get(node.name);
+      } else {
+        binding = reference.scope.get(node.name);
+        if (binding === null) {
+          binding = reference.scope.getType(node.name);
+          if (binding !== null) {
+            reference.type = true;
+            reference.reads = false;
+          }
+        }
+      }
+      if (binding === null && this.component && meaning !== TYPE) {
         const store = this.storeOf(node.name);
         if (store !== false) {
           reference.store = true;
           reference.mutates ||= reference.writes;
-          reference.reads = true;
+          reference.reads = !reference.type;
           reference.writes = false;
           binding = store;
         }
@@ -1247,6 +1749,23 @@ class Analysis implements Scopes {
             : String(specifier.exported.value);
       }
     }
+  }
+}
+
+/**
+ * Whether an `Identifier` in a type is a reference to a value: a computed
+ * key, the parameter of `x is T`, or a name in a computed key's
+ * expression. Type names, `typeof` and qualified names are visited apart.
+ */
+function isReferenceInType(node: Identifier, parent: AST.SvelteNode): boolean {
+  switch (parent.type) {
+    case "TSPropertySignature":
+    case "TSMethodSignature":
+      return parent.computed === true && node === parent.key;
+    case "TSTypePredicate":
+      return node === parent.parameterName;
+    default:
+      return isReference(node, parent);
   }
 }
 

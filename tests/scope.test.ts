@@ -1,15 +1,23 @@
 import {
+  type AST,
   type Identifier,
+  type Program,
   parse,
   parseModule,
   SKIP,
   valueVisitorKeys,
+  visitorKeys,
   walk,
 } from "sveast";
-import { analyzeScopes, type Binding } from "sveast/scope";
+import {
+  analyzeScopes,
+  type Binding,
+  type Reference,
+  type Scopes,
+} from "sveast/scope";
 import { attempt, SVELTE_FILES } from "../scripts/shared";
 import { compareScopes } from "../scripts/svelte-scopes";
-import { corpusFiles, readCorpus } from "./shared";
+import { corpusAsts, corpusFiles, readCorpus } from "./shared";
 
 test("resolves names as svelte's analyzer does on the corpus", () => {
   let compared = 0;
@@ -25,9 +33,9 @@ test("resolves names as svelte's analyzer does on the corpus", () => {
   expect(stores).toBeGreaterThan(10);
 });
 
-function analyze(source: string) {
+function analyze(source: string, types = false) {
   const ast = parse(source);
-  const scopes = analyzeScopes(ast);
+  const scopes = analyzeScopes(ast, { types });
   const named = (name: string, nth = 0): Identifier => {
     const found: Identifier[] = [];
     walk(ast, {
@@ -46,6 +54,7 @@ function analyze(source: string) {
         reference.writes && "write",
         reference.mutates && "mutate",
         reference.store && "store",
+        reference.type && "type",
       ].filter(Boolean);
       return `${reference.node.name}@${reference.node.start} ${flags.join(" ")}`;
     });
@@ -291,6 +300,8 @@ test("skips TypeScript's types", () => {
   ]);
   expect(scopes.instance.get("S")).toBeNull();
   expect(scopes.instance.get("P")).toBeNull();
+  expect(scopes.instance.getType("P")).toBeNull();
+  expect(scopes.instance.types.size).toBe(0);
   expect(scopes.instance.get("E")?.kind).toBe("enum");
   const f = scopes.instance.get("f")?.declaration;
   if (f?.type !== "FunctionDeclaration") throw new Error("no f");
@@ -387,4 +398,193 @@ test("gives scopes that resolve names to its own bindings", () => {
   if (!directive) throw new Error("no use:act reference");
   expect(scopes.scopeOf(directive.node)?.get("act")).toBe(act);
   expect(scopes.scopeOf(named("f"))).toBe(scopes.instance);
+});
+
+test("resolves the names in types with { types: true }", () => {
+  const { scopes, uses } = analyze(
+    `<script lang="ts">
+  import type { DataTableHeader } from "carbon-components-svelte";
+  import { type Size, Button } from "./ui";
+  import * as UI from "./ui";
+  let headers: DataTableHeader[] = [];
+  type Props = { size: Size; kind: UI.Kind; of: typeof headers };
+  interface Item extends Props { id: string }
+  class Row implements Item { size!: Size; kind!: UI.Kind; of = headers; id = ""; }
+  const Props = 1;
+  export type { Props };
+</script>
+<Button {headers} />`,
+    true,
+  );
+  const get = (name: string) => scopes.instance.get(name);
+  const type = (name: string) => scopes.instance.getType(name);
+  expect(uses(get("DataTableHeader"))).toEqual(["DataTableHeader@175 type"]);
+  expect(uses(get("Size"))).toEqual(["Size@222 type", "Size@348 type"]);
+  expect(uses(get("UI"))).toEqual(["UI@234 type", "UI@361 type"]);
+  expect(uses(get("headers"))).toEqual([
+    "headers@254 type",
+    "headers@375 read",
+    "headers@458 read",
+  ]);
+  expect(uses(get("Button"))).toEqual(["Button@450 read"]);
+  expect(type("Props")).toMatchObject({ kind: "type", name: "Props" });
+  expect(type("Props")?.initial?.type).toBe("TSTypeAliasDeclaration");
+  expect(get("Props")?.kind).toBe("const");
+  expect(uses(type("Props"))).toEqual(["Props@290 type", "Props@430 type"]);
+  expect(uses(get("Props"))).toEqual([]);
+  expect(uses(type("Item"))).toEqual(["Item@334 type"]);
+  expect(type("Row")).toBe(get("Row"));
+  expect(type("Size")).toBe(get("Size"));
+  expect([...scopes.instance.types.keys()]).toEqual(["Props", "Item"]);
+  expect(scopes.instance.declarations.has("Item")).toBe(false);
+});
+
+test("scopes type parameters, infer and mapped types", () => {
+  const { ast, scopes, named } = analyze(
+    `<script lang="ts">
+  function f<T extends K, K>(a: T, b: K): T { let c: T = a; return c; }
+  class Box<T> { get<U extends T>(u: U): [T, U] { return [null!, u]; } }
+  type Head<L> = L extends [infer H, ...unknown[]] ? H : L;
+  type Keys<O> = { [P in keyof O as \`on\${P & string}\`]: O[P] };
+  type Fn = <R>(x: R, ...rest: R[]) => x is R & typeof x;
+  const T = 1;
+</script>`,
+    true,
+  );
+  const typeParam = (name: string, nth: number) => {
+    const binding = scopes.bindingOf(named(name, nth));
+    expect(binding?.kind).toBe("type-param");
+    expect(binding?.node).toBeNull();
+    expect(binding?.declaration.type).toBe("TSTypeParameter");
+    return binding;
+  };
+  const t = typeParam("T", 0);
+  expect(typeParam("T", 1)).toBe(t);
+  expect(typeParam("T", 2)).toBe(t);
+  expect(typeParam("K", 0)).toBe(typeParam("K", 1));
+  const script = ast.instance?.content.body[0];
+  if (script?.type !== "FunctionDeclaration") throw new Error("no f");
+  expect(scopes.scopeOf(script.body)?.getType("T")).toBe(t);
+  expect([...scopes.declaredIn(script).keys()]).toEqual(["a", "b"]);
+  const box = typeParam("T", 3);
+  expect(box).not.toBe(t);
+  expect(typeParam("T", 4)).toBe(box);
+  expect(typeParam("U", 0)).toBe(typeParam("U", 1));
+  expect(typeParam("H", 0)?.scope.node?.type).toBe("TSConditionalType");
+  expect(typeParam("L", 1)?.scope.node?.type).toBe("TSTypeAliasDeclaration");
+  expect(typeParam("P", 0)?.scope.node?.type).toBe("TSMappedType");
+  expect(typeParam("P", 1)).toBe(typeParam("P", 0));
+  expect(typeParam("O", 0)).toBe(typeParam("O", 1));
+  expect(typeParam("R", 0)).toBe(typeParam("R", 2));
+  const x = scopes.bindingOf(named("x", 0));
+  expect(x).toMatchObject({ kind: "param" });
+  expect(x?.declaration.type).toBe("TSFunctionType");
+  expect(scopes.bindingOf(named("x", 1))).toBe(x);
+  expect(scopes.bindingOf(named("x", 2))).toBe(x);
+  expect(scopes.instance.get("T")?.references).toEqual([]);
+});
+
+test("doesn't take a type's property names for references", () => {
+  const { scopes, uses } = analyze(
+    `<script lang="ts">
+  const key = "k", size = 1, method = 2;
+  type A = { size: number; method(): void; [key]: string; [k: string]: unknown };
+  interface B { [key](): void; size: typeof size }
+</script>`,
+    true,
+  );
+  expect(uses(scopes.instance.get("size"))).toEqual(["size@186 type"]);
+  expect(uses(scopes.instance.get("method"))).toEqual([]);
+  expect(uses(scopes.instance.get("key"))).toEqual([
+    "key@104 type",
+    "key@159 type",
+  ]);
+  expect(scopes.instance.get("k")).toBeNull();
+});
+
+test("resolves a name in a type to its value with typeof and to a namespace in N.T", () => {
+  const { scopes, uses } = analyze(
+    `<script lang="ts">
+  namespace N { export type T = 1; export const v = 1; }
+  enum E { A }
+  type X = N.T | typeof N.v | E.A | E;
+  let n: import("./n").N;
+</script>`,
+    true,
+  );
+  expect(uses(scopes.instance.get("N"))).toEqual(["N@102 type", "N@115 type"]);
+  expect(uses(scopes.instance.get("E"))).toEqual(["E@121 type", "E@127 type"]);
+  expect(scopes.instance.get("n")?.references).toEqual([]);
+});
+
+test("gives every node a scope with { types: true }", () => {
+  for (const ast of corpusAsts()) {
+    if (ast.type !== "Root" && ast.type !== "Program") continue;
+    const scopes = analyzeScopes(ast, { types: true });
+    const missing: string[] = [];
+    walk(
+      ast,
+      {
+        enter(node) {
+          if (node.type === "StyleSheet") return SKIP;
+          if (scopes.scopeOf(node) === null) {
+            missing.push(`${node.type}@${"start" in node ? node.start : ""}`);
+          }
+          return;
+        },
+      },
+      visitorKeys,
+    );
+    expect(missing).toEqual([]);
+  }
+});
+
+test("resolves values the same with { types: true }", () => {
+  const describe = (reference: Reference | null) =>
+    reference && {
+      reads: reference.reads,
+      writes: reference.writes,
+      mutates: reference.mutates,
+      store: reference.store,
+      binding: reference.binding && {
+        name: reference.binding.name,
+        kind: reference.binding.kind,
+        node: reference.binding.node,
+      },
+    };
+  const valueReferences = (ast: AST.Root | Program, scopes: Scopes) => {
+    const found: [Identifier, Reference][] = [];
+    walk(ast, {
+      enter(node) {
+        if (node.type !== "Identifier") return;
+        const reference = scopes.referenceOf(node);
+        if (reference && !reference.type) found.push([node, reference]);
+      },
+    });
+    return found;
+  };
+  let typed = 0;
+  for (const ast of corpusAsts()) {
+    if (ast.type !== "Root" && ast.type !== "Program") continue;
+    const values = analyzeScopes(ast);
+    const types = analyzeScopes(ast, { types: true });
+    const fromValues = valueReferences(ast, values);
+    const fromTypes = valueReferences(ast, types);
+    expect(fromTypes.map(([node]) => node)).toEqual(
+      fromValues
+        .map(([node]) => node)
+        .filter((node) => !types.referenceOf(node)?.type),
+    );
+    for (const [node, reference] of fromTypes) {
+      expect(describe(reference)).toEqual(describe(values.referenceOf(node)));
+    }
+    walk(ast, {
+      enter(node) {
+        if (node.type === "Identifier" && types.referenceOf(node)?.type) {
+          typed++;
+        }
+      },
+    });
+  }
+  expect(typed).toBeGreaterThan(500);
 });

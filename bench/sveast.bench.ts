@@ -363,6 +363,7 @@ group("isValidType", () => {
 });
 
 const CORPUS_ASTS = COMPONENTS.map(({ source }) => parse(flat(source)));
+const TYPESCRIPT_ASTS = TYPESCRIPT.map(({ source }) => parse(flat(source)));
 
 group("analysis", () => {
   const starts = COMPONENTS.map(({ source }, i) => {
@@ -406,6 +407,21 @@ group("analysis", () => {
     "analyzeScopes, corpus files",
     () => CORPUS_ASTS.map((ast) => analyzeScopes(ast)),
     { description: `${CORPUS_ASTS.length} files` },
+  );
+  task(
+    "analyzeScopes with types, corpus files",
+    () => CORPUS_ASTS.map((ast) => analyzeScopes(ast, { types: true })),
+    { description: `${CORPUS_ASTS.length} files` },
+  );
+  task(
+    "analyzeScopes, lang=ts files",
+    () => TYPESCRIPT_ASTS.map((ast) => analyzeScopes(ast)),
+    { description: `${TYPESCRIPT_ASTS.length} files` },
+  );
+  task(
+    "analyzeScopes with types, lang=ts files",
+    () => TYPESCRIPT_ASTS.map((ast) => analyzeScopes(ast, { types: true })),
+    { description: `${TYPESCRIPT_ASTS.length} files` },
   );
   task(
     "a11yWarnings, corpus files",
