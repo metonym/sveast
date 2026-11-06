@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.8 — 2026-11-06
+
+**Features**
+
+- `analyzeScopes(ast, { types: true })` resolves the names in
+  TypeScript's types too. `type`, `interface` and type parameters
+  (including `infer U`) declare bindings in a scope's new `types` map,
+  apart from its values, and `Scope.getType(name)` looks a name up as a
+  type. A name in a type, such as `A` in `let a: A`, `a` in `typeof a`,
+  `I` in `implements I` or `N` in `N.T`, is a `Reference` with the new
+  `type: true`, which neither reads, writes nor mutates. A tool that
+  asks which declarations some code uses no longer drops
+  `import type { A }` when only `let a: A` uses it (#42). The default
+  stays value-only, as svelte's analyzer resolves names, and the value
+  references are the same either way. `AnalyzeScopesOptions` is
+  exported.
+
 ## 0.9.7 — 2026-11-04
 
 **Features**
