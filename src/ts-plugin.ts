@@ -78,6 +78,7 @@ const CHAR_DOT = 46;
 const CHAR_COLON = 58;
 const CHAR_EQ = 61;
 const CHAR_LT = 60;
+const CHAR_GT = 62;
 const CHAR_BRACE_L = 123;
 const CHAR_BRACKET_L = 91;
 const CHAR_STAR = 42;
@@ -102,7 +103,7 @@ export const tsPlugin = definePlugin((Base) => {
     tsAmbient = false;
     tsArrowReturn: Node | null = null;
     tsMethodTypeParams: Node | null = null;
-    tsConstructorParams = false;
+    tsMethodParams = false;
     tsAsyncArguments = false;
     tsDeferredFunction: Node | null = null;
     tsDecoratorStack: Node[][] = [[]];
@@ -135,7 +136,7 @@ export const tsPlugin = definePlugin((Base) => {
       this.tsAmbient = false;
       this.tsArrowReturn = null;
       this.tsMethodTypeParams = null;
-      this.tsConstructorParams = false;
+      this.tsMethodParams = false;
       this.tsAsyncArguments = false;
       this.tsDeferredFunction = null;
       this.tsDecoratorStack = [[]];
@@ -282,6 +283,7 @@ export const tsPlugin = definePlugin((Base) => {
       this.tsNoConditional = state.tsNoConditional;
       this.tsAmbient = state.tsAmbient;
       this.tsArrowReturn = state.tsArrowReturn;
+      this.tsMethodParams = false;
       this.scopeStack.length = state.scopes;
       this.privateNameStack.length = state.privateNames;
       this.labels = state.labels;
@@ -936,7 +938,7 @@ export const tsPlugin = definePlugin((Base) => {
       });
     }
 
-    tsParseTypeArguments() {
+    tsParseTypeArguments(inExpression = false) {
       return this.tsInType(() => {
         const node = this.startNode();
         this.next();
@@ -946,6 +948,13 @@ export const tsPlugin = definePlugin((Base) => {
           if (!this.tsIsGt()) this.expect(tt.comma);
         }
         if (node.params.length === 0) this.unexpected();
+        // In an expression, acorn-typescript rescans the closing `>` as an
+        // operator. `>=`, `>>` and `>>=` are not a `>`, so `a<b>=c` is not
+        // type arguments and the caller backtracks to `(a < b) >= c`.
+        if (inExpression) {
+          const next = this.input.charCodeAt(this.start + 1);
+          if (next === CHAR_EQ || next === CHAR_GT) this.unexpected();
+        }
         this.next();
         return this.finishNode(node, "TSTypeParameterInstantiation");
       });
@@ -1456,6 +1465,9 @@ export const tsPlugin = definePlugin((Base) => {
     ) {
       const typeParameters = this.tsMethodTypeParams;
       this.tsMethodTypeParams = null;
+      // Like acorn-typescript, allow parameter modifiers in every class and
+      // object method, not only in constructors.
+      this.tsMethodParams = true;
       const node = super.parseMethod(isGenerator, isAsync, allowDirectSuper);
       if (!node.body) node.type = "TSDeclareMethod";
       if (typeParameters) node.typeParameters = typeParameters;
@@ -1468,8 +1480,8 @@ export const tsPlugin = definePlugin((Base) => {
       allowTrailingComma: boolean,
       allowModifiers?: boolean,
     ) {
-      const modifiers = allowModifiers === true || this.tsConstructorParams;
-      this.tsConstructorParams = false;
+      const modifiers = allowModifiers === true || this.tsMethodParams;
+      this.tsMethodParams = false;
       return super.parseBindingList(
         close,
         allowEmpty,
@@ -1535,6 +1547,11 @@ export const tsPlugin = definePlugin((Base) => {
 
       if (decorators.length > 0) element.decorators = decorators;
       if (!accessibility && !readonly && !override) return element;
+      if (element.type !== "Identifier" && element.type !== "AssignmentPattern")
+        this.raise(
+          start,
+          "A parameter property may not be declared using a binding pattern.",
+        );
       const node = this.startNodeAt(start, startLoc);
       if (accessibility) node.accessibility = accessibility;
       if (readonly) node.readonly = true;
@@ -1688,7 +1705,7 @@ export const tsPlugin = definePlugin((Base) => {
       }
 
       const typeArguments = this.tsSplitLt()
-        ? this.tsParseTypeArguments()
+        ? this.tsParseTypeArguments(true)
         : undefined;
       if (this.eat(tt.parenL)) {
         const call = this.startNodeAt(expression.start, expression.loc?.start);
@@ -1763,7 +1780,7 @@ export const tsPlugin = definePlugin((Base) => {
     parseClassSuper(node: Node) {
       super.parseClassSuper(node);
       if (node.superClass && this.tsIsLt())
-        node.superTypeParameters = this.tsParseTypeArguments();
+        node.superTypeParameters = this.tsParseTypeArguments(true);
       if (this.eatContextual("implements"))
         node.implements = this.tsInType(() => this.tsParseHeritage());
     }
@@ -1861,7 +1878,6 @@ export const tsPlugin = definePlugin((Base) => {
             (key.type === "Literal" && key.value === "constructor"));
         node.kind = isConstructor ? "constructor" : kind;
         if (this.tsIsLt()) node.typeParameters = this.tsParseTypeParameters();
-        this.tsConstructorParams = isConstructor;
         this.tsBodilessAt = this.start;
         this.parseClassMethod(
           node,
@@ -2084,7 +2100,7 @@ export const tsPlugin = definePlugin((Base) => {
         const typeArguments = this.tsTry(() => {
           if (optional) this.next();
           this.tsSplitLt();
-          const args = this.tsParseTypeArguments();
+          const args = this.tsParseTypeArguments(true);
           if (this.type === tt.parenL && !noCalls) return args;
           if (this.type === tt.backQuote) return optional ? undefined : args;
           if (optional) return;

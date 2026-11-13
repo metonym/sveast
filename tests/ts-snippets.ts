@@ -20,7 +20,7 @@ export const SNIPPETS: Record<string, string> = {
   "call type arguments":
     "f<T>(x); new C<T>(); a?.b<T>(); o?.<T>(x); tag<T>`s`; const g = f<string>;",
   "comparisons that look like type arguments":
-    "a < b > c; a < b >> c; if (a < b && c > d) {} x = a<b>\nc;",
+    "a < b > c; a < b >> c; if (a < b && c > d) {} x = a<b>\nc; y = a<b>=c; z = a<b>>>c; w = f<A<B>>(x) >= 1;",
   interfaces:
     "interface A<T> extends B<T>, C.D { a?: string; readonly b: number; [k: string]: any; m?<U>(x: U): void; (x): y; new (): Z; get g(): T; set s(v: T); new: boolean }",
   "type aliases":
@@ -41,6 +41,8 @@ export const SNIPPETS: Record<string, string> = {
     'import S = require("s"); import R = N.M; export = S;',
   classes:
     "abstract class A<T> extends B<T> implements C, D<E> { private readonly x?: number = 1; static y!: string; declare z: T; protected abstract m(): void; constructor(public a: string, private readonly b = 2) { super() } get g(): number { return 1 } [k: string]: any; override o() {} f(): void; f(a?) {} accessor q = 1; static { init() } }",
+  "parameter modifiers in methods":
+    "class A { m(readonly x: number) {} n(public y, private readonly z = 1) {} static set s(protected v) {} #p(override w) {} } o = { m(public x) {}, async *g(readonly y) {} };",
   "object literal methods":
     "o = { m<T>(a: T): T { return a }, get x(): number { return 1 }, set x(v: number) {} };",
   "import attributes":

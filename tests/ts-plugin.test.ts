@@ -88,6 +88,22 @@ describe("ts-plugin", () => {
     },
   );
 
+  test.each([
+    "a<b>>=c",
+    "a<b>>>=c",
+    "a<b>==c",
+    "a<b> = c",
+    "function f(public x) {}",
+    "(public x) => 1",
+    "class A { m = function (public x) {} }",
+    "class A { m(public {a}) {} }",
+    "class A { constructor(readonly [a]) {} }",
+  ])("rejects what acorn-typescript rejects: %s", (source) => {
+    expect(acornOutcome(Ours, source, LOCATIONS)).toBe(
+      acornOutcome(Theirs, source, LOCATIONS),
+    );
+  });
+
   test("rejects invalid types", () => {
     for (const text of ['"a" |', "{ a: }", "Array<", "(a: ) => void"]) {
       expect(() => Ours.parse(`type T = ${text}\n;`, OPTIONS)).toThrow(
