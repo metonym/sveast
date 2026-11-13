@@ -58,6 +58,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 | AST formats | Modern, legacy (`modern: false`), error-tolerant (`loose`) | Modern |
 | Non-ASCII identifiers | Its own Unicode 17 tables | The JavaScript engine's Unicode data, which is smaller to ship: the same in Node 24 and Bun; an engine on another Unicode version differs on the letters added in between |
 | TypeScript-only errors | Reported, e.g. modifier order or initializers in ambient contexts | Not reported: code that only TypeScript's own checks reject still parses |
+| Invalid regular expressions | Reported as `js_parse_error`, e.g. `/a/gg` or `/(/` | Not reported: the literal parses, which keeps acorn's regular expression validator out of the bundle |
 
 ## Examples
 
