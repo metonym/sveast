@@ -25,6 +25,21 @@ describe("parse() matches svelte/compiler", () => {
   }
 });
 
+describe("block clauses match svelte/compiler", () => {
+  test.each([
+    "{#if a}A{:else if b}B{:else if c}C{:else}D{/if}",
+    "{#if a}A{:else}B{:else}C{/if}",
+    "{#if a}A{:else}B{:else if b}C{/if}",
+    "{#if a}A{:else if b}B{:else}C{:else if d}D{/if}",
+    "{#if a}A{:else}B{:else if}C{/if}",
+    "{#each a as b}{b}{:else}none{/each}",
+    "{#each a as b}{b}{:else}none{:else}none{/each}",
+  ])("%s", (source) => {
+    const { ours, theirs } = svelteParity(source);
+    expect(ours).toEqual(theirs);
+  });
+});
+
 function withoutScripts(ast: AST.Root): AST.Root {
   const ranges: [number, number][] = [];
   const skip = (script: AST.Script | undefined): AST.Script | undefined => {

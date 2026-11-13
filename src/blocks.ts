@@ -286,6 +286,7 @@ export function nextBlockClause(
   if (block.type === "IfBlock") {
     if (!state.eat("else")) expected_token(start, "{:else} or {:else if}");
     if (state.eat("if")) block_invalid_elseif(start);
+    if (block.alternate) block_duplicate_clause(start, "{:else}");
 
     state.allowWhitespace();
     block.alternate = fragment();
@@ -313,6 +314,7 @@ export function nextBlockClause(
     }
   } else if (block.type === "EachBlock") {
     if (!state.eat("else")) expected_token(start, "{:else}");
+    if (block.fallback) block_duplicate_clause(start, "{:else}");
     state.eatClosingBrace();
     block.fallback = fragment();
     state.setFragment(block.fallback);
