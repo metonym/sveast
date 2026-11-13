@@ -4,7 +4,7 @@ import { expected_pattern } from "./errors";
 import { assertType } from "./nodes";
 import type { TemplateParserState } from "./state";
 import type { AssignmentExpression, Pattern } from "./types/estree";
-import type { TSTypeAnnotation } from "./types/typescript";
+import type { TSTypeAnnotation, TypeNode } from "./types/typescript";
 
 const REGEX_OPTIONAL_PARAM_COLON = /\?\s*:/g;
 
@@ -70,13 +70,14 @@ function readTypeAnnotation(
   if (expression.type === "SequenceExpression") {
     expression = expression.expressions[0];
   }
-  assertType(expression, "TSAsExpression");
 
   state.index = expression.end;
   return {
     type: "TSTypeAnnotation",
     start,
     end: state.index,
-    typeAnnotation: expression.typeAnnotation,
+    typeAnnotation: (expression.type === "TSAsExpression"
+      ? expression.typeAnnotation
+      : undefined) as TypeNode,
   };
 }

@@ -105,19 +105,24 @@ const TYPED = [
   (t: string) => `{#if x}{@const { a, b = 1 }: ${t} = value}<p>{a}</p>{/if}`,
   (t: string) => `{#snippet row(item: ${t}, i: number)}<p>{i}</p>{/snippet}`,
   (t: string) => `{#snippet row(item: ${t} = x)}<p>{item}</p>{/snippet}`,
+  (t: string) =>
+    `{#await p then value: ${t}}<p>{value}</p>{:catch error: ${t}}<p>{error}</p>{/await}`,
+  (t: string) => `{#each items as { id }  : ${t}}<p>{id}</p>{/each}`,
 ];
 
 describe("type annotations match svelte/compiler", () => {
-  for (const after of ["", "\n<p>Why?: {x}</p>"]) {
-    for (const type of TYPES) {
-      test(`${JSON.stringify(type)}${after ? ", a `?:` after" : ""}`, () => {
-        for (const component of TYPED) {
-          const { ours, theirs } = svelteParity(
-            `<script lang="ts"></script>\n<p>before</p>\n${component(type)}${after}\n<p>after</p>`,
-          );
-          expect(ours).toEqual(theirs);
-        }
-      });
+  for (const script of ['<script lang="ts"></script>\n', ""]) {
+    for (const after of ["", "\n<p>Why?: {x}</p>"]) {
+      for (const type of TYPES) {
+        test(`${script ? "TypeScript" : "JavaScript"}: ${JSON.stringify(type)}${after ? ", a `?:` after" : ""}`, () => {
+          for (const component of TYPED) {
+            const { ours, theirs } = svelteParity(
+              `${script}<p>before</p>\n${component(type)}${after}\n<p>after</p>`,
+            );
+            expect(ours).toEqual(theirs);
+          }
+        });
+      }
     }
   }
 });
