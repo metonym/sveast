@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.9 — 2026-11-14
+
+**Fixes**
+
+- In `<script lang="ts">`, `let x = a<b>=c;` parses as `(a < b) >= c`,
+  as in svelte. It threw "Assigning to rvalue". `a<b>>=c` and
+  `a<b>==c` now throw, as in svelte.
+- A parameter modifier in a class or object method, as
+  `m(readonly x: number)`, parses, as in svelte. Only a constructor
+  allowed one.
+- A type annotation on a `{@const}`, `{#each}` or `{#await}` pattern in
+  a component without `lang="ts"` throws svelte's `expected_token`,
+  with its message and position. It threw a plain `Error` with no
+  `code` or position.
+- A second `{:else}` in an `{#if}` or `{#each}` block throws
+  `block_duplicate_clause` at that clause, as in svelte. The second
+  clause replaced the first one's content, with no error (#44).
+
 ## 0.9.8 — 2026-11-06
 
 **Features**
