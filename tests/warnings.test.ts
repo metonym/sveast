@@ -2,10 +2,8 @@ import { join } from "node:path";
 import { isRunesMode, parse } from "sveast";
 import { compilerWarnings } from "sveast/warnings";
 import { compile } from "svelte/compiler";
-import { attempt, SVELTE_FILES } from "../scripts/shared";
+import { attempt, SVELTE_FILES, WARNING_CODES } from "../scripts/shared";
 import { corpusFiles, readCorpus } from "./shared";
-
-const CODES = new Set(["css_unused_selector"]);
 
 const key = (w: {
   code: string;
@@ -14,18 +12,31 @@ const key = (w: {
   end?: number;
 }) => `${w.start}-${w.end} ${w.code}: ${w.message}`;
 
-const svelteWarnings = (source: string) =>
+interface Options {
+  filename?: string;
+  customElement?: boolean;
+}
+
+const svelteWarnings = (source: string, options: Options = {}) =>
   attempt(() =>
-    compile(source, { generate: false, experimental: { async: true } })
-      .warnings.filter((w) => CODES.has(w.code))
+    compile(source, {
+      generate: false,
+      experimental: { async: true },
+      ...options,
+    })
+      .warnings.filter((w) => WARNING_CODES.has(w.code))
       .map((w) =>
         key({ ...w, start: w.start?.character, end: w.end?.character }),
       )
       .sort((a, b) => a.localeCompare(b)),
   );
 
-const sveastWarnings = (source: string) =>
-  compilerWarnings(parse(source), { runes: isRunesMode(source) })
+const sveastWarnings = (source: string, options: Options = {}) =>
+  compilerWarnings(parse(source), {
+    source,
+    runes: isRunesMode(source),
+    ...options,
+  })
     .map(key)
     .sort((a, b) => a.localeCompare(b));
 
@@ -113,6 +124,109 @@ for (const [name, source] of Object.entries(CASES)) {
     expect(sveastWarnings(source)).toEqual(expected as string[]);
   });
 }
+
+const RUNES = "<script>let r = $state(0);</script>";
+const RUNES_CHILD =
+  "<script>import Child from './Child.svelte'; let r = $state(0);</script>";
+
+const TEMPLATE_CASES: Record<string, string> = {
+  "empty blocks":
+    "{#if a} {:else if b}\n{:else}\t{/if}{#each xs as x} {:else} {/each}{#await p} {:then} {:catch} {/await}{#key k} {/key}{#snippet s()} {/snippet}",
+  "blocks with content or an empty fragment aren't empty":
+    "{#if a}{/if}{#if a}<p></p>{/if}{#if a} x {/if}{#each xs as x}{/each}{#key k}<!-- c -->{/key}",
+  "a svelte-ignore comment on a block":
+    "<!-- svelte-ignore block_empty -->\n{#if a} {/if}{#if b} {/if}",
+  "attribute names":
+    "<div is='x' className='a' htmlFor='b' foo:bar='c' xmlns:x='d' xlink:href='e' xml:lang='f'></div><svelte:element this={t} is='x' className='a' a:b='c'></svelte:element>",
+  "a colon on a component, not is or className": `${CHILD}<Child is='x' className='a' foo:bar='c' />`,
+  "a svelte-ignore comment on an element covers its attributes":
+    "<!-- svelte-ignore attribute_avoid_is -->\n<div is='x'></div><div is='y'></div>",
+  "global event references": `<script>let onkeydown = () => {};</script><button onclick={onclick}></button><button {onclick}></button><button {onkeydown}></button><button onclick="{onclick}"></button><button on={on}></button><svelte:window {onresize} /><svelte:document {onvisibilitychange} /><svelte:body {onmouseenter} /><svelte:element this={t} {onclick}></svelte:element>`,
+  "a global event reference a let: directive declares": `${CHILD}<Child><button slot="a" let:onclick {onclick}></button></Child>`,
+  "a global event reference with a type-only import":
+    "<script lang='ts'>import type { onclick } from './t';</script><button {onclick}></button>",
+  "a lowercase component name":
+    "<script>import foo from './Foo.svelte'; import bar from './Bar.svelte'; import baz from './Baz.svelte';</script><foo></foo><bar></bar>{bar}<baz/>",
+  "a lowercase component name with a type-only import":
+    "<script lang='ts'>import type foo from './Foo.svelte'; import { type bar } from './Bar.svelte';</script><foo></foo><bar></bar>",
+  "a lowercase component name a let: directive shadows": `<script>import div from './Div.svelte';import Child from './Child.svelte';</script><Child let:div><div></div></Child><div></div>`,
+  "a lowercase component name used as a store":
+    "<script>import foo from './store';</script><foo></foo>{$foo}",
+  "self-closing tags":
+    "<div/><span /><br/><input/><svg><path/><circle /></svg><math><mi/></math><my-el/><svelte:element this={t}/><div></div><textarea/><custom:div/>",
+  "bind on a rest in an each": `${RUNES}{#each xs as { a, ...rest }}<input bind:value={rest.b} /><input bind:value={a.b} />{/each}{#each xs as [x, ...ys]}<input bind:value={ys[0]} />{/each}{#each xs as { a: { ...deep } }}<input bind:value={deep.c} />{/each}`,
+  "bind on a rest in an each, legacy and on a component": `${CHILD}{#each xs as { ...rest }}<Child bind:value={rest.b} /><input bind:value={rest} />{/each}`,
+  "bind on a rest in an each, ignored on the element":
+    "{#each xs as { ...rest }}<!-- svelte-ignore bind_invalid_each_rest -->\n<input bind:value={rest.b} /><input bind:value={rest.b} />{/each}",
+  "bind on a rest in an each, with a sequence and a shadow":
+    "{#each xs as { ...rest }}<input bind:value={() => rest.b, (v) => {}} />{#each ys as rest}<input bind:value={rest.b} />{/each}{/each}",
+  "quoted attributes in runes mode": `${RUNES_CHILD}<Child a="{r}" b={r} c="x{r}" /><my-el a="{r}"></my-el><div is="x" a="{r}"></div><div a="{r}"></div><svelte:component this={Child} a="{r}" />`,
+  "quoted attributes in legacy mode": `${CHILD}<Child a="{x}" /><my-el a="{x}"></my-el>`,
+  "deprecations in runes mode": `${RUNES_CHILD}<button on:click={() => {}}></button><Child on:click={() => {}} /><svelte:window on:resize={() => {}} /><svelte:element this={t} on:click={() => {}}></svelte:element><slot></slot><svelte:component this={Child} />{#if a}<svelte:self />{/if}`,
+  "deprecations in legacy mode": `${CHILD}<button on:click={() => {}}></button><slot></slot><svelte:component this={Child} />{#if a}<svelte:self />{/if}`,
+  "no slot_element_deprecated in a custom element": `<svelte:options customElement="my-el" />${RUNES}<slot></slot>`,
+  "no slot_element_deprecated in a custom element with an empty object": `<svelte:options customElement={{}} />${RUNES}<slot></slot>`,
+  "a svelte-ignore comment before a component's child carries on in the default slot": `${CHILD}<Child><!-- svelte-ignore block_empty -->\n{#if a} {/if}<p></p>{#if b} {/if}<div slot="x">{#if c} {/if}</div>{#if d} {/if}</Child>`,
+  "a svelte-ignore comment before a component's child carries on with no named slot": `${CHILD}<Child><!-- svelte-ignore block_empty -->\n{#if a} {/if}<p></p>{#if b} {/if}</Child>`,
+  "a svelte-ignore comment before a named slot": `${CHILD}<Child><!-- svelte-ignore element_invalid_self_closing_tag -->\n<div slot="x"><span/></div><b/></Child>`,
+  "a svelte-ignore comment with the legacy code in runes mode": `${RUNES}<!-- svelte-ignore block-empty -->\n{#if a} {/if}`,
+  "a svelte-ignore comment with the legacy code in legacy mode":
+    "<!-- svelte-ignore block-empty -->\n{#if a} {/if}",
+  "template and CSS warnings together":
+    "<div/>{#if a} {/if}<style>p {}</style>",
+};
+
+for (const [name, source] of Object.entries(TEMPLATE_CASES)) {
+  test(name, () => {
+    const expected = svelteWarnings(source);
+    expect(expected).toBeDefined();
+    expect(sveastWarnings(source)).toEqual(expected as string[]);
+  });
+}
+
+const SELF = `${RUNES}{#if a}<svelte:self />{/if}`;
+
+const SELF_CASES: [string, string, Options][] = [
+  ["no filename", SELF, {}],
+  ["a file name", SELF, { filename: "src/lib/Button.svelte" }],
+  ["a lowercase file name", SELF, { filename: "tree-view.svelte" }],
+  ["an index file", SELF, { filename: "lib/tree/index.svelte" }],
+  ["an index file in src", SELF, { filename: "src/index.svelte" }],
+  ["a Windows path", SELF, { filename: "C:\\app\\9lives.svelte" }],
+  [
+    "a name that clashes with a declaration",
+    "<script>let Button = $state(0); let Button_1 = 1;</script>{#if a}<svelte:self />{/if}",
+    { filename: "Button.svelte" },
+  ],
+  [
+    "a name that clashes with a global and a template name",
+    `${RUNES}{Tree}{#each xs as Tree_1}{/each}{#snippet Tree_2()}{/snippet}{#if a}<svelte:self />{/if}`,
+    { filename: "Tree.svelte" },
+  ],
+  ["a name svelte gives an each index", SELF, { filename: "$$index.svelte" }],
+  [
+    "a name svelte gives an each index, with each blocks",
+    `${RUNES}{#each xs as x}{/each}{#each xs as x, i}{/each}{#if a}<svelte:self />{/if}`,
+    { filename: "$$index.svelte" },
+  ],
+];
+
+for (const [name, source, options] of SELF_CASES) {
+  test(`svelte_self_deprecated: ${name}`, () => {
+    const expected = svelteWarnings(source, options);
+    expect(expected).toBeDefined();
+    expect(sveastWarnings(source, options)).toEqual(expected as string[]);
+  });
+}
+
+test("slot_element_deprecated with the customElement option", () => {
+  const source = `${RUNES}<slot></slot>`;
+  const options = { customElement: true };
+  expect(sveastWarnings(source, options)).toEqual(
+    svelteWarnings(source, options) as string[],
+  );
+  expect(sveastWarnings(source)).toHaveLength(1);
+});
 
 const ALL_MATCH = /: (\d+) of \1 compiled components match/;
 

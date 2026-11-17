@@ -145,3 +145,21 @@ export function report(
   printList("Mismatches", mismatches, all);
   process.exitCode = mismatches.length > 0 ? 1 : 0;
 }
+
+/** The codes `compilerWarnings` gives. */
+export const WARNING_CODES: ReadonlySet<string> = new Set([
+  "attribute_avoid_is",
+  "attribute_global_event_reference",
+  "attribute_illegal_colon",
+  "attribute_invalid_property_name",
+  "attribute_quoted",
+  "bind_invalid_each_rest",
+  "block_empty",
+  "component_name_lowercase",
+  "css_unused_selector",
+  "element_invalid_self_closing_tag",
+  "event_directive_deprecated",
+  "slot_element_deprecated",
+  "svelte_component_deprecated",
+  "svelte_self_deprecated",
+]);

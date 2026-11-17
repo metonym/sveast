@@ -37,7 +37,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
 | [`analyzeScopes`](#analyzescopesast-options--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
 | [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `sveast/a11y` |
-| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: today, unused CSS selectors | `sveast/warnings` |
+| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: unused CSS selectors, empty blocks, attribute and naming mistakes, and runes-mode deprecations | `sveast/warnings` |
 | [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
@@ -467,22 +467,42 @@ for (const warning of a11yWarnings(parse(source), { runes: isRunesMode(source) }
 
 The ARIA tables come from svelte's, which read aria-query and axobject-query, generated into the package, so it has no dependencies. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich and SvelteKit, it gives the warnings `compile` gives for all 13,276 components both accept, 899 warnings, and for 13,163 with their `svelte-ignore` comments and common a11y attributes removed, 2,185 warnings.
 
-### `compilerWarnings(ast, options?) => CompilerWarning[]`
+### `compilerWarnings(ast, options) => CompilerWarning[]`
 
-From `sveast/warnings`. The warnings svelte's compiler gives for a component besides the `a11y_…` ones, with the same `code`, `message` and offsets, and without the ones a `svelte-ignore` comment silences. Today it gives `css_unused_selector`: a selector in the component's `<style>` that matches no element in its markup. It takes the `runes` option of [`a11yWarnings`](#a11ywarningsast-options--a11ywarning). It loads neither acorn nor the parser.
+From `sveast/warnings`. The warnings svelte's compiler gives for a component besides the `a11y_…` ones, with the same `code`, `message` and offsets, and without the ones a `svelte-ignore` comment silences. It loads neither acorn nor the parser. It gives:
+
+| Code | When |
+| --- | --- |
+| `css_unused_selector` | A selector in the `<style>` matches no element in the markup |
+| `block_empty` | A block's branch holds only whitespace, such as `{#if a} {/if}` |
+| `element_invalid_self_closing_tag` | An HTML element that isn't void is written `<div/>` |
+| `component_name_lowercase` | A lowercase element's name is an imported value, such as `<foo />` after `import foo from "./Foo.svelte"` |
+| `attribute_global_event_reference` | `onclick={onclick}` or `{onclick}` on an element, where nothing in scope is named `onclick` |
+| `attribute_avoid_is`, `attribute_invalid_property_name`, `attribute_illegal_colon` | The `is` attribute, React's `className` and `htmlFor`, and a colon in an attribute name that isn't `xmlns:` or `xlink:` |
+| `bind_invalid_each_rest` | `bind:` to a name from the rest of an `{#each}` pattern, such as `...rest` |
+| `attribute_quoted` | In runes mode, `prop="{value}"` on a component or custom element |
+| `event_directive_deprecated`, `slot_element_deprecated`, `svelte_component_deprecated`, `svelte_self_deprecated` | In runes mode, `on:`, `<slot>`, `<svelte:component>` and `<svelte:self>` |
+
+Its options:
+
+- `source` (required): the source passed to `parse`. svelte reads it to tell `<div/>` from `<div></div>`, which the AST doesn't.
+- `filename`: svelte's `filename` option. `svelte_self_deprecated` names the self-import after it, or `Self` without one.
+- `customElement`: svelte's `customElement` option. `<svelte:options customElement>` counts without it. A custom element gets no `slot_element_deprecated`.
+- `runes`: as for [`a11yWarnings`](#a11ywarningsast-options--a11ywarning).
 
 ```ts
 import { isRunesMode, parse } from "sveast";
 import { compilerWarnings } from "sveast/warnings";
 
-for (const warning of compilerWarnings(parse(source), { runes: isRunesMode(source) })) {
+const ast = parse(source);
+for (const warning of compilerWarnings(ast, { source, filename, runes: isRunesMode(source) })) {
   warning.code; // "css_unused_selector"
   warning.message; // 'Unused CSS selector ".a"\nhttps://svelte.dev/e/css_unused_selector'
   warning.start; // offsets of the selector
 }
 ```
 
-It's a port of svelte 5's CSS pruning, so it gives what svelte 5 gives. On the 8,344 components of the projects below that compile and have the AST, it takes 13 ms, against 1,729 ms for `compile(source, { generate: false })`. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
+It's a port of svelte 5's analysis, so it gives what svelte 5 gives. It builds scopes only for a component that needs them, and shares them between checks. On the 8,344 components of the projects below that compile and have the AST, it takes 36 ms, against 2,451 ms for `compile(source, { generate: false })`. For the warnings besides `css_unused_selector`, on the same projects, svelte's tests, carbon-components-svelte and the corpus, it gives the warnings `compile` gives for all 15,090 components both accept with their `svelte-ignore` comments removed, 602 warnings, and for all 12,119 that compile with `<svelte:options runes>` added, 1,295 warnings. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
 
 ### `createLocator(source) => (offset) => Position`
 

@@ -262,9 +262,10 @@ assert.deepEqual(
 );
 
 const { compilerWarnings } = await import("sveast/warnings");
+const warned = "<p/>\\n<style>p {} .a {}</style>";
 assert.deepEqual(
-  compilerWarnings(parse("<p></p>\\n<style>p {} .a {}</style>")).map((w) => [w.code, w.start, w.end]),
-  [["css_unused_selector", 20, 22]],
+  compilerWarnings(parse(warned), { source: warned }).map((w) => [w.code, w.start, w.end]),
+  [["element_invalid_self_closing_tag", 0, 4], ["css_unused_selector", 17, 19]],
 );
 `,
   );
@@ -434,7 +435,12 @@ const prop: string | null | undefined = binding?.prop;
 void prop;
 const a11y: A11yWarning[] = a11yWarnings(walkRoot, { runes: false });
 void a11y;
-const compiler: CompilerWarning[] = compilerWarnings(walkRoot, { runes: false });
+const compiler: CompilerWarning[] = compilerWarnings(walkRoot, {
+  source: "",
+  filename: "App.svelte",
+  customElement: false,
+  runes: false,
+});
 void compiler;
 const bindingsOf = (fn: AnyFunction): WalkNode[] => fn.params.flatMap(extractIdentifiers);
 void bindingsOf;
