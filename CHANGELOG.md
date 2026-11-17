@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+**Performance**
+
+- `a11yWarnings` is 1.7x faster: 43 ms against 72 ms on 8,344
+  components from real projects. Its role and element lists are
+  `Set`s, and it tests only the role schemas for an element's tag
+  name (#55).
+
 ## 0.9.9 — 2026-11-13
 
 **Fixes**

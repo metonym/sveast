@@ -127,31 +127,54 @@ const toMap = <T>(
   record: Readonly<Record<string, T>>,
 ): ReadonlyMap<string, T> => new Map(Object.entries(record));
 
-const distractingElements: readonly string[] = a11yDistractingElements;
+// Each element's schemas, in their table's order, so a lookup tests only
+// the schemas for its tag name.
+const byName = <T extends Schema>(
+  schemas: readonly T[],
+): ReadonlyMap<string, readonly T[]> => {
+  const map = new Map<string, T[]>();
+  for (const schema of schemas) {
+    const named = map.get(schema.name);
+    if (named === undefined) map.set(schema.name, [schema]);
+    else named.push(schema);
+  }
+  return map;
+};
+const NO_SCHEMAS: readonly never[] = [];
+
+const distractingElements: ReadonlySet<string> = new Set(
+  a11yDistractingElements,
+);
 const implicitSemantics: ReadonlyMap<string, string> = toMap(
   a11yImplicitSemantics,
 );
-const interactiveHandlers: readonly string[] = a11yInteractiveHandlers;
+const interactiveHandlers: ReadonlySet<string> = new Set(
+  a11yInteractiveHandlers,
+);
 const labelable: readonly string[] = a11yLabelable;
 const nestedImplicitSemantics: ReadonlyMap<string, string> = toMap(
   a11yNestedImplicitSemantics,
 );
 const toInteractiveRoleExceptions: ReadonlyMap<string, readonly string[]> =
   toMap(a11yNonInteractiveElementToInteractiveRoleExceptions);
-const recommendedInteractiveHandlers: readonly string[] =
-  a11yRecommendedInteractiveHandlers;
+const recommendedInteractiveHandlers: ReadonlySet<string> = new Set(
+  a11yRecommendedInteractiveHandlers,
+);
 const requiredAttributes: ReadonlyMap<string, readonly string[]> = toMap(
   a11yRequiredAttributes,
 );
-const requiredContent: readonly string[] = a11yRequiredContent;
-const abstractRoles: readonly string[] = abstractRolesData;
+const requiredContent: ReadonlySet<string> = new Set(a11yRequiredContent);
+const abstractRoles: ReadonlySet<string> = new Set(abstractRolesData);
 const addressTypeTokens: readonly string[] = addressTypeTokensData;
+// The aria lists stay arrays for `fuzzymatch`, which keeps their order.
 const ariaAttributes: readonly string[] = ariaAttributesData;
+const ariaAttributeSet: ReadonlySet<string> = new Set(ariaAttributesData);
 const ariaProperties: ReadonlyMap<
   string,
   { readonly type: string; readonly values?: readonly string[] }
 > = toMap(ariaPropertiesData);
 const ariaRoles: readonly string[] = ariaRolesData;
+const ariaRoleSet: ReadonlySet<string> = new Set(ariaRolesData);
 const autofillContactFieldNameTokens: readonly string[] =
   autofillContactFieldNameTokensData;
 const autofillFieldNameTokens: readonly string[] = autofillFieldNameTokensData;
@@ -160,28 +183,34 @@ const contactTypeTokens: readonly string[] = contactTypeTokensData;
 const inputTypeToImplicitRole: ReadonlyMap<string, string> = toMap(
   inputTypeToImplicitRoleData,
 );
-const interactiveElementAxObjectSchemas: readonly Schema[] =
-  interactiveElementAxObjectSchemasData;
-const interactiveElementRoleSchemas: readonly Schema[] =
-  interactiveElementRoleSchemasData;
-const interactiveRoles: readonly string[] = interactiveRolesData;
-const invisibleElements: readonly string[] = invisibleElementsData;
+const interactiveElementAxObjectSchemas = byName<Schema>(
+  interactiveElementAxObjectSchemasData,
+);
+const interactiveElementRoleSchemas = byName<Schema>(
+  interactiveElementRoleSchemasData,
+);
+const interactiveRoles: ReadonlySet<string> = new Set(interactiveRolesData);
+const invisibleElements: ReadonlySet<string> = new Set(invisibleElementsData);
 const menuitemTypeToImplicitRole: ReadonlyMap<string, string> = toMap(
   menuitemTypeToImplicitRoleData,
 );
-const nonInteractiveElementAxObjectSchemas: readonly Schema[] =
-  nonInteractiveElementAxObjectSchemasData;
-const nonInteractiveElementRoleSchemas: readonly Schema[] =
-  nonInteractiveElementRoleSchemasData;
-const nonInteractiveRoles: readonly string[] = nonInteractiveRolesData;
-const presentationRoles: readonly string[] = presentationRolesData;
+const nonInteractiveElementAxObjectSchemas = byName<Schema>(
+  nonInteractiveElementAxObjectSchemasData,
+);
+const nonInteractiveElementRoleSchemas = byName<Schema>(
+  nonInteractiveElementRoleSchemasData,
+);
+const nonInteractiveRoles: ReadonlySet<string> = new Set(
+  nonInteractiveRolesData,
+);
+const presentationRoles: ReadonlySet<string> = new Set(presentationRolesData);
 const roleProps: ReadonlyMap<
   string,
   { readonly props: readonly string[]; readonly required: readonly string[] }
 > = toMap(rolePropsData);
-const semanticRoleElements: readonly (Schema & {
-  readonly roles: readonly string[];
-})[] = semanticRoleElementsData;
+const semanticRoleElements = byName<
+  Schema & { readonly roles: readonly string[] }
+>(semanticRoleElementsData);
 const { Interactive, NonInteractive, Static } = ElementInteractivity;
 
 const HEADING_TAGS = /^h[1-6]$/;
@@ -346,7 +375,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
     if (attribute.type !== "Attribute") continue;
     const name = attribute.name.toLowerCase();
     if (name.startsWith("aria-")) {
-      if (invisibleElements.includes(node.name)) {
+      if (invisibleElements.has(node.name)) {
         warn(
           attribute,
           "a11y_aria_attributes",
@@ -354,7 +383,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
         );
       }
       const type = name.slice(5);
-      if (!ariaAttributes.includes(type)) {
+      if (!ariaAttributeSet.has(type)) {
         const match = fuzzymatch(type, ariaAttributes);
         warn(
           attribute,
@@ -386,7 +415,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
 
     switch (name) {
       case "role": {
-        if (invisibleElements.includes(node.name)) {
+        if (invisibleElements.has(node.name)) {
           warn(
             attribute,
             "a11y_misplaced_role",
@@ -402,7 +431,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
               "a11y_no_abstract_role",
               a11y_no_abstract_role(currentRole),
             );
-          } else if (currentRole && !ariaRoles.includes(currentRole)) {
+          } else if (currentRole && !ariaRoleSet.has(currentRole)) {
             const match = fuzzymatch(currentRole, ariaRoles);
             warn(
               attribute,
@@ -471,9 +500,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
             isInteractiveRole(currentRole) &&
             isStatic &&
             !attributeMap.get("tabindex") &&
-            [...handlers].some((handler) =>
-              interactiveHandlers.includes(handler),
-            )
+            [...handlers].some((handler) => interactiveHandlers.has(handler))
           ) {
             warn(
               node,
@@ -616,9 +643,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
     !isPresentationRole(roleStaticValue) &&
     ((!isInteractive && isNonInteractiveRole(roleStaticValue)) ||
       (isNonInteractive && !role)) &&
-    [...handlers].some((handler) =>
-      recommendedInteractiveHandlers.includes(handler),
-    )
+    [...handlers].some((handler) => recommendedInteractiveHandlers.has(handler))
   ) {
     warn(
       node,
@@ -639,7 +664,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
     !isAbstractRole(roleStaticValue)
   ) {
     const interactive = [...handlers].filter((handler) =>
-      interactiveHandlers.includes(handler),
+      interactiveHandlers.has(handler),
     );
     if (interactive.length > 0) {
       warn(
@@ -805,7 +830,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
     }
   }
 
-  if (distractingElements.includes(node.name)) {
+  if (distractingElements.has(node.name)) {
     warn(
       node,
       "a11y_distracting_elements",
@@ -817,7 +842,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
     !hasSpread &&
     !isLabelled &&
     !hasContenteditableBinding &&
-    requiredContent.includes(node.name) &&
+    requiredContent.has(node.name) &&
     !hasContent(node)
   ) {
     warn(node, "a11y_missing_content", a11y_missing_content(node.name));
@@ -841,13 +866,13 @@ function list(strings: readonly string[], conjunction = "or"): string {
 }
 
 const isPresentationRole = (role: string | null | undefined) =>
-  presentationRoles.includes(role as string);
+  presentationRoles.has(role as string);
 const isNonInteractiveRole = (role: string | null | undefined) =>
-  nonInteractiveRoles.includes(role as string);
+  nonInteractiveRoles.has(role as string);
 const isInteractiveRole = (role: string | null | undefined) =>
-  interactiveRoles.includes(role as string);
+  interactiveRoles.has(role as string);
 const isAbstractRole = (role: string | null | undefined) =>
-  abstractRoles.includes(role as string);
+  abstractRoles.has(role as string);
 
 function isHiddenFromScreenReader(
   tagName: string,
@@ -875,29 +900,29 @@ function elementInteractivity(
   attributeMap: Map<string, AST.Attribute>,
 ): Interactivity {
   if (
-    interactiveElementRoleSchemas.some((schema) =>
+    (interactiveElementRoleSchemas.get(tagName) ?? NO_SCHEMAS).some((schema) =>
       matchSchema(schema, tagName, attributeMap),
     )
   )
     return Interactive;
   if (
     tagName !== "header" &&
-    nonInteractiveElementRoleSchemas.some((schema) =>
-      matchSchema(schema, tagName, attributeMap),
+    (nonInteractiveElementRoleSchemas.get(tagName) ?? NO_SCHEMAS).some(
+      (schema) => matchSchema(schema, tagName, attributeMap),
     )
   ) {
     return NonInteractive;
   }
   if (
-    interactiveElementAxObjectSchemas.some((schema) =>
-      matchSchema(schema, tagName, attributeMap),
+    (interactiveElementAxObjectSchemas.get(tagName) ?? NO_SCHEMAS).some(
+      (schema) => matchSchema(schema, tagName, attributeMap),
     )
   ) {
     return Interactive;
   }
   if (
-    nonInteractiveElementAxObjectSchemas.some((schema) =>
-      matchSchema(schema, tagName, attributeMap),
+    (nonInteractiveElementAxObjectSchemas.get(tagName) ?? NO_SCHEMAS).some(
+      (schema) => matchSchema(schema, tagName, attributeMap),
     )
   ) {
     return NonInteractive;
@@ -910,7 +935,7 @@ function isSemanticRoleElement(
   tagName: string,
   attributeMap: Map<string, AST.Attribute>,
 ): boolean {
-  return semanticRoleElements.some(
+  return (semanticRoleElements.get(tagName) ?? NO_SCHEMAS).some(
     (schema) =>
       schema.name === tagName &&
       (!schema.attributes ||
@@ -975,7 +1000,7 @@ function effectiveRole(value: string | null): string | null {
   if (value === null) return null;
   return (
     roleTokens(value).find(
-      (role) => ariaRoles.includes(role) && !isAbstractRole(role),
+      (role) => ariaRoleSet.has(role) && !isAbstractRole(role),
     ) ?? value
   );
 }
