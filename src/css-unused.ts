@@ -5,7 +5,7 @@
 // visitors/RegularElement.js, RenderTag.js, shared/component.js). The
 // metadata svelte writes onto the AST lives in maps here, so the AST is
 // never changed. svelte is MIT licensed.
-import { analyzeScopes, type Binding, type Scopes } from "./scope";
+import type { Binding, Scopes } from "./scope";
 import { ignoreCodes } from "./svelte-ignore";
 import type { Expression, Identifier } from "./types/estree";
 import type { AST } from "./types/svelte-ast";
@@ -259,6 +259,7 @@ function isResolvedSnippet(binding: Binding | null): boolean {
 export function cssUnusedSelectors(
   ast: AST.Root,
   runes: boolean,
+  scopes: () => Scopes,
   warn: (node: AST.CSS.ComplexSelector, code: string, message: string) => void,
 ): void {
   const stylesheet = ast.css;
@@ -270,13 +271,13 @@ export function cssUnusedSelectors(
   ) {
     return;
   }
-  new UnusedSelectors(ast, stylesheet).run(warn);
+  new UnusedSelectors(ast, stylesheet, scopes).run(warn);
 }
 
 class UnusedSelectors {
   private readonly ast: AST.Root;
   private readonly stylesheet: AST.CSS.StyleSheet;
-  private scopes: Scopes | undefined;
+  private readonly scopes: () => Scopes;
 
   // The template's metadata.
   private readonly elements: Element[] = [];
@@ -289,9 +290,14 @@ class UnusedSelectors {
   private readonly complexes = new Map<ComplexSelector, ComplexMeta>();
   private readonly rules = new Map<Rule, RuleMeta>();
 
-  constructor(ast: AST.Root, stylesheet: AST.CSS.StyleSheet) {
+  constructor(
+    ast: AST.Root,
+    stylesheet: AST.CSS.StyleSheet,
+    scopes: () => Scopes,
+  ) {
     this.ast = ast;
     this.stylesheet = stylesheet;
+    this.scopes = scopes;
     this.relatives.set(NESTING_SELECTOR, {
       isGlobal: false,
       isGlobalLike: false,
@@ -364,8 +370,7 @@ class UnusedSelectors {
   // --- the template ---
 
   private bindingOf(identifier: Identifier): Binding | null {
-    this.scopes ??= analyzeScopes(this.ast);
-    return this.scopes.bindingOf(identifier);
+    return this.scopes().bindingOf(identifier);
   }
 
   private analyzeTemplate(): void {

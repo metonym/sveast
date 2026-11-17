@@ -8,10 +8,8 @@ import {
   errorMessage,
   report,
   SVELTE_FILES,
+  WARNING_CODES,
 } from "./shared";
-
-// The codes compilerWarnings gives.
-const CODES = new Set(["css_unused_selector"]);
 
 const { files, list } = compareArgs(SVELTE_FILES);
 
@@ -21,8 +19,7 @@ interface Found {
   start: number;
   end: number;
 }
-const key = (w: Found) =>
-  `${w.start}-${w.end} ${w.code}: ${w.message.split("\n")[0]}`;
+const key = (w: Found) => `${w.start}-${w.end} ${w.code}: ${w.message}`;
 
 let matched = 0;
 let warnings = 0;
@@ -37,7 +34,7 @@ for (const file of files) {
       experimental: { async: true },
       filename: file,
     })
-      .warnings.filter((w) => CODES.has(w.code))
+      .warnings.filter((w) => WARNING_CODES.has(w.code))
       .map((w) => ({
         code: w.code,
         message: w.message,
@@ -52,7 +49,11 @@ for (const file of files) {
   }
   let actual: Found[];
   try {
-    actual = compilerWarnings(ast, { runes: isRunesMode(source) });
+    actual = compilerWarnings(ast, {
+      source,
+      filename: file,
+      runes: isRunesMode(source),
+    });
   } catch (error) {
     mismatches.push(`${file}: throws ${errorMessage(error)}`);
     continue;

@@ -319,7 +319,11 @@ for (let i = 0; i < iterations; i++) {
   warnings += expected.length;
   let actual: string[];
   try {
-    actual = compilerWarnings(parse(source), { runes: isRunesMode(source) })
+    actual = compilerWarnings(parse(source), {
+      source,
+      runes: isRunesMode(source),
+    })
+      .filter((w) => w.code === "css_unused_selector")
       .map(key)
       .sort((a, b) => a.localeCompare(b));
   } catch (error) {

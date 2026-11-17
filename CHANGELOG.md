@@ -14,6 +14,18 @@
   real projects it takes 13 ms against 1,729 ms for
   `compile(source, { generate: false })`. It matches `compile` on
   14,208 components and 166,000 fuzzed ones.
+- `compilerWarnings` gives 13 more of svelte's warnings: `block_empty`,
+  `element_invalid_self_closing_tag`, `component_name_lowercase`,
+  `attribute_global_event_reference`, `attribute_avoid_is`,
+  `attribute_invalid_property_name`, `attribute_illegal_colon`,
+  `bind_invalid_each_rest`, `attribute_quoted`, and in runes mode
+  `event_directive_deprecated`, `slot_element_deprecated`,
+  `svelte_component_deprecated` and `svelte_self_deprecated` (#52). It
+  now takes the `source` (required), `filename` and `customElement`
+  options. On 8,344 components from real projects it takes 36 ms
+  against 2,451 ms for `compile`. It matches `compile` on 15,090
+  components with their `svelte-ignore` comments removed, and on
+  12,119 forced into runes mode.
 
 **Performance**
 

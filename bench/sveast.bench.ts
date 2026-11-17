@@ -363,7 +363,8 @@ group("isValidType", () => {
   typesTask("JSDoc types the fast path leaves to the parser", uncommon, false);
 });
 
-const CORPUS_ASTS = COMPONENTS.map(({ source }) => parse(flat(source)));
+const CORPUS_SOURCES = COMPONENTS.map(({ source }) => flat(source));
+const CORPUS_ASTS = CORPUS_SOURCES.map((source) => parse(source));
 const TYPESCRIPT_ASTS = TYPESCRIPT.map(({ source }) => parse(flat(source)));
 
 group("analysis", () => {
@@ -431,7 +432,10 @@ group("analysis", () => {
   );
   task(
     "compilerWarnings, corpus files",
-    () => CORPUS_ASTS.map((ast) => compilerWarnings(ast)),
+    () =>
+      CORPUS_ASTS.map((ast, i) =>
+        compilerWarnings(ast, { source: CORPUS_SOURCES[i] }),
+      ),
     { description: `${CORPUS_ASTS.length} files` },
   );
 

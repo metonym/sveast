@@ -566,6 +566,34 @@ class Analysis implements Scopes {
     return this.made.get(node)?.declarations ?? NO_BINDINGS;
   }
 
+  /**
+   * The names svelte's `Scope#generate` avoids: every value any scope
+   * declares, without type-only imports, and every name a value
+   * reference uses, globals and stores too. Internal: for
+   * `sveast/warnings`, which casts to it.
+   */
+  names(): Set<string> {
+    const names = new Set<string>();
+    for (const scope of this.scopes) {
+      for (const [name, binding] of scope.declarations) {
+        const specifier = binding.declaration as { importKind?: string };
+        const declaration = binding.initial as { importKind?: string } | null;
+        if (
+          binding.kind === "import" &&
+          (specifier.importKind === "type" ||
+            declaration?.importKind === "type")
+        ) {
+          continue;
+        }
+        names.add(name);
+      }
+    }
+    for (const reference of this.references.values()) {
+      if (!reference.type) names.add(reference.node.name);
+    }
+    return names;
+  }
+
   private child(
     scope: ScopeNode,
     node: AST.SvelteNode,
