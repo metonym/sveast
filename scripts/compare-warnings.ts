@@ -7,6 +7,7 @@ import {
   compareArgs,
   errorMessage,
   report,
+  resetSvelteBidi,
   SVELTE_FILES,
   WARNING_CODES,
 } from "./shared";
@@ -28,6 +29,7 @@ const mismatches: string[] = [];
 
 for (const file of files) {
   const source = readFileSync(file, "utf8");
+  resetSvelteBidi();
   const expected = attempt(() =>
     compile(source, {
       generate: false,

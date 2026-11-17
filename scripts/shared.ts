@@ -1,12 +1,22 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { compile } from "svelte/compiler";
 
 export type Json =
   null | boolean | number | string | Json[] | { [key: string]: Json };
 
 export const LOC_KEYS: ReadonlySet<string> = new Set(["loc", "name_loc"]);
 export const SVELTE_FILES = /\.svelte$/;
+
+// svelte tests every string for bidirectional control characters with one
+// regular expression with the `g` flag, so after a match its next test
+// starts mid-string, even in the next component. sveast starts each
+// component afresh. Compiling an empty string makes svelte do the same:
+// a test that fails sets the regex back to the start.
+export function resetSvelteBidi(): void {
+  compile('<script>"";</script>', { generate: false });
+}
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -148,6 +158,7 @@ export const WARNING_CODES: ReadonlySet<string> = new Set([
   "attribute_illegal_colon",
   "attribute_invalid_property_name",
   "attribute_quoted",
+  "bidirectional_control_characters",
   "bind_invalid_each_rest",
   "block_empty",
   "component_name_lowercase",
@@ -155,14 +166,18 @@ export const WARNING_CODES: ReadonlySet<string> = new Set([
   "element_implicitly_closed",
   "element_invalid_self_closing_tag",
   "event_directive_deprecated",
+  "legacy_code",
   "node_invalid_placement_ssr",
   "options_deprecated_accessors",
   "options_deprecated_immutable",
   "options_missing_custom_element",
+  "perf_avoid_inline_class",
+  "perf_avoid_nested_class",
   "script_context_deprecated",
   "script_unknown_attribute",
   "slot_element_deprecated",
   "svelte_component_deprecated",
   "svelte_element_invalid_this",
   "svelte_self_deprecated",
+  "unknown_code",
 ]);
