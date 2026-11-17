@@ -482,12 +482,19 @@ From `sveast/warnings`. The warnings svelte's compiler gives for a component bes
 | `bind_invalid_each_rest` | `bind:` to a name from the rest of an `{#each}` pattern, such as `...rest` |
 | `attribute_quoted` | In runes mode, `prop="{value}"` on a component or custom element |
 | `event_directive_deprecated`, `slot_element_deprecated`, `svelte_component_deprecated`, `svelte_self_deprecated` | In runes mode, `on:`, `<slot>`, `<svelte:component>` and `<svelte:self>` |
+| `node_invalid_placement_ssr` | An element the browser would move out of its parent, such as a `<div>` in a `<p>`, with a block between them. Without the block, svelte fails the build |
+| `element_implicitly_closed` | A tag closes an open element, such as the second `<li>` in `<li>a<li>b` |
+| `svelte_element_invalid_this` | `<svelte:element this="div">`, with a string for `this` |
+| `script_unknown_attribute` | A `<script>` attribute other than `context`, `generics`, `lang` and `module` |
+| `script_context_deprecated` | In runes mode, `<script context="module">` |
+| `options_deprecated_accessors`, `options_deprecated_immutable` | In runes mode, `accessors` and `immutable` in `<svelte:options>` |
+| `options_missing_custom_element` | `customElement` in `<svelte:options>` without the `customElement` option |
 
 Its options:
 
 - `source` (required): the source passed to `parse`. svelte reads it to tell `<div/>` from `<div></div>`, which the AST doesn't.
 - `filename`: svelte's `filename` option. `svelte_self_deprecated` names the self-import after it, or `Self` without one.
-- `customElement`: svelte's `customElement` option. `<svelte:options customElement>` counts without it. A custom element gets no `slot_element_deprecated`.
+- `customElement`: svelte's `customElement` option. `<svelte:options customElement>` counts without it, except for `options_missing_custom_element`. A custom element gets no `slot_element_deprecated`.
 - `runes`: as for [`a11yWarnings`](#a11ywarningsast-options--a11ywarning).
 
 ```ts
@@ -501,6 +508,8 @@ for (const warning of compilerWarnings(ast, { source, filename, runes: isRunesMo
   warning.start; // offsets of the selector
 }
 ```
+
+svelte gives some warnings as it parses: `element_implicitly_closed` and `svelte_element_invalid_this`. `parse` records them with the AST it returns, so pass that AST: a copy, or an AST from svelte's `parse`, gets neither. svelte gives these and the `script_…` and `options_…` warnings outside its walk of the markup, so a `svelte-ignore` comment silences none of them.
 
 It's a port of svelte 5's analysis, so it gives what svelte 5 gives. It builds scopes only for a component that needs them, and shares them between checks. On the 8,344 components of the projects below that compile and have the AST, it takes 36 ms, against 2,451 ms for `compile(source, { generate: false })`. For the warnings besides `css_unused_selector`, on the same projects, svelte's tests, carbon-components-svelte and the corpus, it gives the warnings `compile` gives for all 15,090 components both accept with their `svelte-ignore` comments removed, 602 warnings, and for all 12,119 that compile with `<svelte:options runes>` added, 1,295 warnings. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
 

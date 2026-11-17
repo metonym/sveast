@@ -3,6 +3,8 @@
 // checks in shared/element.js and shared/attribute.js, the checks in
 // RegularElement.js, BindDirective.js and the deprecations. svelte is MIT
 // licensed.
+
+import { invalidWithAncestor, invalidWithParent } from "./html-tree-validation";
 import type { Binding, Scope, Scopes } from "./scope";
 import { skipTypeWrappers } from "./skip-type-wrappers";
 import { ignoreCodes } from "./svelte-ignore";
@@ -99,6 +101,11 @@ class TemplateWarnings {
   private imports: Set<string> | undefined;
   // How many `{#each}` blocks with a `...rest` in their context are open.
   private restEaches = 0;
+  // The nodes above the one being visited, as svelte's `context.path`.
+  private readonly path: Node[] = [];
+  // svelte's `parent_element`: the element the markup sits in, until a
+  // component, snippet or `<svelte:element>` resets it.
+  private parentElement: string | null = null;
 
   constructor(ast: AST.Root, options: TemplateWarningsOptions, warn: Warn) {
     this.ast = ast;
@@ -148,18 +155,37 @@ class TemplateWarnings {
   }
 
   private visit(node: Node, ignores: ReadonlySet<string>): void {
+    this.path.push(node);
+    this.visitNode(node, ignores);
+    this.path.pop();
+  }
+
+  /** Visits `node`'s fragment with `parentElement` as svelte's `parent_element`. */
+  private within(
+    parentElement: string | null,
+    nodes: readonly Node[],
+    ignores: ReadonlySet<string>,
+  ): void {
+    const outer = this.parentElement;
+    this.parentElement = parentElement;
+    this.fragment(nodes, ignores);
+    this.parentElement = outer;
+  }
+
+  private visitNode(node: Node, ignores: ReadonlySet<string>): void {
     switch (node.type) {
       case "RegularElement":
+        this.placement(node, ignores);
         this.validateElement(node, ignores);
         this.componentNameLowercase(node, ignores);
         this.selfClosing(node, ignores);
         this.directives(node, ignores);
-        this.fragment(node.fragment.nodes, ignores);
+        this.within(node.name, node.fragment.nodes, ignores);
         return;
       case "SvelteElement":
         this.validateElement(node, ignores);
         this.directives(node, ignores);
-        this.fragment(node.fragment.nodes, ignores);
+        this.within(null, node.fragment.nodes, ignores);
         return;
       case "SvelteComponent":
         if (this.runes) {
@@ -245,11 +271,14 @@ class TemplateWarnings {
         return;
       case "SnippetBlock":
         this.blockEmpty(node.body, ignores);
-        this.fragment(node.body.nodes, ignores);
+        this.within(null, node.body.nodes, ignores);
+        return;
+      case "SvelteFragment":
+        this.directives(node, ignores);
+        this.within(null, node.fragment.nodes, ignores);
         return;
       case "TitleElement":
       case "SvelteBoundary":
-      case "SvelteFragment":
       case "SvelteHead":
         this.directives(node, ignores);
         this.fragment(node.fragment.nodes, ignores);
@@ -258,6 +287,61 @@ class TemplateWarnings {
   }
 
   // --- elements ---
+
+  /**
+   * svelte's placement check: an element the browser would move out of
+   * where it sits. svelte fails the build unless a block stands between,
+   * and warns then, since the client builds each block on its own.
+   */
+  private placement(
+    node: AST.RegularElement,
+    ignores: ReadonlySet<string>,
+  ): void {
+    const parent = this.parentElement;
+    if (parent === null || ignores.has("node_invalid_placement_ssr")) return;
+    let pastParent = false;
+    let inBlock = false;
+    const ancestors = [parent];
+    // `path` ends with `node` itself.
+    for (let i = this.path.length - 2; i >= 0; i--) {
+      const ancestor = this.path[i];
+      switch (ancestor.type) {
+        case "IfBlock":
+        case "EachBlock":
+        case "AwaitBlock":
+        case "KeyBlock":
+          inBlock = true;
+          break;
+        case "RegularElement": {
+          let message: string | null = null;
+          if (pastParent) {
+            ancestors.push(ancestor.name);
+            message = invalidWithAncestor(node.name, ancestors);
+          } else {
+            if (ancestor.name !== parent) break;
+            message = invalidWithParent(node.name, parent);
+            pastParent = true;
+          }
+          if (message !== null && inBlock) {
+            this.warn(
+              ignores,
+              node,
+              "node_invalid_placement_ssr",
+              `${message}. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a \`hydration_mismatch\` warning`,
+            );
+          }
+          break;
+        }
+        case "Component":
+        case "SvelteComponent":
+        case "SvelteElement":
+        case "SvelteSelf":
+        case "SnippetBlock":
+          if (pastParent) return;
+          break;
+      }
+    }
+  }
 
   /** svelte's `validate_element`, for the warnings it gives. */
   private validateElement(
@@ -505,7 +589,7 @@ class TemplateWarnings {
         (child) => child.type === "Comment" || slotOf(child) !== null,
       )
     ) {
-      this.fragment(children, ignores);
+      this.within(null, children, ignores);
       return;
     }
     // svelte groups the children by slot, each with the comments before
@@ -524,7 +608,7 @@ class TemplateWarnings {
       else nodes.push(...comments, child);
       if (slot !== "default") comments = [];
     }
-    for (const nodes of slots.values()) this.fragment(nodes, ignores);
+    for (const nodes of slots.values()) this.within(null, nodes, ignores);
   }
 
   // --- blocks ---

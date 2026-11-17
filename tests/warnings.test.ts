@@ -176,6 +176,71 @@ const TEMPLATE_CASES: Record<string, string> = {
     "<div/>{#if a} {/if}<style>p {}</style>",
 };
 
+// Warnings svelte gives as it parses, for the scripts and for <svelte:options>.
+const COMPONENT_CASES: Record<string, string> = {
+  "implicitly closed by a sibling":
+    "<ul><li>a<li>b</li></ul><p>x<div></div><dl><dt>a<dd>b</dd></dl>",
+  "implicitly closed by a parent's closing tag":
+    "<ul><li>a</ul><div><p>x</div><table><tbody><tr><td>a</tr></tbody></table><div><p><span>a</div>",
+  "implicitly closed, empty element": "<ul><li><li></li></ul><div><p></div>",
+  "implicitly closed twice":
+    "<ul><li>a<li>b</ul><select><option>a<option>b</select>",
+  "implicitly closed in a block":
+    "{#if a}<ul><li>a<li>b</li></ul>{/if}{#each xs as x}<p>x<div></div>{/each}",
+  "implicitly closed then closed by name": "<div><p>a<p>b</p></div>",
+  "svelte:element this":
+    '<svelte:element this=\'div\'></svelte:element><svelte:element this="h{n}"></svelte:element><svelte:element this={t}></svelte:element><svelte:element this="{t}"></svelte:element><svelte:element this=span />',
+  "script attributes":
+    "<script context='module' foo bar='x'></script><script lang='ts' generics='T' baz></script><p></p>",
+  "script module attribute":
+    "<script module type='x'></script><script>let a = $state(0);</script>",
+  "script context in runes mode":
+    '<script context="module">export const x = 1;</script><script>let a = $state(0);</script>',
+  "options in runes mode": `<svelte:options accessors immutable customElement="my-el" />${RUNES}`,
+  "options in legacy mode":
+    '<svelte:options accessors immutable={true} customElement="my-el" />',
+  "options with ignore": `<!-- svelte-ignore options_deprecated_accessors -->\n<svelte:options accessors />${RUNES}`,
+  "placement in blocks":
+    "<p>{#if a}<div></div>{/if}</p><table>{#each xs as x}<tr></tr>{/each}</table><ul>{#key k}<li><div><li></li></div></li>{/key}</ul><p>{#if a}<b><div></div></b>{/if}</p>",
+  "placement through ancestors":
+    "<p><span>{#if a}<div></div>{/if}</span></p><form><div>{#await x}<form></form>{/await}</div></form><a><b>{#if a}<a></a>{/if}</b></a>",
+  "placement reset by dl": "<dd><dl>{#if a}<dt></dt>{/if}</dl></dd>",
+  "placement through a component":
+    "<script>import C from './C.svelte';</script><p>{#if a}<C><div></div></C>{/if}</p><p><C>{#if a}<div></div>{/if}</C></p>",
+  "placement ignored":
+    "<p>{#if a}<!-- svelte-ignore node_invalid_placement_ssr -->\n<div></div>{/if}</p>",
+  "placement in snippet and svelte:element":
+    "<p>{#if a}{#snippet s()}<div></div>{/snippet}{/if}</p><p><svelte:element this={t}>{#if a}<div></div>{/if}</svelte:element></p>",
+  "placement custom element and template":
+    "<p>{#if a}<my-el></my-el>{/if}</p><template>{#if a}<td></td>{/if}</template><div>{#if a}<td></td><tr></tr><tbody></tbody><col /><html></html>{/if}</div>",
+  "placement with only rules":
+    "<table>{#if a}<div></div><tbody></tbody>{/if}</table><tr>{#if a}<span></span>{/if}</tr><colgroup>{#if a}<col/><div></div>{/if}</colgroup>",
+};
+
+for (const [name, source] of Object.entries(COMPONENT_CASES)) {
+  test(name, () => {
+    const expected = svelteWarnings(source);
+    expect(expected).toBeDefined();
+    expect(sveastWarnings(source)).toEqual(expected as string[]);
+  });
+}
+
+test("options_missing_custom_element with the customElement option", () => {
+  const source = '<svelte:options customElement="my-el" />';
+  const options = { customElement: true };
+  expect(sveastWarnings(source, options)).toEqual(
+    svelteWarnings(source, options) as string[],
+  );
+  expect(sveastWarnings(source, options)).toHaveLength(0);
+});
+
+test("parse warnings stay with the AST parse returned", () => {
+  const source = "<ul><li>a<li>b</li></ul>";
+  const ast = parse(source);
+  expect(compilerWarnings(ast, { source })).toHaveLength(1);
+  expect(compilerWarnings(structuredClone(ast), { source })).toHaveLength(0);
+});
+
 for (const [name, source] of Object.entries(TEMPLATE_CASES)) {
   test(name, () => {
     const expected = svelteWarnings(source);
