@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**Features**
+
+- `compilerWarnings(ast, { runes })`, from the new `sveast/warnings`
+  entry, returns the warnings svelte's `compile` gives besides the
+  `a11y_…` ones, with the same `code`, `message` and offsets, minus the
+  ones a `svelte-ignore` comment silences. It starts with
+  `css_unused_selector`, a port of svelte 5's CSS pruning, the slowest
+  and most used of them (#52). A linter that already has the AST no
+  longer compiles each component for it: on 8,344 components from
+  real projects it takes 13 ms against 1,729 ms for
+  `compile(source, { generate: false })`. It matches `compile` on
+  14,208 components and 166,000 fuzzed ones.
+
 **Performance**
 
 - `a11yWarnings` is 1.7x faster: 43 ms against 72 ms on 8,344

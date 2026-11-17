@@ -35,6 +35,7 @@ export default defineConfig({
     // Each runs the next as a subprocess.
     "tests/fuzz.test.ts": "scripts/fuzz-parser.ts",
     "scripts/fuzz-parser.ts": "scripts/fuzz-trial.ts",
+    "tests/warnings.test.ts": "scripts/fuzz-css.ts",
   },
   // These read or import only the paths their caller passes, or temp
   // directories, or svelte's own files under node_modules (a svelte bump
@@ -44,6 +45,7 @@ export default defineConfig({
     "scripts/shared.ts",
     "scripts/lexed.ts",
     "scripts/svelte-scopes.ts",
+    "scripts/fuzz-css.ts",
     "examples/*.ts",
     "tests/examples.test.ts",
     "tests/fuzz.test.ts",

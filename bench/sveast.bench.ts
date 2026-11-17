@@ -28,6 +28,7 @@ import {
 import { a11yWarnings } from "sveast/a11y";
 import { createParser } from "sveast/core";
 import { createModuleParser } from "sveast/module";
+import { compilerWarnings } from "sveast/warnings";
 import { isCommonType } from "../src/common-type";
 import {
   CARBON_COMPONENTS,
@@ -426,6 +427,11 @@ group("analysis", () => {
   task(
     "a11yWarnings, corpus files",
     () => CORPUS_ASTS.map((ast) => a11yWarnings(ast)),
+    { description: `${CORPUS_ASTS.length} files` },
+  );
+  task(
+    "compilerWarnings, corpus files",
+    () => CORPUS_ASTS.map((ast) => compilerWarnings(ast)),
     { description: `${CORPUS_ASTS.length} files` },
   );
 

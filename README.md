@@ -37,6 +37,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
 | [`analyzeScopes`](#analyzescopesast-options--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
 | [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `sveast/a11y` |
+| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: today, unused CSS selectors | `sveast/warnings` |
 | [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
@@ -465,6 +466,23 @@ for (const warning of a11yWarnings(parse(source), { runes: isRunesMode(source) }
 ```
 
 The ARIA tables come from svelte's, which read aria-query and axobject-query, generated into the package, so it has no dependencies. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich and SvelteKit, it gives the warnings `compile` gives for all 13,276 components both accept, 899 warnings, and for 13,163 with their `svelte-ignore` comments and common a11y attributes removed, 2,185 warnings.
+
+### `compilerWarnings(ast, options?) => CompilerWarning[]`
+
+From `sveast/warnings`. The warnings svelte's compiler gives for a component besides the `a11y_…` ones, with the same `code`, `message` and offsets, and without the ones a `svelte-ignore` comment silences. Today it gives `css_unused_selector`: a selector in the component's `<style>` that matches no element in its markup. It takes the `runes` option of [`a11yWarnings`](#a11ywarningsast-options--a11ywarning). It loads neither acorn nor the parser.
+
+```ts
+import { isRunesMode, parse } from "sveast";
+import { compilerWarnings } from "sveast/warnings";
+
+for (const warning of compilerWarnings(parse(source), { runes: isRunesMode(source) })) {
+  warning.code; // "css_unused_selector"
+  warning.message; // 'Unused CSS selector ".a"\nhttps://svelte.dev/e/css_unused_selector'
+  warning.start; // offsets of the selector
+}
+```
+
+It's a port of svelte 5's CSS pruning, so it gives what svelte 5 gives. On the 8,344 components of the projects below that compile and have the AST, it takes 13 ms, against 1,729 ms for `compile(source, { generate: false })`. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
 
 ### `createLocator(source) => (offset) => Position`
 

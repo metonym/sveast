@@ -48,7 +48,13 @@ try {
     }
   }
   const acorn = reach("is-valid-type.js");
-  for (const entry of ["walk.js", "scope.js", "lexer.js", "a11y.js"]) {
+  for (const entry of [
+    "walk.js",
+    "scope.js",
+    "lexer.js",
+    "a11y.js",
+    "warnings.js",
+  ]) {
     for (const file of reach(entry)) {
       if (file === "parse.js" || acorn.has(file)) {
         throw new Error(`dist/${entry} imports the parser: ${file}`);
@@ -85,6 +91,7 @@ try {
     "scope",
     "lexer",
     "a11y",
+    "warnings",
   ]) {
     const types = readFileSync(
       join(root, `dist/${entry}.d.ts`),
@@ -253,6 +260,12 @@ assert.deepEqual(
   a11yWarnings(parse('<img src="a.png" />\\n<!-- svelte-ignore a11y-autofocus -->\\n<input autofocus />')).map((w) => [w.code, w.start, w.end]),
   [["a11y_missing_attribute", 0, 19]],
 );
+
+const { compilerWarnings } = await import("sveast/warnings");
+assert.deepEqual(
+  compilerWarnings(parse("<p></p>\\n<style>p {} .a {}</style>")).map((w) => [w.code, w.start, w.end]),
+  [["css_unused_selector", 20, 22]],
+);
 `,
   );
   await $`node smoke.js`.cwd(dir);
@@ -307,6 +320,7 @@ import {
 } from "sveast/walk";
 import { analyzeScopes, type Binding, type Scopes } from "sveast/scope";
 import { type A11yWarning, a11yWarnings } from "sveast/a11y";
+import { type CompilerWarning, compilerWarnings } from "sveast/warnings";
 
 type CoreRoot = CoreAST.Root;
 
@@ -420,6 +434,8 @@ const prop: string | null | undefined = binding?.prop;
 void prop;
 const a11y: A11yWarning[] = a11yWarnings(walkRoot, { runes: false });
 void a11y;
+const compiler: CompilerWarning[] = compilerWarnings(walkRoot, { runes: false });
+void compiler;
 const bindingsOf = (fn: AnyFunction): WalkNode[] => fn.params.flatMap(extractIdentifiers);
 void bindingsOf;
 void walkVisitor;

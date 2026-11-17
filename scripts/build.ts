@@ -40,6 +40,7 @@ const SUBPATHS = [
   "scope",
   "lexer",
   "a11y",
+  "warnings",
 ];
 
 async function emitTypeDeclarations() {
