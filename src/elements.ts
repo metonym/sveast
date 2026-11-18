@@ -32,6 +32,7 @@ import {
   nameEnd,
 } from "./markup";
 import { ParseError } from "./parse-error";
+import { recordParseWarning } from "./parse-warnings";
 import { readScript } from "./script";
 import type { StackNode, TemplateParserState } from "./state";
 import { readStyle } from "./style";
@@ -191,7 +192,11 @@ function closeElement(state: TemplateParserState, start: number): void {
 
   let open = state.current();
   while (!("name" in open) || open.name !== name) {
-    if (open.type !== "RegularElement") {
+    if (open.type === "RegularElement") {
+      if (state.lastAutoClosedTag?.tag !== name) {
+        implicitlyClosed(state, open, start, `</${name}>`);
+      }
+    } else {
       const autoClosed = state.lastAutoClosedTag;
       if (autoClosed?.tag === name) {
         element_invalid_closing_tag_autoclosed(start, name, autoClosed.reason);
@@ -208,6 +213,22 @@ function closeElement(state: TemplateParserState, start: number): void {
   if (state.stack.length < (state.lastAutoClosedTag?.depth ?? 0)) {
     state.lastAutoClosedTag = undefined;
   }
+}
+
+/** Records svelte's `element_implicitly_closed` for an element `by` closes. */
+function implicitlyClosed(
+  state: TemplateParserState,
+  element: AST.RegularElement,
+  start: number,
+  by: string,
+): void {
+  recordParseWarning(state.root, {
+    code: "element_implicitly_closed",
+    start: element.start,
+    end: element.fragment.nodes[0]?.start ?? start,
+    by,
+    closing: `</${element.name}>`,
+  });
 }
 
 function createElement(
@@ -252,6 +273,7 @@ function openElement(state: TemplateParserState, start: number): void {
     parent.type === "RegularElement" &&
     closingTagOmitted(parent.name, name)
   ) {
+    implicitlyClosed(state, parent, start, `<${name}>`);
     parent.end = start;
     state.close();
     state.lastAutoClosedTag = {
@@ -283,6 +305,13 @@ function openElement(state: TemplateParserState, start: number): void {
     const definition = takeThis(element);
     if (!definition) svelte_element_missing_this(start);
     if (definition.value === true) svelte_element_missing_this(definition);
+    if (!isExpressionValue(definition.value)) {
+      recordParseWarning(state.root, {
+        code: "svelte_element_invalid_this",
+        start: definition.start,
+        end: definition.end,
+      });
+    }
     element.tag = isExpressionValue(definition.value)
       ? expressionOf(definition.value)
       : literalTag(definition.value[0]);

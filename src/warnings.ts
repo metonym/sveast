@@ -1,5 +1,6 @@
 // The warnings svelte's compiler gives besides the a11y ones, without
 // svelte's compiler. svelte is MIT licensed.
+import { componentWarnings } from "./component-warnings";
 import { cssUnusedSelectors } from "./css-unused";
 import { analyzeScopes, type Scopes } from "./scope";
 import { templateWarnings } from "./template-warnings";
@@ -29,7 +30,8 @@ export interface CompilerWarningsOptions {
   /**
    * Whether the component compiles as a custom element, as svelte's
    * `customElement` option. `<svelte:options customElement>` counts
-   * without it. Default `false`.
+   * without it, except for `options_missing_custom_element`. Default
+   * `false`.
    */
   customElement?: boolean;
   /**
@@ -51,9 +53,17 @@ export interface CompilerWarningsOptions {
  * `attribute_global_event_reference`, `attribute_illegal_colon`,
  * `attribute_invalid_property_name`, `attribute_quoted`,
  * `bind_invalid_each_rest`, `block_empty`, `component_name_lowercase`,
- * `css_unused_selector`, `element_invalid_self_closing_tag`,
- * `event_directive_deprecated`, `slot_element_deprecated`,
- * `svelte_component_deprecated` and `svelte_self_deprecated`.
+ * `css_unused_selector`, `element_implicitly_closed`,
+ * `element_invalid_self_closing_tag`, `event_directive_deprecated`,
+ * `node_invalid_placement_ssr`, `options_deprecated_accessors`,
+ * `options_deprecated_immutable`, `options_missing_custom_element`,
+ * `script_context_deprecated`, `script_unknown_attribute`,
+ * `slot_element_deprecated`, `svelte_component_deprecated`,
+ * `svelte_element_invalid_this` and `svelte_self_deprecated`.
+ *
+ * `parse` records `element_implicitly_closed` and
+ * `svelte_element_invalid_this` with the AST it returns, so a copy of
+ * it gets neither.
  *
  * ```ts
  * import { isRunesMode, parse } from "sveast";
@@ -94,5 +104,6 @@ export function compilerWarnings(
     push,
   );
   cssUnusedSelectors(ast, runes, scopes, push);
+  componentWarnings(ast, runes, options.customElement ?? false, push);
   return warnings;
 }

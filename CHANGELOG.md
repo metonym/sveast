@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+**Features**
+
+- `compilerWarnings` gives 8 more of svelte's warnings (#52):
+  `node_invalid_placement_ssr`, `element_implicitly_closed`,
+  `svelte_element_invalid_this`, `script_unknown_attribute`,
+  `options_missing_custom_element`, and in runes mode
+  `script_context_deprecated`, `options_deprecated_accessors` and
+  `options_deprecated_immutable`. `parse` records the two svelte gives
+  as it parses with the AST it returns. It matches `compile` on 13,503
+  components, with and without their `svelte-ignore` comments, and on
+  11,269 forced into runes mode.
+
 ## 0.10.0 — 2026-11-17
 
 **Features**
