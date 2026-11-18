@@ -53,14 +53,21 @@ export interface CompilerWarningsOptions {
  * The codes it gives: `attribute_avoid_is`,
  * `attribute_global_event_reference`, `attribute_illegal_colon`,
  * `attribute_invalid_property_name`, `attribute_quoted`,
- * `bind_invalid_each_rest`, `block_empty`, `component_name_lowercase`,
- * `css_unused_selector`, `element_implicitly_closed`,
+ * `bidirectional_control_characters`, `bind_invalid_each_rest`,
+ * `block_empty`, `component_name_lowercase`, `css_unused_selector`,
+ * `custom_element_props_identifier`, `element_implicitly_closed`,
  * `element_invalid_self_closing_tag`, `event_directive_deprecated`,
- * `node_invalid_placement_ssr`, `options_deprecated_accessors`,
- * `options_deprecated_immutable`, `options_missing_custom_element`,
+ * `export_let_unused`, `legacy_code`, `legacy_component_creation`,
+ * `node_invalid_placement_ssr`, `non_reactive_update`,
+ * `options_deprecated_accessors`, `options_deprecated_immutable`,
+ * `options_missing_custom_element`, `perf_avoid_inline_class`,
+ * `perf_avoid_nested_class`, `reactive_declaration_invalid_placement`,
+ * `reactive_declaration_module_script_dependency`,
  * `script_context_deprecated`, `script_unknown_attribute`,
- * `slot_element_deprecated`, `svelte_component_deprecated`,
- * `svelte_element_invalid_this` and `svelte_self_deprecated`.
+ * `slot_element_deprecated`, `state_referenced_locally`,
+ * `store_rune_conflict`, `svelte_component_deprecated`,
+ * `svelte_element_invalid_this`, `svelte_self_deprecated` and
+ * `unknown_code`.
  *
  * `parse` records `element_implicitly_closed` and
  * `svelte_element_invalid_this` with the AST it returns, so a copy of
@@ -106,6 +113,17 @@ export function compilerWarnings(
   );
   cssUnusedSelectors(ast, runes, scopes, push);
   componentWarnings(ast, runes, options.customElement ?? false, push);
-  jsWarnings(ast, options.source, runes, push);
+  jsWarnings(
+    ast,
+    options.source,
+    {
+      runes,
+      customElement:
+        (options.customElement ?? false) ||
+        ast.options?.customElement !== undefined,
+      scopes,
+    },
+    push,
+  );
   return warnings;
 }

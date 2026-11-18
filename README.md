@@ -37,7 +37,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
 | [`analyzeScopes`](#analyzescopesast-options--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
 | [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `sveast/a11y` |
-| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: unused CSS selectors, empty blocks, attribute and naming mistakes, bidirectional text, nested classes, and runes-mode deprecations | `sveast/warnings` |
+| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: unused CSS selectors, empty blocks, attribute and naming mistakes, bidirectional text, nested classes, state read outside a closure, unused props, and runes-mode deprecations | `sveast/warnings` |
 | [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
@@ -492,6 +492,14 @@ From `sveast/warnings`. The warnings svelte's compiler gives for a component bes
 | `bidirectional_control_characters` | A string, template or text holds a character that changes the direction of the text, such as U+202E |
 | `perf_avoid_inline_class`, `perf_avoid_nested_class` | `new class {}` outside the module script's top level, and a class declared in a function, a `$:` statement or the markup |
 | `legacy_code`, `unknown_code` | In runes mode, a `svelte-ignore` comment names a svelte 4 code, such as `a11y-autofocus`, or a code svelte doesn't have |
+| `state_referenced_locally` | In runes mode, a script reads a `$state`, `$derived` or `$props` binding in the function that declares it, so it gets only the first value. `$state` warns only if it's reassigned or holds a value svelte doesn't proxy, such as a number |
+| `non_reactive_update` | In runes mode, the markup reads a script's binding outside a function, and something reassigns it, but no rune declares it. `bind:this` counts only inside a block |
+| `store_rune_conflict` | `$state(...)` or another rune's call where a local `state` makes it a store subscription |
+| `custom_element_props_identifier` | In runes mode, a custom element without `customElement.props` takes `let props = $props()` or `...rest` |
+| `export_let_unused` | In legacy mode, nothing reads an `export let` |
+| `reactive_declaration_invalid_placement` | In legacy mode, a `$:` statement outside the instance script's top level |
+| `reactive_declaration_module_script_dependency` | In legacy mode, a `$:` statement reads a module script's binding that something reassigns |
+| `legacy_component_creation` | `new App({ target })`, where `App` is the default import of a `.svelte` file |
 
 Its options:
 
@@ -512,11 +520,11 @@ for (const warning of compilerWarnings(ast, { source, filename, runes: isRunesMo
 }
 ```
 
-svelte gives some warnings as it parses: `element_implicitly_closed` and `svelte_element_invalid_this`. `parse` records them with the AST it returns, so pass that AST: a copy, or an AST from svelte's `parse`, gets neither. svelte gives these and the `script_…` and `options_…` warnings outside its walk of the markup, so a `svelte-ignore` comment silences none of them.
+svelte gives some warnings as it parses: `element_implicitly_closed` and `svelte_element_invalid_this`. `parse` records them with the AST it returns, so pass that AST: a copy, or an AST from svelte's `parse`, gets neither. svelte gives these and the `script_…`, `options_…` and `store_rune_conflict` warnings outside its walk of the markup, so a `svelte-ignore` comment silences none of them. For `non_reactive_update` and `export_let_unused`, only a comment before the declaration counts.
 
 svelte checks every string for `bidirectional_control_characters` with one regular expression with the `g` flag. After a match, its next check starts part way into the next string, so svelte can miss one, and the miss carries over to the next component it compiles. sveast follows this within a component, but starts each component afresh, as svelte does for the first one it compiles. svelte throws on an `unknown_code` or `legacy_code` in a comment before a `<script>`; sveast gives no warning for it.
 
-It's a port of svelte 5's analysis, so it gives what svelte 5 gives. It builds scopes only for a component that needs them, and shares them between checks. On the 8,344 components of the projects below that compile and have the AST, it takes 36 ms, against 2,451 ms for `compile(source, { generate: false })`. For the warnings besides `css_unused_selector`, on the same projects, svelte's tests, carbon-components-svelte and the corpus, it gives the warnings `compile` gives for all 15,090 components both accept with their `svelte-ignore` comments removed, 602 warnings, and for all 12,119 that compile with `<svelte:options runes>` added, 1,295 warnings. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
+It's a port of svelte 5's analysis, so it gives what svelte 5 gives. It builds scopes only for a component that needs them, and shares them between checks: a check of the scripts' syntax and the markup's text first rules out most components. On the 8,834 components of the projects below that have the AST, it takes 193 ms, against 60 ms without the scope warnings. `compile(source, { generate: false })` takes 2,693 ms on the 8,735 of them it accepts. For all the warnings, on the same projects, svelte's tests and the corpus, it gives the warnings `compile` gives for all 13,097 components both accept, 1,344 warnings. For the warnings besides `css_unused_selector`, on the same projects, svelte's tests, carbon-components-svelte and the corpus, it gives the warnings `compile` gives for all 15,090 components both accept with their `svelte-ignore` comments removed, 602 warnings, and for all 12,119 that compile with `<svelte:options runes>` added, 1,295 warnings. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
 
 ### `createLocator(source) => (offset) => Position`
 
