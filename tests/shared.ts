@@ -49,7 +49,9 @@ export function* mutated(
   let seed = 1;
   const random = (n: number) => {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed % n;
+    // The low bits of this generator repeat with a short period, so
+    // `seed % n` can reach only a few values for some n. Scale instead.
+    return Math.floor((seed / 0x80000000) * n);
   };
   for (let trial = 0; trial < count; trial++) {
     const index = random(texts.length);
