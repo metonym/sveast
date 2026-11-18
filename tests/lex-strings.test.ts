@@ -41,12 +41,12 @@ b", " ", "é"];`,
     false,
   ],
   "templates with escapes and line breaks": [
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal in the lexed source
+    // eslint-disable-next-line no-template-curly-in-string -- a template literal in the lexed source
     "a = `\\u0041${b}\\`\r\nc\rd\\\r\ne`; f = String.raw`\\unicode ${g} \\x`;",
     false,
   ],
   "nested templates and objects in expressions": [
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal in the lexed source
+    // eslint-disable-next-line no-template-curly-in-string -- a template literal in the lexed source
     'a = `b${`c${{ d: "}" }.d}`}e${f({ "g": `h` })}`;',
     false,
   ],

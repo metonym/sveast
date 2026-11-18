@@ -370,9 +370,7 @@ const NAMESPACE_KINDS: ReadonlySet<BindingKind> = new Set([
 ]);
 
 type FunctionNode =
-  | ArrowFunctionExpression
-  | FunctionDeclaration
-  | FunctionExpression;
+  ArrowFunctionExpression | FunctionDeclaration | FunctionExpression;
 
 type DeclaredPattern = Pattern | TSParameterProperty;
 

@@ -351,7 +351,7 @@ async function ddmin(
         ...current.slice(start + chunkSize),
       ];
       tests++;
-      // biome-ignore lint/performance/noAwaitInLoops: each ddmin step depends on the previous trial's result.
+      // eslint-disable-next-line no-await-in-loop -- each ddmin step depends on the previous trial's result.
       if (complement.length > 0 && (await reproduces(complement))) {
         current = complement;
         n = Math.max(n - 1, 2);
@@ -404,7 +404,7 @@ async function main() {
     if (!mutation) continue;
     applied++;
 
-    // biome-ignore lint/performance/noAwaitInLoops: sequential so a hang only ties up one child
+    // eslint-disable-next-line no-await-in-loop -- sequential so a hang only ties up one child
     const result = await runTrial(mutation.source);
     if (result.ms > SLOW_MS) {
       slow++;
@@ -442,7 +442,7 @@ async function main() {
     mkdirSync(args.findingsDir, { recursive: true });
     const findingPaths: string[] = [];
     for (const finding of findings.values()) {
-      // biome-ignore lint/performance/noAwaitInLoops: sequential so minimizing doesn't multiply load
+      // eslint-disable-next-line no-await-in-loop -- sequential so minimizing doesn't multiply load
       const minimized = await minimizeFinding(finding);
       const slug = finding.signature
         .replace(/[^a-zA-Z0-9]+/g, "-")

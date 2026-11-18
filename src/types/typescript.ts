@@ -50,9 +50,7 @@ export type TSDeclaration =
 
 /** Module-level statements; in estree's `ModuleDeclaration` union. */
 export type TSModuleDeclarationStatement =
-  | TSExportAssignment
-  | TSImportEqualsDeclaration
-  | TSNamespaceExportDeclaration;
+  TSExportAssignment | TSImportEqualsDeclaration | TSNamespaceExportDeclaration;
 
 /** Expressions; in estree's `Expression` union. */
 export type TSExpression =
@@ -107,10 +105,7 @@ export type Accessibility = "public" | "private" | "protected";
 
 /** A parameter of a function type, method signature or declared function. */
 export type SignatureParameter =
-  | Identifier
-  | ObjectPattern
-  | ArrayPattern
-  | RestElement;
+  Identifier | ObjectPattern | ArrayPattern | RestElement;
 
 /** Fields the plugin adds to `Identifier`, `ObjectPattern`, `ArrayPattern` and `RestElement`. */
 export interface TSBindingFields {

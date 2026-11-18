@@ -64,14 +64,14 @@ export function openBlock(state: TemplateParserState, start: number): void {
       value: null,
       error: null,
       pending: null,
-      // biome-ignore lint/suspicious/noThenProperty: svelte's own AwaitBlock field name
+      // eslint-disable-next-line unicorn/no-thenable -- svelte's own AwaitBlock field name
       then: null,
       catch: null,
     };
     const body = fragment();
     if (state.eat("then")) {
       block.value = readAwaitBinding(state);
-      // biome-ignore lint/suspicious/noThenProperty: svelte's own AwaitBlock field name
+      // eslint-disable-next-line unicorn/no-thenable -- svelte's own AwaitBlock field name
       block.then = body;
     } else if (state.eat("catch")) {
       block.error = readAwaitBinding(state);

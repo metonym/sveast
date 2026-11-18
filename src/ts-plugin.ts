@@ -1644,7 +1644,7 @@ export const tsPlugin = definePlugin((Base) => {
       super.checkLocalExport(id);
     }
 
-    // biome-ignore lint/suspicious/noEmptyBlockStatements: TypeScript's overloads and merged declarations export a name more than once
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- TypeScript's overloads and merged declarations export a name more than once
     checkExport() {}
 
     raiseRecoverable(pos: number, message: string) {

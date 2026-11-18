@@ -22,11 +22,10 @@
     "fuzz": "bun scripts/fuzz-parser.ts",
     "typecheck": "bun check",
     "knip": "knip-bun",
-    "lint": "biome ci --error-on-warnings",
-    "lint:fix": "biome check --write --unsafe ."
+    "lint:all": "bun fmt && bun lint --fix",
+    "lint:changed": "bun fmt --staged && bun lint --staged --fix"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.3",
     "@sveltejs/acorn-typescript": "1.0.13",
     "@types/bun": "^1.4.4",
     "@types/estree": "^1.0.9",

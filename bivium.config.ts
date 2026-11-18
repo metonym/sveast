@@ -22,8 +22,8 @@ export default defineConfig({
     "tsconfig.json",
     "bunfig.toml",
   ],
-  // Lint config and benchmarks: no test runs Biome, knip or ostia.
-  ignore: ["**/*.md", "bench/**", "LICENSE", "biome.json", "knip.json"],
+  // Lint config and benchmarks: no test runs knip or ostia.
+  ignore: ["**/*.md", "bench/**", "LICENSE", "knip.json"],
   // The corpus every parity test parses, through `tests/shared.ts`'s
   // `corpusFiles` and `readCorpus`: a corpus edit selects what imports it.
   reads: {
@@ -52,5 +52,5 @@ export default defineConfig({
     "tests/is-reference.test.ts",
   ],
   // Tools CI runs on its own: a bump that only reaches them selects nothing.
-  inert: ["@biomejs/biome", "knip", "ostia", "@types/*"],
+  inert: ["knip", "ostia", "@types/*"],
 });

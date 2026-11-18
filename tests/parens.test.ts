@@ -8,8 +8,9 @@ function parenthesizedCount(root: object): number {
     if (node.type === "ParenthesizedExpression") count++;
     for (const key in node) {
       const value = node[key];
-      if (Array.isArray(value)) value.forEach(walk);
-      else if (value && typeof value === "object") walk(value);
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item);
+      } else if (value && typeof value === "object") walk(value);
     }
   })(root);
   return count;

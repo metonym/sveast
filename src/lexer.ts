@@ -584,7 +584,7 @@ class Lexer {
     if (quote !== 34 && quote !== 39) return null;
     let value = "";
     let chunk = start + 1;
-    for (let i = chunk; i < source.length; ) {
+    for (let i = chunk; i < source.length;) {
       const code = source.charCodeAt(i);
       if (code === quote) {
         this.advance(i + 1 - start);
@@ -607,7 +607,7 @@ class Lexer {
     const source = this.source;
     let value = "";
     let chunk = from;
-    for (let i = from; i < to; ) {
+    for (let i = from; i < to;) {
       const code = source.charCodeAt(i);
       if (code === 92) {
         const escaped = this.escape(i + 1);

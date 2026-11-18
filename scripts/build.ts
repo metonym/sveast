@@ -72,12 +72,12 @@ async function slimPackageManifest() {
 
   pkg.main = pkg.main.replace(DIST_PREFIX, "./");
   pkg.types = pkg.types.replace(DIST_PREFIX, "./");
-  const exports: Record<string, Json> = {
+  const subpathExports: Record<string, Json> = {
     ".": { types: pkg.types, import: pkg.main, default: pkg.main },
   };
   for (const subpath of SUBPATHS) {
     const js = `./${subpath}.js`;
-    exports[`./${subpath}`] = {
+    subpathExports[`./${subpath}`] = {
       types: `./${subpath}.d.ts`,
       import: js,
       default: js,
@@ -87,7 +87,7 @@ async function slimPackageManifest() {
   const ordered: Record<string, Json> = {};
   for (const [key, value] of Object.entries(pkg)) {
     ordered[key] = value;
-    if (key === "types") ordered.exports = exports;
+    if (key === "types") ordered.exports = subpathExports;
   }
 
   await writeFile(manifestPath, `${JSON.stringify(ordered, null, 2)}\n`);

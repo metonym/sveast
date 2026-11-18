@@ -87,7 +87,7 @@ function scanAtom(
     name,
   };
 
-  for (let index = identifierEnd; ; ) {
+  for (let index = identifierEnd; ;) {
     const next = source.charCodeAt(index);
     if (next === 40) {
       const call = scanArguments(source, index + 1, typescript);

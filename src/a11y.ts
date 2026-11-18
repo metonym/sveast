@@ -692,7 +692,7 @@ function checkElement(node: Element, path: readonly Node[], warn: Warn): void {
         );
       }
       if (node.name === "button") break;
-      const href = attributeMap.get("href") || attributeMap.get("xlink:href");
+      const href = attributeMap.get("href") ?? attributeMap.get("xlink:href");
       if (href) {
         const hrefValue = staticTextValue(href);
         if (

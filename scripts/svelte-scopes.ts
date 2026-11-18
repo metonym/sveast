@@ -95,8 +95,7 @@ function svelteResolutions(source: string): Map<string, number | null> {
     } else if (typeof value === "object" && value !== null) {
       const node = value as Record<string, unknown>;
       const metadata = node.metadata as
-        | { scopes?: Record<string, SvelteScope> }
-        | undefined;
+        { scopes?: Record<string, SvelteScope> } | undefined;
       for (const scope of Object.values(metadata?.scopes ?? {})) {
         scopes.add(scope);
       }

@@ -341,9 +341,7 @@ function declaredIn(
 }
 
 type FunctionNode =
-  | ArrowFunctionExpression
-  | FunctionDeclaration
-  | FunctionExpression;
+  ArrowFunctionExpression | FunctionDeclaration | FunctionExpression;
 
 function isFunction(node: AST.SvelteNode): node is FunctionNode {
   return (
