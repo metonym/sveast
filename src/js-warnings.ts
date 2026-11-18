@@ -7,10 +7,27 @@
 // as it reads it. svelte is MIT licensed.
 
 import { fuzzymatch } from "./a11y-fuzzymatch";
+import { extractIdentifiers } from "./extract-identifiers";
 import { isTypeScript } from "./markup";
 import { fieldsOf, isNode } from "./nodes";
+import type { Scopes } from "./scope";
+import {
+  mayHaveScopeWarnings,
+  needsMarkupWalk,
+  needsScriptWalk,
+  nonReactiveUpdates,
+  type RuneKind,
+  ScopeFacts,
+  storeRuneConflicts,
+  unusedExports,
+} from "./scope-warnings";
 import { ignoreCodes, isSvelteCode, renamedCode } from "./svelte-ignore";
 import { slotOf } from "./template-warnings";
+import type {
+  ExpressionStatement,
+  Identifier,
+  VariableDeclarator,
+} from "./types/estree";
 import type { AST } from "./types/svelte-ast";
 import { type VisitorKeys, valueVisitorKeys } from "./walk";
 import { SVELTE_CODES } from "./warning-codes";
@@ -65,6 +82,22 @@ const TYPE_WRAPPERS: Readonly<Record<string, string>> = {
   TSInstantiationExpression: "expression",
   TSParameterProperty: "parameter",
 };
+// The kind each rune gives the bindings it declares, at first.
+const RUNE_KINDS: Readonly<Record<string, RuneKind>> = {
+  $state: "state",
+  "$state.raw": "raw_state",
+  $derived: "derived",
+  "$derived.by": "derived",
+  $props: "prop",
+};
+// The blocks whose fragments are scopes of their own.
+const BLOCKS = new Set([
+  "IfBlock",
+  "EachBlock",
+  "AwaitBlock",
+  "KeyBlock",
+  "SnippetBlock",
+]);
 const FUNCTIONS = new Set([
   "FunctionDeclaration",
   "FunctionExpression",
@@ -154,22 +187,51 @@ interface JsComment {
   start?: number;
 }
 
+export interface JsWarningsOptions {
+  runes: boolean;
+  /** Whether the component compiles as a custom element. */
+  customElement: boolean;
+  scopes: () => Scopes;
+}
+
 export function jsWarnings(
   ast: AST.Root,
   source: string,
-  runes: boolean,
+  options: JsWarningsOptions,
   warn: Warn,
 ): void {
-  // Each warning needs a bidirectional control character, a class or, in
-  // runes mode, a `svelte-ignore` comment; most components have none.
-  if (
-    !(runes && source.includes("svelte-ignore")) &&
-    !mayHaveBidi(source) &&
-    !mayHaveClass(source)
-  ) {
-    return;
+  const { runes } = options;
+  const customElementProps =
+    options.customElement && ast.options?.customElement?.props == null;
+  const facts = mayHaveScopeWarnings(ast, source, runes, customElementProps)
+    ? new ScopeFacts(options.scopes())
+    : null;
+  // Each other warning needs a bidirectional control character, a class
+  // or, in runes mode, a `svelte-ignore` comment; most components have
+  // none.
+  const others =
+    (runes && source.includes("svelte-ignore")) ||
+    mayHaveBidi(source) ||
+    mayHaveClass(source);
+  if (facts === null && !others) return;
+  // svelte gives store_rune_conflict before its walk.
+  if (facts !== null) storeRuneConflicts(facts, warn);
+  const scriptFacts =
+    facts !== null &&
+    needsScriptWalk(ast, source, runes, facts, customElementProps);
+  const markupFacts = facts !== null && needsMarkupWalk(source, runes);
+  if (others || scriptFacts || markupFacts) {
+    const walker = new Walker(runes, isTypeScript(source), warn, facts);
+    walker.customElementProps = customElementProps;
+    walker.run(ast, others, scriptFacts, markupFacts);
   }
-  new Walker(runes, isTypeScript(source), warn).run(ast);
+  if (facts === null) return;
+  if (runes) {
+    facts.exportedNames(ast);
+    nonReactiveUpdates(ast, facts, warn);
+  } else {
+    unusedExports(ast, facts, warn);
+  }
 }
 
 class Walker {
@@ -181,20 +243,52 @@ class Walker {
   // svelte strips TypeScript only from a `lang="ts"` component.
   private readonly typescript: boolean;
   private readonly report: Warn;
+  // What the scope warnings need, when the component may have one.
+  private facts: ScopeFacts | null;
+  /** Whether a `$props()` declaration warns: a custom element without `customElement.props`. */
+  customElementProps = false;
+  // svelte's `state.function_depth`.
+  private functionDepth = 0;
+  // The nodes from the walk's root to the one it visits, with
+  // TypeScript's wrappers left out.
+  private readonly path: Node[] = [];
+  // Whether the walk is in the first pass of a top-level `$:`.
+  private reactive = false;
 
-  constructor(runes: boolean, typescript: boolean, report: Warn) {
+  constructor(
+    runes: boolean,
+    typescript: boolean,
+    report: Warn,
+    facts: ScopeFacts | null,
+  ) {
     this.runes = runes;
     this.typescript = typescript;
     this.report = report;
+    this.facts = facts;
   }
 
-  run(ast: AST.Root): void {
+  /**
+   * `others`: whether a warning that isn't a scope warning may come.
+   * `scriptFacts` and `markupFacts`: whether a scope warning may come
+   * from the walk of the scripts or of the markup.
+   */
+  run(
+    ast: AST.Root,
+    others: boolean,
+    scriptFacts: boolean,
+    markupFacts: boolean,
+  ): void {
     BIDI.lastIndex = 0;
+    const facts = this.facts;
     // svelte walks the module, the instance and the markup, with the
     // scopes' depths: the module's is 0, each one inside is 1 more.
-    if (ast.module) this.walk("module", 0, ast.module.content);
-    if (ast.instance) this.walk("instance", 1, ast.instance.content);
-    this.walk("template", 2, ast.fragment);
+    this.facts = scriptFacts ? facts : null;
+    if (others || scriptFacts) {
+      if (ast.module) this.walk("module", 0, ast.module.content);
+      if (ast.instance) this.walk("instance", 1, ast.instance.content);
+    }
+    this.facts = markupFacts ? facts : null;
+    if (others || markupFacts) this.walk("template", 2, ast.fragment);
     // svelte reads the comment before `<style>` after its walk, from the
     // comment's start rather than its text's.
     const comment = ast.css?.content.comment;
@@ -204,6 +298,7 @@ class Walker {
   private walk(section: Section, depth: number, node: Node): void {
     this.section = section;
     this.depth = depth;
+    this.functionDepth = depth;
     this.visit(node, null, null, -1, NO_IGNORES);
   }
 
@@ -301,7 +396,35 @@ class Walker {
     }
     const ignores =
       codes.length > 0 ? new Set([...ignored, ...codes]) : ignored;
+    this.path.push(node);
     this.visitNode(node, parent, siblings, ignores);
+    this.path.pop();
+  }
+
+  /** `node` without TypeScript's wrappers, as svelte sees it. */
+  private unwrap(node: Node): Node {
+    if (!this.typescript) return node;
+    let inner = node;
+    let wrapped = TYPE_WRAPPERS[inner.type];
+    while (wrapped !== undefined) {
+      inner = fieldsOf(inner)[wrapped] as Node;
+      wrapped = TYPE_WRAPPERS[inner.type];
+    }
+    return inner;
+  }
+
+  /** Visits `node`'s children with `functionDepth` one more. */
+  private deeper(node: Node, ignores: ReadonlySet<string>): void {
+    this.functionDepth++;
+    this.children(node, ignores);
+    this.functionDepth--;
+  }
+
+  /** Visits `node`'s children in a scope of its own. */
+  private scoped(node: Node, ignores: ReadonlySet<string>): void {
+    this.depth++;
+    this.children(node, ignores);
+    this.depth--;
   }
 
   private visitNode(
@@ -335,10 +458,51 @@ class Walker {
         this.text(node, siblings, ignores);
         return;
       case "Identifier":
-      case "ImportDeclaration":
+        if (this.facts !== null) this.identifier(node, parent, ignores);
+        return;
       case "ExportSpecifier":
+        // In runes mode, `export { x }` in the instance makes `x` reassigned.
+        if (
+          this.facts !== null &&
+          this.runes &&
+          this.section === "instance" &&
+          node.local.type === "Identifier"
+        ) {
+          const binding = this.facts.scopes.instance.get(node.local.name);
+          if (binding !== null) this.facts.exported.add(binding);
+        }
+        return;
+      case "ImportDeclaration":
       case "LetDirective":
         return;
+      case "VariableDeclarator":
+        if (this.facts !== null && this.runes) {
+          this.declarator(node, ignores);
+          return;
+        }
+        break;
+      case "CallExpression":
+        if (this.facts !== null && this.runes) {
+          const rune = this.facts.rune(node);
+          // svelte reads `$derived(x)` and `$inspect(x)` as in a function.
+          if (rune === "$derived" || rune === "$inspect") {
+            this.deeper(node, ignores);
+            return;
+          }
+        }
+        break;
+      case "ExpressionStatement":
+        if (this.facts !== null) this.componentCreation(node, ignores);
+        break;
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+      case "ArrowFunctionExpression": {
+        const outer = this.functionDepth;
+        this.functionDepth = Math.max(this.depth, outer) + 1;
+        this.children(node, ignores);
+        this.functionDepth = outer;
+        return;
+      }
       case "ClassDeclaration":
         if (this.depth > (this.section === "module" ? 0 : 1)) {
           this.warn(
@@ -369,28 +533,54 @@ class Walker {
         }
         break;
       case "LabeledStatement":
-        // svelte walks a `$:` statement twice, in a scope of its own.
-        if (
-          node.label.name === "$" &&
-          this.section === "instance" &&
-          parent?.type === "Program"
-        ) {
+        if (node.label.name !== "$") break;
+        // svelte walks a `$:` statement twice, in a scope of its own, and
+        // finds its dependencies in the first walk.
+        if (this.section === "instance" && parent?.type === "Program") {
           this.depth++;
+          const outer = this.functionDepth;
+          this.functionDepth = this.depth;
+          this.reactive = true;
           this.children(node, ignores);
+          this.reactive = false;
+          this.functionDepth = outer;
           this.children(node, ignores);
           this.depth--;
           return;
         }
+        if (this.facts !== null && !this.runes) {
+          this.warn(
+            ignores,
+            node,
+            "reactive_declaration_invalid_placement",
+            "Reactive declarations only exist at the top level of the instance script",
+          );
+        }
         break;
       case "Fragment":
+        // A block's fragment and the markup are scopes of their own; an
+        // element's isn't.
+        if (parent === null || BLOCKS.has(parent.type)) {
+          this.depth++;
+          this.fragment(node.nodes, ignores);
+          this.depth--;
+          return;
+        }
         this.fragment(node.nodes, ignores);
         return;
       case "RegularElement":
         if (node.name === "textarea") {
+          this.depth++;
           this.textarea(node, ignores);
+          this.depth--;
           return;
         }
-        break;
+        this.scoped(node, ignores);
+        return;
+      case "SlotElement":
+      case "SvelteFragment":
+        this.scoped(node, ignores);
+        return;
       case "IfBlock":
         this.child(node.test, node, ignores);
         this.child(node.consequent, node, ignores);
@@ -398,8 +588,10 @@ class Walker {
         return;
       case "EachBlock":
         this.child(node.expression, node, ignores);
-        this.child(node.body, node, ignores);
+        this.depth++;
+        this.fragment(node.body.nodes, ignores);
         this.child(node.key, node, ignores);
+        this.depth--;
         this.child(node.fallback, node, ignores);
         return;
       case "AwaitBlock":
@@ -412,15 +604,24 @@ class Walker {
         this.child(node.expression, node, ignores);
         this.child(node.fragment, node, ignores);
         return;
+      case "SnippetBlock":
+        this.scoped(node, ignores);
+        return;
       case "ConstTag": {
         const [declarator] = node.declaration.declarations;
         this.child(declarator.id, node, ignores);
+        this.functionDepth++;
         this.child(declarator.init, node, ignores);
+        this.functionDepth--;
         return;
       }
-      case "DeclarationTag":
+      case "DeclarationTag": {
+        const outer = this.functionDepth;
+        this.functionDepth = this.depth;
         this.child(node.declaration, node, ignores);
+        this.functionDepth = outer;
         return;
+      }
       case "RenderTag": {
         const call =
           node.expression.type === "ChainExpression"
@@ -434,10 +635,12 @@ class Walker {
       }
       case "SvelteElement":
         this.child(node.tag, node, ignores);
+        this.depth++;
         for (const attribute of node.attributes) {
           this.child(attribute, node, ignores);
         }
         this.child(node.fragment, node, ignores);
+        this.depth--;
         return;
       case "SvelteComponent":
         this.child(node.expression, node, ignores);
@@ -509,7 +712,218 @@ class Walker {
       else nodes.push(...comments, child);
       if (slot !== "default") comments = [];
     }
-    for (const nodes of slots.values()) this.fragment(nodes, ignores);
+    // Each slot is a scope of its own, but the default one of a
+    // component that's itself in a slot.
+    const inSlot = slotOf(node) !== null;
+    for (const [slot, nodes] of slots) {
+      const scoped = slot !== "default" || !inSlot;
+      if (scoped) this.depth++;
+      this.fragment(nodes, ignores);
+      if (scoped) this.depth--;
+    }
+  }
+
+  /**
+   * svelte's `Identifier` visitor: state_referenced_locally in runes
+   * mode, reactive_declaration_module_script_dependency in legacy mode.
+   */
+  private identifier(
+    node: Identifier,
+    parent: Node | null,
+    ignores: ReadonlySet<string>,
+  ): void {
+    const facts = this.facts as ScopeFacts;
+    facts.ignores.set(node, ignores);
+    // Its reference, if it's one: the scopes see past TypeScript's wrappers.
+    const binding = facts.referenced(node);
+    if (binding === null || binding.node === node) return;
+    if (this.runes) {
+      const kind = facts.kinds.get(binding);
+      if (
+        kind === undefined ||
+        kind === "bindable_prop" ||
+        (kind === "state" && !facts.stateIsStatic(binding)) ||
+        facts.depths.get(binding) !== this.functionDepth ||
+        (parent?.type === "AssignmentExpression" &&
+          this.unwrap(parent.left) === node) ||
+        parent?.type === "UpdateExpression"
+      ) {
+        return;
+      }
+      this.warn(
+        ignores,
+        node,
+        "state_referenced_locally",
+        `This reference only captures the initial value of \`${node.name}\`. Did you mean to reference it inside a ${this.capture()} instead?`,
+      );
+    } else if (
+      this.reactive &&
+      binding.scope === facts.scopes.module &&
+      facts.reassigned(binding)
+    ) {
+      this.warn(
+        ignores,
+        node,
+        "reactive_declaration_module_script_dependency",
+        "Reassignments of module-level declarations will not cause reactive statements to update",
+      );
+    }
+  }
+
+  /**
+   * What would keep the reference up to date: `$derived` around
+   * `$state(f(x))`. svelte doesn't look at the identifier itself, so
+   * `$state(x)` gives `closure`.
+   */
+  private capture(): string {
+    const facts = this.facts as ScopeFacts;
+    for (let i = this.path.length - 2; i >= 0; i--) {
+      const node = this.path[i];
+      if (FUNCTIONS.has(node.type)) break;
+      if (node.type === "CallExpression" && i < this.path.length - 2) {
+        const child = this.path[i + 1];
+        if (!node.arguments.some((arg) => this.unwrap(arg) === child)) continue;
+        const rune = facts.rune(node);
+        if (rune === "$state" || rune === "$state.raw") return "derived";
+      }
+    }
+    return "closure";
+  }
+
+  /** svelte's `VariableDeclarator` visitor in runes mode. */
+  private declarator(
+    node: VariableDeclarator,
+    ignores: ReadonlySet<string>,
+  ): void {
+    const facts = this.facts as ScopeFacts;
+    const rune = facts.rune(node.init);
+    if (
+      rune === "$state" ||
+      rune === "$state.raw" ||
+      rune === "$derived" ||
+      rune === "$derived.by" ||
+      rune === "$props"
+    ) {
+      const kind = RUNE_KINDS[rune];
+      for (const id of extractIdentifiers(node.id)) {
+        const binding = facts.scopes.bindingOf(id);
+        if (binding === null) continue;
+        facts.kinds.set(binding, kind);
+        facts.depths.set(binding, this.depth);
+      }
+    }
+    if (rune === "$props") {
+      this.props(node.id, ignores);
+      // svelte reads a prop's fallback as in a function.
+      this.functionDepth++;
+      this.child(node.id, node, ignores);
+      this.functionDepth--;
+      this.child(node.init, node, ignores);
+      return;
+    }
+    this.children(node, ignores);
+  }
+
+  /** The kinds and first values of `$props()`'s bindings, and custom_element_props_identifier. */
+  private props(
+    id: VariableDeclarator["id"],
+    ignores: ReadonlySet<string>,
+  ): void {
+    const facts = this.facts as ScopeFacts;
+    let rest: Span | null = null;
+    if (id.type === "Identifier") {
+      const binding = facts.scopes.bindingOf(id);
+      if (binding !== null) {
+        facts.kinds.set(binding, "rest_prop");
+        facts.initials.set(binding, null);
+      }
+      rest = id;
+    } else if (id.type === "ObjectPattern") {
+      for (const property of id.properties) {
+        if (property.type === "RestElement") {
+          rest ??= property;
+          for (const name of extractIdentifiers(property.argument)) {
+            const binding = facts.scopes.bindingOf(name);
+            if (binding !== null) facts.kinds.set(binding, "rest_prop");
+          }
+          continue;
+        }
+        const value =
+          property.value.type === "AssignmentPattern"
+            ? property.value.left
+            : property.value;
+        if (value.type !== "Identifier") continue;
+        const binding = facts.scopes.bindingOf(value);
+        if (binding === null) continue;
+        const initial =
+          property.value.type === "AssignmentPattern"
+            ? property.value.right
+            : null;
+        if (
+          initial?.type === "CallExpression" &&
+          initial.callee.type === "Identifier" &&
+          initial.callee.name === "$bindable"
+        ) {
+          const [first] = initial.arguments;
+          facts.initials.set(binding, first ?? null);
+          facts.kinds.set(binding, "bindable_prop");
+        } else {
+          facts.initials.set(binding, initial);
+        }
+      }
+    }
+    if (this.customElementProps && rest !== null) {
+      this.warn(
+        ignores,
+        rest,
+        "custom_element_props_identifier",
+        "Using a rest element or a non-destructured declaration with `$props()` means that Svelte can't infer what properties to expose when creating a custom element. Consider destructuring all the props or explicitly specifying the `customElement.props` option.",
+      );
+    }
+  }
+
+  /** legacy_component_creation: `new App({ target })` of a `.svelte` file's default export. */
+  private componentCreation(
+    node: ExpressionStatement,
+    ignores: ReadonlySet<string>,
+  ): void {
+    const expression = this.unwrap(node.expression);
+    if (expression.type !== "NewExpression") return;
+    const callee = this.unwrap(expression.callee);
+    if (callee.type !== "Identifier" || expression.arguments.length !== 1) {
+      return;
+    }
+    const [argument] = expression.arguments;
+    const options = this.unwrap(argument);
+    if (
+      options.type !== "ObjectExpression" ||
+      !options.properties.some(
+        (p) =>
+          p.type === "Property" &&
+          p.key.type === "Identifier" &&
+          p.key.name === "target",
+      )
+    ) {
+      return;
+    }
+    const binding = (this.facts as ScopeFacts).referenced(callee);
+    const declaration = binding?.initial;
+    if (
+      binding?.kind === "import" &&
+      declaration?.type === "ImportDeclaration" &&
+      String(declaration.source.value).endsWith(".svelte") &&
+      declaration.specifiers.some(
+        (s) =>
+          s.type === "ImportDefaultSpecifier" && s.local.name === binding.name,
+      )
+    ) {
+      this.warn(
+        ignores,
+        expression,
+        "legacy_component_creation",
+        "Svelte 5 components are no longer classes. Instantiate them using `mount` or `hydrate` (imported from 'svelte') instead.",
+      );
+    }
   }
 
   /**

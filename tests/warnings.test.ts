@@ -282,6 +282,161 @@ for (const [name, source] of Object.entries(COMPONENT_CASES)) {
   });
 }
 
+const SCOPE_CASES: Record<string, string> = {
+  "state_referenced_locally on state, derived and props": `<script>
+	let count = $state(0); count = 1;
+	let raw = $state.raw([]);
+	let doubled = $derived(count * 2);
+	let { size = 'md', ...rest } = $props();
+	console.log(count, raw, doubled, size, rest);
+	let tripled = $state(count * 3);
+	let copy = $state(size);
+	const read = () => count;
+</script>`,
+  "state_referenced_locally skips proxied state, writes and fallbacks": `<script>
+	let obj = $state({ a: 1 });
+	let list = $state([]);
+	let { a, b = a } = $props();
+	let other = $derived(a);
+	console.log(obj, list);
+	obj.a++;
+	a = 2;
+</script>`,
+  "state_referenced_locally with export, casts and $inspect": `<script lang="ts">
+	let count = $state(0);
+	let el = $state() as HTMLElement;
+	console.log(count, el, (count as number) + 1);
+	$inspect(count);
+	export { count };
+</script>`,
+  "state_referenced_locally in a {let} tag": `${RUNES}{let b = $state(1)}{let c = b}<div>{let d = b}</div>{#if r}{let e = $state(2)}{let f = e}{e}{/if}`,
+  "state_referenced_locally ignored": `<script>
+	let count = $state(0); count = 1;
+	// svelte-ignore state_referenced_locally
+	console.log(count);
+	console.log(count);
+</script>`,
+  "non_reactive_update in the markup": `<script>
+	let a = 1; let b = 2; let c = 3; let d; let e; let f = 4;
+	let s = $state(0);
+	function set() { a = 5; b = 6; c = 7; d = 8; f = 9; }
+</script>
+<p>{a}</p><button onclick={() => b}>x</button>
+<input bind:value={c} /><div bind:this={d}></div>{#if a}<div bind:this={e}></div>{/if}
+<p style:color={f}></p>`,
+  "non_reactive_update from the module script, var twice, and ignored": `<script module>
+	let m = 1;
+	export function bump() { m++; }
+</script>
+<script>
+	var v = 1; var v = 2;
+	// svelte-ignore non_reactive_update
+	let quiet = 1;
+	const later = () => { v = 3; quiet = 4; };
+	import Imported from './Child.svelte';
+	let { p } = $props();
+	let s = $state(0);
+	s = 1;
+</script>
+{m}{v}{quiet}{s}<Imported />`,
+  "export_let_unused in legacy mode": `<script>
+	export let used;
+	export let unused;
+	export let a, b = 1;
+	export var c;
+	let d; let e;
+	export { d, e as f };
+	export const g = 1;
+	let store;
+	export let sub;
+	// svelte-ignore export_let_unused
+	export let quiet;
+</script>
+{used}{a}{$sub}`,
+  "export_let_unused skips $props() in legacy mode":
+    "<script>let { a } = $props(); export { a };</script>",
+  "store_rune_conflict, which svelte-ignore can't silence": `<script>
+	import { state } from './stores';
+	let derived = 1;
+	// svelte-ignore store_rune_conflict
+	const a = $state(0);
+	const b = $derived(1);
+	const c = foo($state);
+</script>`,
+  "store_rune_conflict on a prop named like a rune":
+    "<script>let { state } = $props(); const a = $state(0);</script>",
+  reactive_declaration_invalid_placement: `<script context="module">
+	$: a = 1;
+</script>
+<script>
+	export let x;
+	function f() { $: b = 2; }
+	$: if (x) { const g = () => { $: c = 3; }; }
+	// svelte-ignore reactive_declaration_invalid_placement
+	{ $: d = 4; }
+</script>
+<button on:click={() => { $: e = 5; }}>x</button>`,
+  reactive_declaration_module_script_dependency: `<script context="module">
+	let count = 0;
+	let fixed = 0;
+	export function inc() { count += 1; }
+</script>
+<script>
+	$: doubled = count * 2;
+	$: same = fixed * 2;
+	$: { const f = () => count; }
+	// svelte-ignore reactive_declaration_module_script_dependency
+	$: quiet = count;
+	console.log(count);
+</script>`,
+  custom_element_props_identifier: `<svelte:options customElement="x-a" />
+<script>
+	let props = $props();
+</script>`,
+  "custom_element_props_identifier on a rest element": `<svelte:options customElement="x-a" />
+<script>
+	let { a, ...rest } = $props();
+</script>`,
+  "custom_element_props_identifier with customElement.props": `<svelte:options customElement={{ tag: "x-a", props: { a: {} } }} />
+<script>
+	let props = $props();
+</script>`,
+  legacy_component_creation: `<script lang="ts">
+	import App, { Named } from './App.svelte';
+	import Other from './other.js';
+	new App({ target: document.body });
+	new App({ target: null } as any);
+	new App({});
+	new Named({ target: document.body });
+	new Other({ target: document.body });
+	// svelte-ignore legacy_component_creation
+	new App({ target: document.body });
+	const app = new App({ target: document.body });
+</script>`,
+};
+
+let scopeWarned = 0;
+for (const [name, source] of Object.entries(SCOPE_CASES)) {
+  test(name, () => {
+    const expected = svelteWarnings(source);
+    expect(expected).toBeDefined();
+    scopeWarned += expected?.length ?? 0;
+    expect(sveastWarnings(source)).toEqual(expected as string[]);
+  });
+}
+
+test("the scope cases warn", () => {
+  expect(scopeWarned).toBeGreaterThan(30);
+});
+
+test("custom_element_props_identifier with the customElement option", () => {
+  const source = "<script>let props = $props();</script>";
+  const options = { customElement: true };
+  const expected = svelteWarnings(source, options);
+  expect(expected).toHaveLength(1);
+  expect(sveastWarnings(source, options)).toEqual(expected as string[]);
+});
+
 test("options_missing_custom_element with the customElement option", () => {
   const source = '<svelte:options customElement="my-el" />';
   const options = { customElement: true };

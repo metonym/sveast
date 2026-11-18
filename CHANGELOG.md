@@ -20,6 +20,16 @@
   copies with classes, bidirectional characters and ignore comments
   added. In legacy mode, `<!-- svelte-ignore empty-block -->` now
   silences `block_empty`, as in svelte.
+- `compilerWarnings` gives svelte's last 8 warnings (#52), so a
+  linter no longer needs `compile` for any of them:
+  `store_rune_conflict`, `legacy_component_creation`, in runes mode
+  `state_referenced_locally`, `non_reactive_update` and
+  `custom_element_props_identifier`, and in legacy mode
+  `export_let_unused`, `reactive_declaration_invalid_placement` and
+  `reactive_declaration_module_script_dependency`. It matches
+  `compile` on 13,097 components. With them, it takes 193 ms on
+  8,834 components from real projects, against about 2,700 ms for
+  `compile(source, { generate: false })`.
 
 ## 0.10.0 — 2026-11-17
 

@@ -592,6 +592,22 @@ class Analysis implements Scopes {
     return names;
   }
 
+  /**
+   * Every reference, values and types. Internal: for `sveast/warnings`,
+   * which casts to it.
+   */
+  allReferences(): Iterable<Reference> {
+    return this.references.values();
+  }
+
+  /**
+   * Every declaring identifier, with its binding. Internal: for
+   * `sveast/warnings`, which casts to it.
+   */
+  allDeclared(): Iterable<[Identifier, Binding]> {
+    return this.declared.entries();
+  }
+
   private child(
     scope: ScopeNode,
     node: AST.SvelteNode,
