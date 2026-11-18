@@ -6,7 +6,10 @@ import type { TemplateParserState } from "./state";
 import type { AssignmentExpression, Pattern } from "./types/estree";
 import type { TSTypeAnnotation, TypeNode } from "./types/typescript";
 
-const REGEX_OPTIONAL_PARAM_COLON = /\?\s*:/g;
+// acorn reads the parameters after an annotation as a sequence expression
+// and fails on an optional one (`b?: U`). Blanking the `?` keeps the
+// length, so positions in the synthetic source still match the template.
+const REGEX_OPTIONAL_MARK = /\?(?=\s*:)/g;
 
 export function readPattern(state: TemplateParserState): Pattern {
   const start = state.index;
@@ -59,7 +62,7 @@ function readTypeAnnotation(
   const synthetic =
     state.source.slice(0, a) +
     insert +
-    state.source.slice(state.index).replace(REGEX_OPTIONAL_PARAM_COLON, ":");
+    state.source.slice(state.index).replace(REGEX_OPTIONAL_MARK, " ");
 
   let expression = parseExpressionAt(state, synthetic, a).node;
   if (expression.type === "AssignmentExpression") {
