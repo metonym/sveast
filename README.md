@@ -37,7 +37,7 @@ ast.fragment.nodes; // [Text, RegularElement]
 | [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
 | [`analyzeScopes`](#analyzescopesast-options--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
 | [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `sveast/a11y` |
-| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: unused CSS selectors, empty blocks, attribute and naming mistakes, and runes-mode deprecations | `sveast/warnings` |
+| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: unused CSS selectors, empty blocks, attribute and naming mistakes, bidirectional text, nested classes, and runes-mode deprecations | `sveast/warnings` |
 | [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
 
 ## Migrating from svelte/compiler
@@ -489,6 +489,9 @@ From `sveast/warnings`. The warnings svelte's compiler gives for a component bes
 | `script_context_deprecated` | In runes mode, `<script context="module">` |
 | `options_deprecated_accessors`, `options_deprecated_immutable` | In runes mode, `accessors` and `immutable` in `<svelte:options>` |
 | `options_missing_custom_element` | `customElement` in `<svelte:options>` without the `customElement` option |
+| `bidirectional_control_characters` | A string, template or text holds a character that changes the direction of the text, such as U+202E |
+| `perf_avoid_inline_class`, `perf_avoid_nested_class` | `new class {}` outside the module script's top level, and a class declared in a function, a `$:` statement or the markup |
+| `legacy_code`, `unknown_code` | In runes mode, a `svelte-ignore` comment names a svelte 4 code, such as `a11y-autofocus`, or a code svelte doesn't have |
 
 Its options:
 
@@ -510,6 +513,8 @@ for (const warning of compilerWarnings(ast, { source, filename, runes: isRunesMo
 ```
 
 svelte gives some warnings as it parses: `element_implicitly_closed` and `svelte_element_invalid_this`. `parse` records them with the AST it returns, so pass that AST: a copy, or an AST from svelte's `parse`, gets neither. svelte gives these and the `script_…` and `options_…` warnings outside its walk of the markup, so a `svelte-ignore` comment silences none of them.
+
+svelte checks every string for `bidirectional_control_characters` with one regular expression with the `g` flag. After a match, its next check starts part way into the next string, so svelte can miss one, and the miss carries over to the next component it compiles. sveast follows this within a component, but starts each component afresh, as svelte does for the first one it compiles. svelte throws on an `unknown_code` or `legacy_code` in a comment before a `<script>`; sveast gives no warning for it.
 
 It's a port of svelte 5's analysis, so it gives what svelte 5 gives. It builds scopes only for a component that needs them, and shares them between checks. On the 8,344 components of the projects below that compile and have the AST, it takes 36 ms, against 2,451 ms for `compile(source, { generate: false })`. For the warnings besides `css_unused_selector`, on the same projects, svelte's tests, carbon-components-svelte and the corpus, it gives the warnings `compile` gives for all 15,090 components both accept with their `svelte-ignore` comments removed, 602 warnings, and for all 12,119 that compile with `<svelte:options runes>` added, 1,295 warnings. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
 

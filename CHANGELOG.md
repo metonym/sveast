@@ -13,6 +13,13 @@
   as it parses with the AST it returns. It matches `compile` on 13,503
   components, with and without their `svelte-ignore` comments, and on
   11,269 forced into runes mode.
+- `compilerWarnings` gives 5 more of svelte's warnings (#52):
+  `bidirectional_control_characters`, `perf_avoid_inline_class`,
+  `perf_avoid_nested_class`, and in runes mode `legacy_code` and
+  `unknown_code`. It matches `compile` on 14,209 components, and on
+  copies with classes, bidirectional characters and ignore comments
+  added. In legacy mode, `<!-- svelte-ignore empty-block -->` now
+  silences `block_empty`, as in svelte.
 
 ## 0.10.0 — 2026-11-17
 

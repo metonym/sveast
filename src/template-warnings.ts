@@ -313,7 +313,7 @@ class TemplateWarnings {
           inBlock = true;
           break;
         case "RegularElement": {
-          let message: string | null = null;
+          let message: string | null;
           if (pastParent) {
             ancestors.push(ancestor.name);
             message = invalidWithAncestor(node.name, ancestors);
@@ -702,7 +702,7 @@ function isCustomElement(node: AST.RegularElement): boolean {
 }
 
 /** svelte's `determine_slot`: the static `slot` attribute of an element. */
-function slotOf(node: Node): string | null {
+export function slotOf(node: Node): string | null {
   if (!ELEMENTS.has(node.type)) return null;
   for (const attribute of (node as Element).attributes) {
     if (attribute.type !== "Attribute" || attribute.name !== "slot") continue;

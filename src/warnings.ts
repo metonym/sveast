@@ -2,6 +2,7 @@
 // svelte's compiler. svelte is MIT licensed.
 import { componentWarnings } from "./component-warnings";
 import { cssUnusedSelectors } from "./css-unused";
+import { jsWarnings } from "./js-warnings";
 import { analyzeScopes, type Scopes } from "./scope";
 import { templateWarnings } from "./template-warnings";
 import type { AST } from "./types/svelte-ast";
@@ -105,5 +106,6 @@ export function compilerWarnings(
   );
   cssUnusedSelectors(ast, runes, scopes, push);
   componentWarnings(ast, runes, options.customElement ?? false, push);
+  jsWarnings(ast, options.source, runes, push);
   return warnings;
 }

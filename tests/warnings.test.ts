@@ -2,7 +2,13 @@ import { join } from "node:path";
 import { isRunesMode, parse } from "sveast";
 import { compilerWarnings } from "sveast/warnings";
 import { compile } from "svelte/compiler";
-import { attempt, SVELTE_FILES, WARNING_CODES } from "../scripts/shared";
+import {
+  attempt,
+  resetSvelteBidi,
+  SVELTE_FILES,
+  WARNING_CODES,
+} from "../scripts/shared";
+import { REPLACEMENTS, SVELTE_CODES } from "../src/warning-codes";
 import { corpusFiles, readCorpus } from "./shared";
 
 const key = (w: {
@@ -18,8 +24,9 @@ interface Options {
 }
 
 const svelteWarnings = (source: string, options: Options = {}) =>
-  attempt(() =>
-    compile(source, {
+  attempt(() => {
+    resetSvelteBidi();
+    return compile(source, {
       generate: false,
       experimental: { async: true },
       ...options,
@@ -28,8 +35,8 @@ const svelteWarnings = (source: string, options: Options = {}) =>
       .map((w) =>
         key({ ...w, start: w.start?.character, end: w.end?.character }),
       )
-      .sort((a, b) => a.localeCompare(b)),
-  );
+      .sort((a, b) => a.localeCompare(b));
+  });
 
 const sveastWarnings = (source: string, options: Options = {}) =>
   compilerWarnings(parse(source), {
@@ -217,6 +224,56 @@ const COMPONENT_CASES: Record<string, string> = {
     "<table>{#if a}<div></div><tbody></tbody>{/if}</table><tr>{#if a}<span></span>{/if}</tr><colgroup>{#if a}<col/><div></div>{/if}</colgroup>",
 };
 
+// Bidirectional control characters, built so this file has none.
+const RLO = String.fromCharCode(0x202e);
+const LRI = String.fromCharCode(0x2066);
+const BACKSLASH = "\\";
+
+const JS_CASES: Record<string, string> = {
+  "bidi in strings, templates and text": `<script>let a = "${RLO}x"; let b = \`${RLO}\${a}${LRI}\`;</script><p title="${RLO}t">a${RLO}b${LRI}c</p>{"${RLO}"}`,
+  "bidi as escapes and character references": `<script>let a = "${BACKSLASH}u202e"; let b = "${BACKSLASH}u{2066}";</script><p>&#x202e; &#8238;</p>`,
+  "bidi in a textarea": `<textarea>\n${RLO}a{b}${RLO}</textarea><textarea>\n${RLO}</textarea>`,
+  "bidi in an import isn't checked": `<script>import a from "./${RLO}.js";</script>`,
+  "bidi after an ignore comment": `<!-- svelte-ignore bidirectional_control_characters -->\n<p>${RLO}</p><!-- svelte-ignore bidirectional_control_characters -->\na${RLO}<script>// svelte-ignore bidirectional_control_characters\nlet a = "${RLO}";</script>`,
+  "the shared regex skips the string after a match": `<script>let a = "${RLO}${RLO}x"; let b = "${RLO}"; let c = "${RLO}";</script>`,
+  "classes in the module script":
+    "<script module>class A {} new class {}; const f = () => new class {}; function g() { class B {} new class {}; } const h = (x = new class {}) => x;</script>",
+  "classes in the instance script":
+    "<script>class A { m() { class B {} } } new class {}; { class C {} } $: { class D {} new class {}; }</script>",
+  "classes in the markup":
+    "{new class {}}{#if a}{(() => { class A {} })()}{/if}",
+  "a TypeScript class with comments": `<script lang="ts">// svelte-ignore perf_avoid_inline_class\nconst a = new class {} as any; export {}; type T = string;</script>`,
+  "legacy and unknown codes in runes mode": `${RUNES}<!-- svelte-ignore a11y-autofocus, nope, a11y_autofocus -->\n<p></p><!-- svelte-ignore empty-block x -->\n{#if a}{/if}`,
+  "legacy and unknown codes in a script":
+    "<script>// svelte-ignore perf-avoid-inline-class, state_referencd_locally\nlet a = $state(new class {});\n/* svelte-ignore unused-export-let */ let b = 1;</script>",
+  "an ignore of unknown_code covers the codes inside": `${RUNES}<!-- svelte-ignore unknown_code -->\n<div><!-- svelte-ignore nope -->\n<p></p></div>`,
+  "legacy and unknown codes before a style": `${RUNES}<!-- svelte-ignore nope, css-unused-selector -->\n<style>p {}</style>`,
+  "legacy and unknown codes in legacy mode":
+    "<!-- svelte-ignore nope, a11y-autofocus -->\n<p></p>",
+  "a component's default slot reads a comment once per child": `<script>import Child from './Child.svelte'; let a = $state(0);</script><Child><!-- svelte-ignore nope -->\n<p></p><b></b><div slot="x"></div><i></i></Child>`,
+};
+
+let jsWarned = 0;
+for (const [name, source] of Object.entries(JS_CASES)) {
+  test(name, () => {
+    const expected = svelteWarnings(source);
+    expect(expected).toBeDefined();
+    jsWarned += expected?.length ?? 0;
+    expect(sveastWarnings(source)).toEqual(expected as string[]);
+  });
+}
+
+test("the JavaScript cases warn", () => {
+  expect(jsWarned).toBeGreaterThan(30);
+});
+
+test("no warning for a code svelte can't place, before a script", () => {
+  // svelte throws "An impossible situation occurred" here.
+  const source = `<!-- svelte-ignore nope -->\n${RUNES}`;
+  expect(svelteWarnings(source)).toBeUndefined();
+  expect(sveastWarnings(source)).toEqual([]);
+});
+
 for (const [name, source] of Object.entries(COMPONENT_CASES)) {
   test(name, () => {
     const expected = svelteWarnings(source);
@@ -309,3 +366,21 @@ test("has no false positives or misses on fuzzed components", async () => {
   expect(out).toMatch(ALL_MATCH);
   expect(exitCode).toBe(0);
 }, 30_000);
+
+test("svelte knows every svelte-ignore code and renaming", () => {
+  // scripts/generate-warning-codes.ts writes the lists. svelte gives
+  // unknown_code for a code it doesn't know, and legacy_code with the
+  // new name for a renamed one.
+  const ignore = (codes: string[]) =>
+    `${RUNES}<!-- svelte-ignore ${codes.join(", ")} -->\n<p></p>`;
+  expect(svelteWarnings(ignore([...SVELTE_CODES]))).toEqual([]);
+  for (const [from, to] of Object.entries(REPLACEMENTS)) {
+    const [warning] = svelteWarnings(ignore([from])) ?? [];
+    // svelte renames one code to a code it doesn't have.
+    const expected = SVELTE_CODES.includes(to)
+      ? `legacy_code: \`${from}\` is no longer valid — please use \`${to}\` instead`
+      : `unknown_code: \`${from}\` is not a recognised code`;
+    expect(warning).toContain(expected);
+    expect(sveastWarnings(ignore([from]))).toEqual([warning]);
+  }
+});
