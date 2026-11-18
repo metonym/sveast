@@ -104,7 +104,7 @@ CI runs only the tests a pull request's changes can reach, planned by [bivium](h
   ```
 
   Each trial runs in its own process with a timeout and a CPU limit; keep it that way. A finding is a hang, a crash, or any difference from svelte: an AST, an error code or position, or a component only one of them accepts. It's written minimized to `.context/fuzz-findings/`, next to the original. Add it to `tests/corpus/fixtures/`, fix, repeat.
-- **The weekly canary** (`.github/workflows/svelte-canary.yml`) runs the tests and the fuzzer against `svelte@latest` and opens an issue when svelte's parser moves.
+- **The weekly canary** (`.github/workflows/svelte-canary.yml`) runs the tests and the fuzzer against `svelte@latest`, compares the parsers on that release's own parser tests, and opens an issue when svelte's parser moves.
 
 ### Large corpora
 
