@@ -24,6 +24,9 @@ export function matchBracket(
 
     if (char === "'" || char === '"' || char === "`") {
       i = matchQuote(source, i, char);
+    } else if (char === ">" && source[i - 2] === "=" && close.includes(">")) {
+      // The `>` of an arrow function type (`T extends () => void`) doesn't
+      // close a type parameter list.
     } else if (Object.hasOwn(brackets, char)) {
       stack.push(char);
     } else if (close.includes(char)) {
