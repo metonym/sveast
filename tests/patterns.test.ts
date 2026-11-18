@@ -43,7 +43,7 @@ const PATTERNS = [
   "{ get a() {} }",
   "{ a: b = (c, d) }",
   "{ a: (b = 1) }",
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal in the pattern
+  // eslint-disable-next-line no-template-curly-in-string -- a template literal in the pattern
   "[a = `x${y}`]",
   "{ \\u0061 }",
   "{ a: b?.c }",

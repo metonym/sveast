@@ -67,10 +67,7 @@ const DIRECTIVES = new Map<string, AST.Directive["type"]>([
 type ElementType = AST.ElementLike["type"];
 type Chunk = AST.Text | AST.ExpressionTag;
 type AttributeLike =
-  | AST.Attribute
-  | AST.SpreadAttribute
-  | AST.Directive
-  | AST.AttachTag;
+  AST.Attribute | AST.SpreadAttribute | AST.Directive | AST.AttachTag;
 
 const META_TAGS = new Map<string, [type: ElementType, rootOnly: boolean]>([
   ["svelte:head", ["SvelteHead", true]],

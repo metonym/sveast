@@ -2,7 +2,7 @@ import { Parser } from "acorn";
 import { isCommonType } from "./common-type";
 import { tsPlugin } from "./ts-plugin";
 
-// biome-ignore lint/suspicious/noExplicitAny: `parseWholeType` isn't in acorn's published Parser type
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- `parseWholeType` isn't in acorn's published Parser type
 const TypeParser: any = Parser.extend(tsPlugin);
 
 /**

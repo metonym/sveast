@@ -3,12 +3,7 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 export type Json =
-  | null
-  | boolean
-  | number
-  | string
-  | Json[]
-  | { [key: string]: Json };
+  null | boolean | number | string | Json[] | { [key: string]: Json };
 
 export const LOC_KEYS: ReadonlySet<string> = new Set(["loc", "name_loc"]);
 export const SVELTE_FILES = /\.svelte$/;

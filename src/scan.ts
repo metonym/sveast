@@ -127,8 +127,7 @@ function tokenize(
   exportLists: boolean,
   parseAt: ((start: number, keyword: number) => number) | undefined,
   literal:
-    | ((start: number, end: number, template: boolean) => void)
-    | undefined,
+    ((start: number, end: number, template: boolean) => void) | undefined,
   call: ((start: number, member: boolean) => void) | undefined,
 ): void {
   const stack: number[] = [];

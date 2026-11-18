@@ -214,7 +214,7 @@ export const tweaks = definePlugin((Base) => {
       );
     }
 
-    // biome-ignore lint/suspicious/noEmptyBlockStatements: svelte's acorn.js doesn't check that exported names are declared
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- svelte's acorn.js doesn't check that exported names are declared
     checkLocalExport() {}
 
     skipSpace() {

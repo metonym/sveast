@@ -1703,7 +1703,7 @@ function gatherPossibleValues(
           }
         } else {
           for (const value of left) {
-            // biome-ignore lint/suspicious/noDoubleEquals: svelte's check, null and undefined both
+            // eslint-disable-next-line eqeqeq -- svelte's check, null and undefined both
             if (!value && value != undefined && (!isClass || !isNested))
               set.add(value);
           }

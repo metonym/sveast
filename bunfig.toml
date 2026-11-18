@@ -1,2 +1,102 @@
 [install]
 linker = "isolated"
+
+# `bun lint` and `bun fmt` (Bun canary until 1.4.5).
+
+[lint]
+maxWarnings = 0
+ignorePatterns = ["dist/**", ".context/**", "tests/corpus/**", "src/types/**"]
+
+# ESLint and typescript-eslint recommended are on by default; these add the
+# stricter checks the project enforces on top.
+[lint.rules]
+"@typescript-eslint/ban-ts-comment" = ["error", { "ts-expect-error" = false }]
+"@typescript-eslint/consistent-type-definitions" = "error"
+"@typescript-eslint/consistent-type-exports" = "error"
+"@typescript-eslint/consistent-type-imports" = [
+  "error",
+  { disallowTypeAnnotations = false },
+]
+"@typescript-eslint/default-param-last" = "error"
+"@typescript-eslint/no-empty-function" = "error"
+"@typescript-eslint/no-explicit-any" = "error"
+"@typescript-eslint/no-shadow" = "error"
+# `for (let scope = this; scope; scope = scope.parent)` walks a scope chain.
+"@typescript-eslint/no-this-alias" = "off"
+"@typescript-eslint/no-unnecessary-type-constraint" = "error"
+"@typescript-eslint/no-useless-constructor" = "error"
+"@typescript-eslint/no-useless-empty-export" = "error"
+"@typescript-eslint/prefer-nullish-coalescing" = "error"
+"@typescript-eslint/prefer-regexp-exec" = "error"
+"@typescript-eslint/prefer-string-starts-ends-with" = "error"
+"@typescript-eslint/require-array-sort-compare" = "error"
+"bun:test/no-conditional-expect" = "error"
+"bun:test/no-disabled-tests" = "error"
+"bun:test/no-focused-tests" = "error"
+"bun:test/no-standalone-expect" = "error"
+"dot-notation" = "error"
+"eqeqeq" = ["error", "always", { null = "ignore" }]
+"import/no-commonjs" = "error"
+"import/no-cycle" = "error"
+"no-await-in-loop" = "error"
+"no-empty" = "error"
+"no-extra-label" = "error"
+"no-implicit-coercion" = "error"
+"no-lone-blocks" = "error"
+"no-negated-condition" = "error"
+"no-nested-ternary" = "error"
+"no-param-reassign" = "error"
+"no-restricted-imports" = [
+  "error",
+  { paths = [
+    { name = "bun:test", message = "bun:test imports are unnecessary." },
+  ] },
+]
+"no-restricted-syntax" = [
+  "error",
+  { selector = "UnaryExpression[operator='delete'] > MemberExpression[computed=false]", message = "Avoid the delete operator; assign undefined or rebuild the object." },
+  { selector = "ExportAllDeclaration[exportKind!='type']", message = "Export names explicitly instead of re-exporting everything." },
+  { selector = "ImportDeclaration[importKind!='type'] > ImportNamespaceSpecifier", message = "Import names explicitly instead of a namespace." },
+  { selector = ":function Literal[regex]:not([regex.flags=/[gy]/])", message = "Hoist the regular expression to the top level so it compiles once." },
+  { selector = "TSEnumDeclaration", message = "Use a union of literals or a const object instead of an enum." },
+  { selector = "TemplateLiteral[expressions.length=0]:not(TaggedTemplateExpression > .quasi):not([quasis.0.value.raw=/[\\n'\"]/])", message = "Use a string literal for a template literal without substitutions." },
+]
+"no-sequences" = ["error", { allowInParentheses = false }]
+"no-template-curly-in-string" = "error"
+"no-useless-concat" = "error"
+"no-useless-rename" = "error"
+"one-var" = ["error", "never"]
+"operator-assignment" = "error"
+"oxc/no-accumulating-spread" = "error"
+"prefer-arrow-callback" = "error"
+"prefer-const" = "error"
+"prefer-exponentiation-operator" = "error"
+"preserve-caught-error" = "error"
+"unicorn/explicit-length-check" = "error"
+"unicorn/no-array-for-each" = "error"
+"unicorn/no-thenable" = "error"
+"unicorn/no-useless-switch-case" = "error"
+"unicorn/no-useless-undefined" = [
+  "error",
+  { checkArguments = false, checkArrowFunctionBody = false },
+]
+"unicorn/prefer-node-protocol" = "error"
+"unicorn/prefer-number-properties" = "error"
+"unicorn/prefer-string-slice" = "error"
+
+# The published code runs in browsers too.
+[[lint.overrides]]
+files = ["src/**"]
+rules = { "import/no-nodejs-modules" = "error", "no-console" = "error", "no-restricted-globals" = ["error", { name = "process", message = "src/ runs outside Node; take what you need as an option." }] }
+
+[fmt]
+# Markdown and YAML stay hand-formatted. The corpus is data: whitespace in a
+# `.svelte` file changes its AST.
+ignorePatterns = [
+  "**/*.md",
+  "**/*.yml",
+  "**/*.yaml",
+  "dist/**",
+  ".context/**",
+  "tests/corpus/**",
+]

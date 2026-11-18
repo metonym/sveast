@@ -131,7 +131,7 @@ if (missing.length > 0) {
 const messagesFile = join(root, "src/a11y-messages.ts");
 writeFileSync(messagesFile, messages);
 
-await $`bunx biome format --write ${dataFile} ${messagesFile}`.quiet();
+await $`bun fmt ${dataFile} ${messagesFile}`.quiet();
 console.log(
   `✓ ${Object.keys(tables).length} tables written to src/a11y-data.ts, ${codes.length} messages to src/a11y-messages.ts`,
 );

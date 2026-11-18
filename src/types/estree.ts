@@ -111,8 +111,7 @@ export interface Program extends Omit<BaseNode, "leadingComments"> {
   comments?: Comment[] | undefined;
   /** In a component's `<script>`, an HTML comment right before the tag becomes `{ type: "Line", value }`, without offsets, as in svelte. */
   leadingComments?:
-    | Array<Comment | { type: "Line"; value: string }>
-    | undefined;
+    Array<Comment | { type: "Line"; value: string }> | undefined;
 }
 
 export interface Directive extends BaseNode {
@@ -132,9 +131,7 @@ export interface BaseFunction extends BaseNode, TSFunctionFields {
 }
 
 export type Function =
-  | FunctionDeclaration
-  | FunctionExpression
-  | ArrowFunctionExpression;
+  FunctionDeclaration | FunctionExpression | ArrowFunctionExpression;
 
 export type Statement =
   | ExpressionStatement
@@ -266,16 +263,12 @@ export interface DebuggerStatement extends BaseStatement {
 }
 
 export type Declaration =
-  | FunctionDeclaration
-  | VariableDeclaration
-  | ClassDeclaration
-  | TSDeclaration;
+  FunctionDeclaration | VariableDeclaration | ClassDeclaration | TSDeclaration;
 
 export interface BaseDeclaration extends BaseStatement {}
 
 export interface MaybeNamedFunctionDeclaration
-  extends BaseFunction,
-    BaseDeclaration {
+  extends BaseFunction, BaseDeclaration {
   type: "FunctionDeclaration";
   /** It is null when a function declaration is a part of the `export default function` statement */
   id: Identifier | null;
@@ -492,10 +485,7 @@ export interface CatchClause extends BaseNode {
 }
 
 export interface Identifier
-  extends BaseNode,
-    BaseExpression,
-    BasePattern,
-    TSBindingFields {
+  extends BaseNode, BaseExpression, BasePattern, TSBindingFields {
   type: "Identifier";
   name: string;
 }
@@ -531,13 +521,7 @@ export interface BigIntLiteral extends BaseNode, BaseExpression {
 }
 
 export type UnaryOperator =
-  | "-"
-  | "+"
-  | "!"
-  | "~"
-  | "typeof"
-  | "void"
-  | "delete";
+  "-" | "+" | "!" | "~" | "typeof" | "void" | "delete";
 
 export type BinaryOperator =
   | "=="

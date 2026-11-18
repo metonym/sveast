@@ -16,14 +16,14 @@ const PARSERS: [string, ParserConstructor][] = [
 ];
 
 const INPUT =
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal in the parsed source
+  // eslint-disable-next-line no-template-curly-in-string -- a template literal in the parsed source
   "let a = 1;\r\nconst b = <T,>(x: T) => x;\n  {c + `d${e}`}\u2028f";
 const POSITIONS = [0, 4, INPUT.indexOf("const"), INPUT.indexOf("c +")];
 
 const DIRTY = [
   "class A { #x = 1; static { label: for (;;) break label; } }",
   "async function* f<T>(@d a: T): T { yield await a; }",
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal in the parsed source
+  // eslint-disable-next-line no-template-curly-in-string -- a template literal in the parsed source
   "(a, { b = 1 }) => `${(c)}` / /re/g",
   "(a, b",
   "class A { #x; async *m() { label: for (;;) { yield await (",

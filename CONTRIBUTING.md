@@ -4,7 +4,7 @@ This guide covers how sveast is built, the rules every change must keep, and how
 
 ## Setup
 
-[Bun](https://bun.sh/) is the package manager, test runner and bundler.
+[Bun](https://bun.sh/) is the package manager, test runner, bundler, formatter and linter. `bun fmt` and `bun lint` are in canary builds only until 1.4.5 ships (`bun upgrade --canary`), so CI installs canary. Their config is the `[fmt]`, `[lint]` and `[[lint.overrides]]` sections of [`bunfig.toml`](bunfig.toml): ESLint and typescript-eslint recommended are on by default, and the extra rules there are errors. Warnings fail too (`maxWarnings = 0`). `bun fmt` leaves Markdown, YAML and `tests/corpus` alone.
 
 ```sh
 bun ci
@@ -12,7 +12,7 @@ bun run test          # svelte/compiler and acorn-typescript parity, API, fuzzer
 bun run test:changed  # only the tests your branch's changes can reach (bivium.config.ts)
 bun run test:package  # build, pack, install, and use it as a consumer would
 bun run typecheck
-bun run lint          # biome; `bun run lint:fix` formats and applies fixes
+bun fmt --check && bun lint  # format check and lint; `bun run lint:all` formats and applies fixes
 bun run build         # dist/: ESM with acorn bundled, minified but with its names kept, split for consumers' bundlers, bundled index.d.ts, slimmed package.json
 bun run fuzz          # differential fuzzer against svelte/compiler
 ```
@@ -58,7 +58,7 @@ The build (`scripts/build.ts`) bundles acorn into a few ESM files: `index.js` on
 - **Options are opt-outs from parity, not changes to it.** A new option must default to svelte's output and say in the README what it leaves out.
 - **No runtime dependencies and no Node APIs in `src/`.** The build targets browsers, Node, Bun and Deno alike. Dev-only code (`tests/`, `bench/`, `scripts/`) may use anything.
 - **Keep the public API small.** `src/index.ts` is the public API.
-- **`tests/corpus` is data.** Biome ignores it. Never format it: whitespace in a `.svelte` file changes its AST.
+- **`tests/corpus` is data.** `bun fmt` and `bun lint` ignore it. Never format it: whitespace in a `.svelte` file changes its AST.
 
 ## Tests
 
@@ -150,14 +150,14 @@ Pitfalls seen before:
 
 ## Style
 
-- Match the surrounding code: TypeScript, biome formatting, and no comments. The only comments are JSDoc on the public API (what consumers see in their editor) and `biome-ignore`/`@ts-expect-error` directives with their reason. Names and tests carry the rest.
+- Match the surrounding code: TypeScript, `bun fmt` formatting, and no comments. The only comments are JSDoc on the public API (what consumers see in their editor) and `eslint-disable-next-line <rule> -- <reason>`/`@ts-expect-error` directives with their reason. Names and tests carry the rest.
 - Conventional commits: `feat`, `fix`, `perf`, `refactor`, `bench`, `test`, `docs`, `build`, `ci`, with `!` for breaking changes. Wrap bodies at 72 columns. No em dashes, and no AI attribution or co-author trailers. Put measured numbers in the body of `perf:` commits.
 - Don't bump the version or edit a changelog; releases are cut separately. Pushing a `v*` tag publishes `dist/` to npm.
 - Update the README when behavior, API or benchmark numbers change.
 
 ## Before you finish
 
-- [ ] `bun run lint`, `bun run typecheck`, `bun run test` and `bun run test:package` pass.
+- [ ] `bun fmt --check`, `bun lint`, `bun run typecheck`, `bun run test` and `bun run test:package` pass.
 - [ ] Parser changes: the fuzzer passes, a test covers the change, and `scripts/compare.ts` finds no new mismatch on the large corpora.
 - [ ] `src/` changes: `bun run bench:ab` shows no confirmed regression.
 - [ ] The README and this guide still describe what the code does.

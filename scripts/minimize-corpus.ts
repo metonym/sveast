@@ -54,7 +54,10 @@ function shapes(source: string): Set<string> {
   const out = new Set<string>();
   try {
     const visit = (node: unknown) => {
-      if (Array.isArray(node)) return node.forEach(visit);
+      if (Array.isArray(node)) {
+        for (const item of node) visit(item);
+        return;
+      }
       if (!isRecord(node)) return;
       const record = node;
       const type = typeof record.type === "string" ? record.type : "?";
@@ -77,7 +80,7 @@ const queue = files.map((f, i) => [f, i] as const);
 const workers = Array.from({ length: 8 }, async () => {
   for (let next = queue.shift(); next; next = queue.shift()) {
     const [file, i] = next;
-    // biome-ignore lint/performance/noAwaitInLoops: each worker runs its probes one at a time
+    // eslint-disable-next-line no-await-in-loop -- each worker runs its probes one at a time
     const set = await lines(file, i);
     for (const s of shapes(readFileSync(join(CORPUS, file), "utf8")))
       set.add(s);
