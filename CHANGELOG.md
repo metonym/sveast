@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.1 — 2026-11-18
+
+**Fixes**
+
+- A snippet type parameter with an arrow function type, as
+  `{#snippet f<T extends () => void>(v: T)}`, parses, as in svelte
+  5.58.0. The `>` of `=>` closed the type parameter list, so it threw
+  `expected_token` (#61).
+- An optional property in a template type annotation, as
+  `{#each items as row: { a?: string }[]}` or
+  `{@const first: { a?: string } = row[0]}`, parses, as in svelte
+  5.58.0. Every position after the `?` was off by one, so it threw
+  `expected_token` (#62).
+
 ## 0.11.0 — 2026-11-18
 
 **Features**
