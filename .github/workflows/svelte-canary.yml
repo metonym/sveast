@@ -3,8 +3,9 @@ name: svelte canary
 # Early warning for the parser: svelte
 # ships new template syntax in minor releases (<svelte:boundary> in 5.3,
 # {@attach} in 5.29), so this checks the generated errors and types, the
-# parity test, unit tests, and the differential fuzzer against the newest
-# svelte@latest, ahead of the lockfile pin. The npm `next` dist-tag is stale (pre-5.0), so `latest`
+# parity test, parity on svelte's own parser tests, unit tests, and the
+# differential fuzzer against the newest svelte@latest, ahead of the
+# lockfile pin. The npm `next` dist-tag is stale (pre-5.0), so `latest`
 # is the real frontier. Scheduled and manual only; never blocks PRs.
 
 on:
@@ -44,6 +45,19 @@ jobs:
 
       - name: Parity with svelte/compiler
         run: bun test tests/parity.test.ts
+
+      # The corpus has only the svelte test inputs it had when it was last
+      # updated, so a parser fix svelte ships with a new test never reaches
+      # it. Compare on that release's own test inputs too.
+      - name: Parity on svelte's parser tests
+        run: |
+          version=$(bun -p 'require("./node_modules/svelte/package.json").version')
+          svelte="$RUNNER_TEMP/svelte"
+          git -c advice.detachedHead=false clone --quiet --depth 1 --branch "svelte@${version}" --filter=blob:none --sparse \
+            https://github.com/sveltejs/svelte.git "$svelte"
+          dirs="parser-modern parser-legacy compiler-errors css validator"
+          git -C "$svelte" sparse-checkout set $(printf 'packages/svelte/tests/%s ' $dirs)
+          bun scripts/compare.ts --loc $(printf "$svelte/packages/svelte/tests/%s " $dirs)
 
       - name: Full unit tests
         run: bun run test
