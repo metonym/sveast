@@ -1,5 +1,5 @@
-import { isRunesMode, parse } from "sveast";
-import { a11yWarnings } from "sveast/a11y";
+import { isRunesMode, parse } from "svelte-ast";
+import { a11yWarnings } from "svelte-ast/a11y";
 import { compile } from "svelte/compiler";
 import { attempt, SVELTE_FILES } from "../scripts/shared";
 import { corpusFiles, readCorpus } from "./shared";
@@ -23,7 +23,7 @@ const svelteWarnings = (source: string) =>
       .sort((a, b) => a.localeCompare(b)),
   );
 
-const sveastWarnings = (source: string) =>
+const ourWarnings = (source: string) =>
   a11yWarnings(parse(source), { runes: isRunesMode(source) })
     .map(key)
     .sort((a, b) => a.localeCompare(b));
@@ -39,7 +39,7 @@ test("matches svelte's compile on the corpus, with and without its svelte-ignore
         continue;
       compared++;
       warned += expected.length;
-      expect([path, sveastWarnings(source)]).toEqual([path, expected]);
+      expect([path, ourWarnings(source)]).toEqual([path, expected]);
     }
   }
   expect(compared).toBeGreaterThan(600);
@@ -92,11 +92,11 @@ for (const [name, source] of Object.entries(CASES)) {
   test(name, () => {
     const expected = svelteWarnings(source);
     expect(expected).toBeDefined();
-    expect(sveastWarnings(source)).toEqual(expected as string[]);
+    expect(ourWarnings(source)).toEqual(expected as string[]);
   });
 }
 
 // svelte's compile throws here, as it looks the element up in an object.
 test("an element named after Object.prototype's member", () => {
-  expect(sveastWarnings("<constructor></constructor>")).toEqual([]);
+  expect(ourWarnings("<constructor></constructor>")).toEqual([]);
 });

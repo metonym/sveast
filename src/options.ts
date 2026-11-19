@@ -66,12 +66,12 @@ export interface ParseImportsExportsOptions {
   localExports?: boolean;
 }
 
-/** TypeScript support for {@link createParser} and {@link createModuleParser}, from `sveast/typescript`. */
+/** TypeScript support for {@link createParser} and {@link createModuleParser}, from `svelte-ast/typescript`. */
 export interface TypeScriptSupport {
   readonly support: "typescript";
 }
 
-/** HTML's named character references for {@link createParser}, from `sveast/entities`. */
+/** HTML's named character references for {@link createParser}, from `svelte-ast/entities`. */
 export interface EntitySupport {
   readonly support: "entities";
 }

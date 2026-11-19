@@ -10,7 +10,7 @@ import {
   SKIP,
   type TSParameterProperty,
   walk,
-} from "sveast";
+} from "svelte-ast";
 import { byCodeUnit } from "../scripts/shared";
 import { corpusAsts } from "./shared";
 

@@ -1,4 +1,4 @@
-import { ParseError, parse, parseModule } from "sveast";
+import { ParseError, parse, parseModule } from "svelte-ast";
 import { parse as svelteParse } from "svelte/compiler";
 import { byCodeUnit } from "../scripts/shared";
 
@@ -6,7 +6,7 @@ const hasKey = (value: object, key: string): boolean =>
   JSON.stringify(value).includes(`"${key}":`);
 
 test("exports the parsers, the lexers, isRunesMode, analyzeScopes, walk and its helpers, and ParseError", async () => {
-  expect(Object.keys(await import("sveast")).sort(byCodeUnit)).toEqual([
+  expect(Object.keys(await import("svelte-ast")).sort(byCodeUnit)).toEqual([
     "ParseError",
     "SKIP",
     "STOP",

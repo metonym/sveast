@@ -448,8 +448,8 @@ const NO_BINDINGS: ReadonlyMap<string, Binding> = new Map();
  * a `<script>` that uses it refers to a global.
  *
  * ```ts
- * import { parse } from "sveast";
- * import { analyzeScopes } from "sveast/scope";
+ * import { parse } from "svelte-ast";
+ * import { analyzeScopes } from "svelte-ast/scope";
  *
  * const ast = parse(source);
  * const scopes = analyzeScopes(ast);
@@ -568,7 +568,7 @@ class Analysis implements Scopes {
    * The names svelte's `Scope#generate` avoids: every value any scope
    * declares, without type-only imports, and every name a value
    * reference uses, globals and stores too. Internal: for
-   * `sveast/warnings`, which casts to it.
+   * `svelte-ast/warnings`, which casts to it.
    */
   names(): Set<string> {
     const names = new Set<string>();
@@ -593,7 +593,7 @@ class Analysis implements Scopes {
   }
 
   /**
-   * Every reference, values and types. Internal: for `sveast/warnings`,
+   * Every reference, values and types. Internal: for `svelte-ast/warnings`,
    * which casts to it.
    */
   allReferences(): Iterable<Reference> {
@@ -602,7 +602,7 @@ class Analysis implements Scopes {
 
   /**
    * Every declaring identifier, with its binding. Internal: for
-   * `sveast/warnings`, which casts to it.
+   * `svelte-ast/warnings`, which casts to it.
    */
   allDeclared(): Iterable<[Identifier, Binding]> {
     return this.declared.entries();

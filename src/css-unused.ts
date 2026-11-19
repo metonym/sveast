@@ -241,7 +241,7 @@ function unwrapOptional(expression: Expression): Expression {
     : node;
 }
 
-/** svelte's `is_resolved_snippet`, on sveast's bindings. */
+/** svelte's `is_resolved_snippet`, on svelte-ast's bindings. */
 function isResolvedSnippet(binding: Binding | null): boolean {
   return (
     !binding ||

@@ -1,5 +1,5 @@
-import { type LexedDynamicImport, lexDynamicImports } from "sveast";
-import { lexDynamicImports as fromEntry } from "sveast/lexer";
+import { type LexedDynamicImport, lexDynamicImports } from "svelte-ast";
+import { lexDynamicImports as fromEntry } from "svelte-ast/lexer";
 import { expectedDynamicImports } from "../scripts/lexed";
 import {
   inputs,
@@ -7,7 +7,7 @@ import {
   TRICKY_AND_SNIPPETS,
 } from "./imports-exports-inputs";
 
-test("sveast/lexer exports the same function", () => {
+test("svelte-ast/lexer exports the same function", () => {
   expect(fromEntry).toBe(lexDynamicImports);
 });
 

@@ -1,4 +1,4 @@
-import type { ParseOptions } from "sveast";
+import type { ParseOptions } from "svelte-ast";
 
 export const flat = (source: string): string =>
   Buffer.from(source, "utf8").toString("utf8");

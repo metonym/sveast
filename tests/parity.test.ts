@@ -1,4 +1,4 @@
-import { type AST, parse, parseSections } from "sveast";
+import { type AST, parse, parseSections } from "svelte-ast";
 import { withoutMarkup } from "../scripts/lexed-component";
 import { attempt, plain, SVELTE_FILES } from "../scripts/shared";
 import {

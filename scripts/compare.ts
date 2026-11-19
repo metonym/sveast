@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
 import { parseArgs } from "node:util";
-import { parse } from "sveast";
+import { parse } from "svelte-ast";
 import { parse as svelteParse } from "svelte/compiler";
 import {
   collectFiles,
@@ -51,7 +51,7 @@ const codeOf = (error: unknown) => errorCode(error) ?? "(no code)";
 let matched = 0;
 const mismatches = new Map<string, string[]>();
 const examples: string[] = [];
-const onlySveastRejects: string[] = [];
+const onlyWeReject: string[] = [];
 const onlySvelteRejects: string[] = [];
 const sameCode: string[] = [];
 const differentCode: string[] = [];
@@ -81,15 +81,13 @@ for (const file of files) {
       sameCode.push(name);
     } else {
       differentCode.push(
-        `${name}: svelte ${codeOf(expectedError)}, sveast ${codeOf(actualError)} (${errorMessage(actualError).split("\n")[0]})`,
+        `${name}: svelte ${codeOf(expectedError)}, svelte-ast ${codeOf(actualError)} (${errorMessage(actualError).split("\n")[0]})`,
       );
     }
     continue;
   }
   if (actualError) {
-    onlySveastRejects.push(
-      `${name}: ${errorMessage(actualError).split("\n")[0]}`,
-    );
+    onlyWeReject.push(`${name}: ${errorMessage(actualError).split("\n")[0]}`);
     continue;
   }
   if (expectedError) {
@@ -109,7 +107,7 @@ for (const file of files) {
   if (examples.length < Number(values.show)) {
     const shorten = (value: unknown) => String(toJson(value)).slice(0, 400);
     examples.push(
-      `${name} at ${difference}\n  sveast: ${shorten(at(actual, difference))}\n  svelte: ${shorten(at(expected, difference))}`,
+      `${name} at ${difference}\n  svelte-ast: ${shorten(at(actual, difference))}\n  svelte: ${shorten(at(expected, difference))}`,
     );
   }
 }
@@ -122,7 +120,7 @@ const astMismatches = [...mismatches.values()].reduce(
 console.log(
   `${total} files: ${matched} match, ${astMismatches} AST mismatches, ` +
     `${sameCode.length} both reject with the same code, ${differentCode.length} with different codes, ` +
-    `${onlySveastRejects.length} only sveast rejects, ${onlySvelteRejects.length} only svelte rejects`,
+    `${onlyWeReject.length} only svelte-ast rejects, ${onlySvelteRejects.length} only svelte rejects`,
 );
 
 const sorted = [...mismatches].sort((a, b) => b[1].length - a[1].length);
@@ -135,7 +133,7 @@ if (sorted.length > 0) {
   }
 }
 for (const [title, list] of [
-  ["Only sveast rejects", onlySveastRejects],
+  ["Only svelte-ast rejects", onlyWeReject],
   ["Only svelte rejects", onlySvelteRejects],
   ["Different error codes", differentCode],
 ] as const) {
@@ -146,7 +144,7 @@ if (examples.length > 0) console.log(`\nExamples:\n${examples.join("\n")}`);
 process.exitCode =
   astMismatches +
     differentCode.length +
-    onlySveastRejects.length +
+    onlyWeReject.length +
     onlySvelteRejects.length >
   0
     ? 1

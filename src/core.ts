@@ -28,13 +28,13 @@ export type * from "./types/typescript";
 /** What {@link createParser} parses with, beyond JavaScript and the markup. */
 export interface ParserSupport {
   /**
-   * `typescript` from `sveast/typescript`. Without it, a component with
+   * `typescript` from `svelte-ast/typescript`. Without it, a component with
    * `<script lang="ts">`, or `parseModule` with `typescript: true`, throws
    * an `Error` rather than parse TypeScript as JavaScript.
    */
   typescript?: TypeScriptSupport;
   /**
-   * `entities` from `sveast/entities`. Without it, text and attribute
+   * `entities` from `svelte-ast/entities`. Without it, text and attribute
    * values decode only numeric references, such as `&#169;`, and `&amp;`,
    * `&apos;`, `&gt;`, `&lt;` and `&quot;`; other named references, such
    * as `&copy;`, are left as written.
@@ -44,11 +44,11 @@ export interface ParserSupport {
 
 /** The parsers {@link createParser} returns. */
 export interface Parser {
-  /** `parse` from `sveast`, with only what the parser was created with. */
+  /** `parse` from `svelte-ast`, with only what the parser was created with. */
   parse(source: string, options?: ParseOptions): AST.Root;
-  /** `parseModule` from `sveast`, with only what the parser was created with. */
+  /** `parseModule` from `svelte-ast`, with only what the parser was created with. */
   parseModule(source: string, options?: ParseModuleOptions): Program;
-  /** `parseImportsExports` from `sveast`, with only what the parser was created with. */
+  /** `parseImportsExports` from `svelte-ast`, with only what the parser was created with. */
   parseImportsExports(
     source: string,
     options?: ParseImportsExportsOptions,
@@ -58,13 +58,13 @@ export interface Parser {
 /**
  * Creates `parse`, `parseModule` and `parseImportsExports` that bundle
  * only what's passed in: the TypeScript plugin and the table of HTML's
- * named character references are about a third of sveast's size, and a
+ * named character references are about a third of svelte-ast's size, and a
  * bundler leaves out whichever isn't imported. With both, they're the
- * same as `sveast`'s.
+ * same as `svelte-ast`'s.
  *
  * ```ts
- * import { createParser } from "sveast/core";
- * import { typescript } from "sveast/typescript";
+ * import { createParser } from "svelte-ast/core";
+ * import { typescript } from "svelte-ast/typescript";
  *
  * const { parse, parseModule } = createParser({ typescript });
  * ```

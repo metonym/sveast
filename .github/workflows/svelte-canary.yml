@@ -83,7 +83,7 @@ jobs:
           BODY="The svelte canary workflow failed.
 
           This usually means a new svelte release changed template syntax,
-          output, errors or AST types in a way sveast doesn't match yet. See
+          output, errors or AST types in a way svelte-ast doesn't match yet. See
           .github/workflows/svelte-canary.yml for context.
 
           Failed run: ${RUN_URL}"

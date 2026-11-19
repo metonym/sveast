@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { Parser } from "acorn";
-import { type AST, parse, parseModule } from "sveast";
+import { type AST, parse, parseModule } from "svelte-ast";
 import { parse as svelteParse } from "svelte/compiler";
 import { MODULE_FILES } from "../scripts/lexed";
 import {

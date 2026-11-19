@@ -8,13 +8,13 @@ import {
   valueVisitorKeys,
   visitorKeys,
   walk,
-} from "sveast";
+} from "svelte-ast";
 import {
   analyzeScopes,
   type Binding,
   type Reference,
   type Scopes,
-} from "sveast/scope";
+} from "svelte-ast/scope";
 import { attempt, SVELTE_FILES } from "../scripts/shared";
 import { compareScopes } from "../scripts/svelte-scopes";
 import { corpusAsts, corpusFiles, readCorpus } from "./shared";

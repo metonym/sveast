@@ -13,7 +13,7 @@ import {
   valueVisitorKeys,
   visitorKeys,
   walk,
-} from "sveast";
+} from "svelte-ast";
 import { byCodeUnit, isRecord } from "../scripts/shared";
 import { corpusAsts } from "./shared";
 

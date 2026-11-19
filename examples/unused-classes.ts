@@ -6,7 +6,7 @@ import {
   parse,
   SKIP,
   walk,
-} from "sveast";
+} from "svelte-ast";
 
 const WHITESPACE = /\s+/;
 

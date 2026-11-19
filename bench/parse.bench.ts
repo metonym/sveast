@@ -1,7 +1,7 @@
 import { tsPlugin as acornTypeScript } from "@sveltejs/acorn-typescript";
 import { Parser } from "acorn";
 import { group, task } from "ostia";
-import { parse } from "sveast";
+import { parse } from "svelte-ast";
 import { parse as svelteParse } from "svelte/compiler";
 import { tsPlugin } from "../src/ts-plugin";
 import {
@@ -28,7 +28,7 @@ const INPUTS: [string, Component[]][] = [
 for (const [name, components] of INPUTS) {
   const sources = components.map((c) => c.source);
   group(name, () => {
-    task("sveast", () => sources.map((source) => parse(source)));
+    task("svelte-ast", () => sources.map((source) => parse(source)));
     task("svelte/compiler", () =>
       sources.map((source) => svelteParse(source, { modern: true })),
     );

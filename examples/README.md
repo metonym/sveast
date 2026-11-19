@@ -1,6 +1,6 @@
 # Examples
 
-Small tools built on sveast, one task each. Each file exports its functions and, run directly, is a CLI over the files you pass it. `tests/examples.test.ts` runs both, on fixtures and on Carbon's components in `tests/corpus`.
+Small tools built on svelte-ast, one task each. Each file exports its functions and, run directly, is a CLI over the files you pass it. `tests/examples.test.ts` runs both, on fixtures and on Carbon's components in `tests/corpus`.
 
 | Example | Uses | Does |
 |:---|:---|:---|
@@ -26,4 +26,4 @@ As a pre-commit check:
 git diff --cached --name-only --diff-filter=ACM -- '*.svelte' '*.ts' '*.js' | xargs bun examples/check-syntax.ts
 ```
 
-They import `sveast`, which resolves to `src/` through `tsconfig.json` here; in your project, install `sveast` and copy the file.
+They import `svelte-ast`, which resolves to `src/` through `tsconfig.json` here; in your project, install `svelte-ast` and copy the file.

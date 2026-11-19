@@ -230,8 +230,8 @@ const CONTENT_EDITABLE_BINDINGS = ["textContent", "innerHTML", "innerText"];
  * none that a `<!-- svelte-ignore -->` comment silences.
  *
  * ```ts
- * import { isRunesMode, parse } from "sveast";
- * import { a11yWarnings } from "sveast/a11y";
+ * import { isRunesMode, parse } from "svelte-ast";
+ * import { a11yWarnings } from "svelte-ast/a11y";
  *
  * const warnings = a11yWarnings(parse(source), { runes: isRunesMode(source) });
  * ```

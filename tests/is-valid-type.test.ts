@@ -1,4 +1,4 @@
-import { isValidType, parseModule } from "sveast";
+import { isValidType, parseModule } from "svelte-ast";
 import { singleEdits } from "./shared";
 
 const VALID = [

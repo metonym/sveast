@@ -1,5 +1,5 @@
-import { lexImportsExports, parseImportsExports } from "sveast";
-import { lexImportsExports as fromEntry } from "sveast/lexer";
+import { lexImportsExports, parseImportsExports } from "svelte-ast";
+import { lexImportsExports as fromEntry } from "svelte-ast/lexer";
 import {
   comparableLexed,
   expectedLexed,
@@ -30,7 +30,7 @@ function compare(source: string, typescript: boolean, exportLists = false) {
   );
 }
 
-test("sveast/lexer exports the same function", () => {
+test("svelte-ast/lexer exports the same function", () => {
   expect(fromEntry).toBe(lexImportsExports);
 });
 

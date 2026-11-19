@@ -3,7 +3,7 @@ import {
   ParseError,
   parseImportsExports,
   parseModule,
-} from "sveast";
+} from "svelte-ast";
 import { expectedImportsExports } from "../scripts/lexed";
 import { attempt, plain } from "../scripts/shared";
 import {

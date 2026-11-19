@@ -1,4 +1,4 @@
-import { createLocator, locate as locateIn, parse, walk } from "sveast";
+import { createLocator, locate as locateIn, parse, walk } from "svelte-ast";
 import { attempt, SVELTE_FILES } from "../scripts/shared";
 import { corpusFiles, readCorpus } from "./shared";
 

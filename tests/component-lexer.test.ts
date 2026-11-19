@@ -1,5 +1,5 @@
-import { lexComponent } from "sveast";
-import { lexComponent as fromEntry } from "sveast/lexer";
+import { lexComponent } from "svelte-ast";
+import { lexComponent as fromEntry } from "svelte-ast/lexer";
 import { expectedSections } from "../scripts/lexed-component";
 import { SVELTE_FILES } from "../scripts/shared";
 import { corpusFiles, mutated, readCorpus } from "./shared";
@@ -9,7 +9,7 @@ const COMPONENTS = corpusFiles(SVELTE_FILES).map((path) => ({
   source: readCorpus(path),
 }));
 
-test("sveast/lexer exports the same function", () => {
+test("svelte-ast/lexer exports the same function", () => {
   expect(fromEntry).toBe(lexComponent);
 });
 

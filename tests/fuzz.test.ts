@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 test("exits non-zero and writes a finding when a trial reports a finding", async () => {
-  const findingsDir = mkdtempSync(join(tmpdir(), "sveast-fuzz-smoke-"));
+  const findingsDir = mkdtempSync(join(tmpdir(), "svelte-ast-fuzz-smoke-"));
 
   try {
     const proc = Bun.spawn({
@@ -18,7 +18,7 @@ test("exits non-zero and writes a finding when a trial reports a finding", async
         findingsDir,
       ],
       cwd: join(import.meta.dir, ".."),
-      env: { ...process.env, SVEAST_FUZZ_FORCE_CRASH: "1" },
+      env: { ...process.env, SVELTE_AST_FUZZ_FORCE_CRASH: "1" },
       stdout: "pipe",
       stderr: "pipe",
     });

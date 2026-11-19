@@ -8,7 +8,7 @@ import { collectFiles, errorCode, isRecord, SVELTE_FILES } from "./shared";
 const ROOT = join(import.meta.dir, "..");
 const CORPUS = join(ROOT, "tests/corpus");
 const apply = process.argv.includes("--apply");
-const work = mkdtempSync(join(tmpdir(), "sveast-minimize-"));
+const work = mkdtempSync(join(tmpdir(), "svelte-ast-minimize-"));
 const probe = join(work, "probe.test.ts");
 writeFileSync(
   probe,

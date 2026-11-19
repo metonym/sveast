@@ -1,5 +1,5 @@
 import { dirname } from "node:path";
-import { type AST, isReference, parse, parseModule, walk } from "sveast";
+import { type AST, isReference, parse, parseModule, walk } from "svelte-ast";
 import { byCodeUnit } from "../scripts/shared";
 import { corpusAsts } from "./shared";
 

@@ -65,17 +65,17 @@ for (const file of files) {
   let at = 0;
   while (actual.charCodeAt(at) === expected.charCodeAt(at)) at++;
   mismatches.push(
-    `${file}\n  sveast: ...${actual.slice(Math.max(0, at - 80), at + 80)}\n  theirs: ...${expected.slice(Math.max(0, at - 80), at + 80)}`,
+    `${file}\n  svelte-ast: ...${actual.slice(Math.max(0, at - 80), at + 80)}\n  theirs: ...${expected.slice(Math.max(0, at - 80), at + 80)}`,
   );
 }
 
 console.log(
-  `${files.length} files: ${matched} match, ${mismatches.length} mismatch, ${bothReject} both reject, ${rejects.length} only acorn-typescript parses, ${accepts.length} only sveast parses`,
+  `${files.length} files: ${matched} match, ${mismatches.length} mismatch, ${bothReject} both reject, ${rejects.length} only acorn-typescript parses, ${accepts.length} only svelte-ast parses`,
 );
 for (const [title, list] of [
   ["Mismatches", mismatches],
   ["Only acorn-typescript parses", rejects],
-  ["Only sveast parses", accepts],
+  ["Only svelte-ast parses", accepts],
 ] as const) {
   printList(title, list, values.list);
 }

@@ -1,4 +1,4 @@
-import { parse } from "sveast";
+import { parse } from "svelte-ast";
 import { parse as svelteParse } from "svelte/compiler";
 import { attempt } from "../scripts/shared";
 import { declarations, tweaks } from "../src/acorn-bridge";

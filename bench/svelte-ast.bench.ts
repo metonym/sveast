@@ -24,11 +24,11 @@ import {
   type VisitorKeys,
   valueVisitorKeys,
   walk,
-} from "sveast";
-import { a11yWarnings } from "sveast/a11y";
-import { createParser } from "sveast/core";
-import { createModuleParser } from "sveast/module";
-import { compilerWarnings } from "sveast/warnings";
+} from "svelte-ast";
+import { a11yWarnings } from "svelte-ast/a11y";
+import { createParser } from "svelte-ast/core";
+import { createModuleParser } from "svelte-ast/module";
+import { compilerWarnings } from "svelte-ast/warnings";
 import { isCommonType } from "../src/common-type";
 import {
   CARBON_COMPONENTS,
@@ -470,7 +470,7 @@ group("analysis", () => {
   );
 });
 
-group("sveast/core", () => {
+group("svelte-ast/core", () => {
   const { parse: coreParse } = createParser();
   const javascript = CARBON_LARGEST.filter(
     ({ source }) => !LANG_TS.test(source),
