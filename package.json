@@ -2,7 +2,7 @@
   "name": "svelte-ast",
   "version": "0.11.1",
   "license": "MIT",
-  "description": "Fast, zero-dependency Svelte 5 parser with svelte/compiler's AST.",
+  "description": "Fast, zero-dependency Svelte 5 parser with svelte/compiler's AST",
   "author": "Eric Liu (https://github.com/metonym)",
   "type": "module",
   "main": "./dist/index.js",
