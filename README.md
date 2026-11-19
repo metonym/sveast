@@ -1,10 +1,15 @@
 # svelte-ast
 
-> Zero-dependency Svelte 5 parser: svelte/compiler's AST, 2.4× faster.
+> svelte/compiler's AST, 2.4× faster, with zero dependencies.
 
-Parse `.svelte` components, including `<script lang="ts">`, into the same AST, and the same errors, as `svelte/compiler`'s `parse(source, { modern: true })`. svelte-ast has no dependencies and uses no Node APIs, so it runs in the browser as well as in Node, Bun and Deno.
+| | svelte-ast | svelte/compiler |
+|:---|:---|:---|
+| Parse 400 components, 1.5 MB | **64.7 ms** | 155 ms |
+| Import in a fresh process | **5.3 ms** | 44.7 ms |
+| `parse` for the browser, gzipped | **58.5 kB** | 126.7 kB |
+| Memory retained by ten parses kept alive | **147 MB** | 294 MB |
 
-It's for tools that analyze components statically, such as documentation and type generators that read a component's props, events and slots. They need only the AST, but parse every component in a library, often on every change. [sveld](https://github.com/carbon-design-system/sveld), which generates TypeScript definitions and documentation for Svelte components, uses it.
+Apple M2; see [Parity and performance](#parity-and-performance) for how they're measured.
 
 ```sh
 bun i svelte-ast
@@ -18,6 +23,10 @@ const ast = parse(`<script>let name = "world";</script>\n<h1>Hello {name}!</h1>`
 ast.instance?.content.body; // [VariableDeclaration]
 ast.fragment.nodes; // [Text, RegularElement]
 ```
+
+Parse `.svelte` components, including `<script lang="ts">`, into the same AST, and the same errors, as `svelte/compiler`'s `parse(source, { modern: true })`. svelte-ast has no dependencies and uses no Node APIs, so it runs in the browser as well as in Node, Bun and Deno.
+
+It's for tools that analyze components statically, such as documentation and type generators that read a component's props, events and slots. They need only the AST, but parse every component in a library, often on every change. [sveld](https://github.com/carbon-design-system/sveld), which generates TypeScript definitions and documentation for Svelte components, uses it.
 
 | Function | For | Import from |
 |:---|:---|:---|
@@ -98,8 +107,6 @@ try {
 
 - **svelte/compiler parity.** Tested on over 12,000 components: carbon-components-svelte, svelte's own test suite, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge. Every one either parses to svelte's AST, `loc` included, or throws svelte's error with the same code, message, position and frame. A differential fuzzer compares the two parsers on mutated components.
 - **TypeScript.** `<script lang="ts">` and `.ts` modules parse to svelte's AST, key order and `loc` included, on 6,604 real-world modules and on all but 2 of the 9,586 TypeScript conformance tests svelte parses.
-- **About 2.4× faster** than svelte/compiler, and its ASTs retain about half the memory.
-- **A smaller bundle and a faster load:** `parse` is less than half of svelte/compiler's size, and a fresh process imports it in about 5 ms against 45 ms.
 
 Apple M2, medians of warm calls. The corpus is `tests/corpus`: all of carbon-components-svelte plus svelte's and sveld's test inputs.
 
