@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+**Breaking**
+
+- The package is now `svelte-ast`, with no aliases. Imports change from
+  `sveast` to `svelte-ast`, and from `sveast/core`, `sveast/module`,
+  `sveast/typescript`, `sveast/entities`, `sveast/walk`, `sveast/scope`,
+  `sveast/lexer`, `sveast/a11y` and `sveast/warnings` to the same path under
+  `svelte-ast/`. The exports and their names are unchanged.
+- Error messages start with `svelte-ast:` instead of `sveast:`. The
+  descriptions of `STOP` and `SKIP` are `svelte-ast.walk.stop` and
+  `svelte-ast.walk.skip`.
+
 ## 0.11.1 — 2026-11-18
 
 **Fixes**

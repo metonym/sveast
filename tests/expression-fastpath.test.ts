@@ -1,4 +1,4 @@
-import { parse } from "sveast";
+import { parse } from "svelte-ast";
 import { type Json, plain } from "../scripts/shared";
 import { acornExpressionParses, parseExpressionAt } from "../src/acorn-bridge";
 import { htmlEntityNames } from "../src/entity-names";

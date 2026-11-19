@@ -14,7 +14,7 @@ import {
 } from "./lexed";
 import { attempt, compareArgs, errorMessage, report, toJson } from "./shared";
 
-const PROBE = '\nimport "sveast-probe";\n';
+const PROBE = '\nimport "svelte-ast-probe";\n';
 
 const parseModuleBody = (source: string, typescript: boolean) =>
   attempt(() => parseModule(source, { typescript, comments: false }).body);
@@ -77,7 +77,7 @@ for (const file of files) {
           );
           if (lexed !== parsed) {
             mismatches.push(
-              `${name}, lexImportsExports, exportLists: ${localExports}\n  sveast: ${lexed.slice(0, 240)}\n  parseImportsExports: ${parsed.slice(0, 240)}`,
+              `${name}, lexImportsExports, exportLists: ${localExports}\n  svelte-ast: ${lexed.slice(0, 240)}\n  parseImportsExports: ${parsed.slice(0, 240)}`,
             );
             continue;
           }
@@ -87,7 +87,7 @@ for (const file of files) {
           continue;
         }
         mismatches.push(
-          `${name}, localExports: ${localExports}\n  sveast: ${starts(actual).slice(0, 240)}\n  parseModule: ${starts(expected).slice(0, 240)}`,
+          `${name}, localExports: ${localExports}\n  svelte-ast: ${starts(actual).slice(0, 240)}\n  parseModule: ${starts(expected).slice(0, 240)}`,
         );
       }
     }

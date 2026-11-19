@@ -97,7 +97,7 @@ const ENTRY = /[\\/]src[\\/]index\.ts$/;
 const RELATIVE = /^\.\//;
 
 const reexportEntries: BunPlugin = {
-  name: "sveast-reexport-entries",
+  name: "svelte-ast-reexport-entries",
   setup(bundler) {
     bundler.onResolve({ filter: RELATIVE }, (args) =>
       ENTRY.test(args.importer)

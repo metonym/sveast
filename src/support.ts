@@ -45,6 +45,6 @@ export function entityNamesOf(
 
 export function missingTypeScript(): never {
   throw new Error(
-    'sveast: parsing TypeScript needs `typescript` from "sveast/typescript": createParser({ typescript }) or createModuleParser({ typescript })',
+    'svelte-ast: parsing TypeScript needs `typescript` from "svelte-ast/typescript": createParser({ typescript }) or createModuleParser({ typescript })',
   );
 }

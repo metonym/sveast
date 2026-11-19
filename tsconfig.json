@@ -10,8 +10,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
-      "sveast": ["./src/index.ts"],
-      "sveast/*": ["./src/*.ts"]
+      "svelte-ast": ["./src/index.ts"],
+      "svelte-ast/*": ["./src/*.ts"]
     },
     "types": ["bun", "jest"]
   },

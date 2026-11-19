@@ -122,7 +122,7 @@ export function lineText(line: number): string | undefined {
  * source order are fastest.
  *
  * ```ts
- * import { createLocator, parse, walk } from "sveast";
+ * import { createLocator, parse, walk } from "svelte-ast";
  *
  * const locate = createLocator(source);
  * walk(parse(source), {

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { createLocator, type LexedAttribute, lexComponent } from "sveast";
+import { createLocator, type LexedAttribute, lexComponent } from "svelte-ast";
 
 export interface Styles {
   /** The text between `<style>` and `</style>`. */

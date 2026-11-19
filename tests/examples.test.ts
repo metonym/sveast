@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parse } from "sveast";
+import { parse } from "svelte-ast";
 import { checkSyntax } from "../examples/check-syntax";
 import { componentsUsed } from "../examples/components-used";
 import { extractStyles } from "../examples/extract-styles";
@@ -133,7 +133,7 @@ const FILES = {
 let dir = "";
 
 beforeAll(() => {
-  dir = mkdtempSync(join(tmpdir(), "sveast-examples-"));
+  dir = mkdtempSync(join(tmpdir(), "svelte-ast-examples-"));
   for (const [file, source] of Object.entries(FILES)) {
     writeFileSync(join(dir, file), source);
   }

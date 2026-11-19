@@ -17,7 +17,7 @@ async function readStdin(): Promise<string> {
 
 const source = await readStdin();
 
-if (process.env.SVEAST_FUZZ_FORCE_CRASH === "1") process.exit(1);
+if (process.env.SVELTE_AST_FUZZ_FORCE_CRASH === "1") process.exit(1);
 
 type Outcome =
   | { ok: true; ast: object }

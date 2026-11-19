@@ -8,7 +8,7 @@ import {
   isReference,
   parse,
   walk,
-} from "sveast";
+} from "svelte-ast";
 
 export interface UnusedBinding {
   name: string;

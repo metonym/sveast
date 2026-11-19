@@ -155,7 +155,7 @@ function bindingAt(
 }
 
 /**
- * Where svelte's analyzer differs and sveast is right: a class
+ * Where svelte's analyzer differs and svelte-ast is right: a class
  * expression's name inside its body, a snippet's name (svelte looks it up
  * among the snippet's parameters) and `var` declared twice (svelte keeps
  * the second; both are the same variable).
@@ -209,7 +209,7 @@ export function compareScopes(source: string): ScopeComparison | undefined {
       found = null;
     }
     if (found !== start && !knownDifference(binding, start)) {
-      result.mismatches.push(`${key}: svelte ${start}, sveast ${found}`);
+      result.mismatches.push(`${key}: svelte ${start}, svelte-ast ${found}`);
     }
   }
   for (const [key, nodes] of ours) {
@@ -220,7 +220,7 @@ export function compareScopes(source: string): ScopeComparison | undefined {
       binding.references.some((reference) => nodes.includes(reference.node)) &&
       !expected.has(key)
     ) {
-      result.mismatches.push(`${key}: only sveast finds it`);
+      result.mismatches.push(`${key}: only svelte-ast finds it`);
     }
   }
   return result;

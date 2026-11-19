@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type AST, parse, walk } from "sveast";
+import { type AST, parse, walk } from "svelte-ast";
 
 /**
  * The components a file renders, each mapped to the module it's imported

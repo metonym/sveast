@@ -1,5 +1,5 @@
-import { type LexedString, lexStrings } from "sveast";
-import { lexStrings as fromEntry } from "sveast/lexer";
+import { type LexedString, lexStrings } from "svelte-ast";
+import { lexStrings as fromEntry } from "svelte-ast/lexer";
 import { expectedStrings } from "../scripts/lexed";
 import {
   inputs,
@@ -7,7 +7,7 @@ import {
   TRICKY_AND_SNIPPETS,
 } from "./imports-exports-inputs";
 
-test("sveast/lexer exports the same function", () => {
+test("svelte-ast/lexer exports the same function", () => {
   expect(fromEntry).toBe(lexStrings);
 });
 

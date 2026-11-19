@@ -46,7 +46,7 @@ export interface CompilerWarningsOptions {
 
 /**
  * The warnings svelte's compiler gives for a component besides the
- * `a11y_…` ones (see `sveast/a11y`), with the same codes, messages and
+ * `a11y_…` ones (see `svelte-ast/a11y`), with the same codes, messages and
  * positions, and none that a `<!-- svelte-ignore -->` comment silences.
  * `ast` must come from {@link parse} with `css` left on.
  *
@@ -74,8 +74,8 @@ export interface CompilerWarningsOptions {
  * it gets neither.
  *
  * ```ts
- * import { isRunesMode, parse } from "sveast";
- * import { compilerWarnings } from "sveast/warnings";
+ * import { isRunesMode, parse } from "svelte-ast";
+ * import { compilerWarnings } from "svelte-ast/warnings";
  *
  * const warnings = compilerWarnings(parse(source), {
  *   source,

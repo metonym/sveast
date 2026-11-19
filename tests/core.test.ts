@@ -1,11 +1,16 @@
-import { ParseError, parse, parseImportsExports, parseModule } from "sveast";
-import { ParseError as CoreParseError, createParser } from "sveast/core";
-import { entities } from "sveast/entities";
+import {
+  ParseError,
+  parse,
+  parseImportsExports,
+  parseModule,
+} from "svelte-ast";
+import { ParseError as CoreParseError, createParser } from "svelte-ast/core";
+import { entities } from "svelte-ast/entities";
 import {
   createModuleParser,
   ParseError as ModuleParseError,
-} from "sveast/module";
-import { typescript } from "sveast/typescript";
+} from "svelte-ast/module";
+import { typescript } from "svelte-ast/typescript";
 import { MODULE_FILES } from "../scripts/lexed";
 import { byCodeUnit } from "../scripts/shared";
 import { corpusFiles, readCorpus } from "./shared";
@@ -25,7 +30,7 @@ function outcome(run: () => object) {
   }
 }
 
-function sameAsSveast(
+function matchesFullParser(
   parser: ReturnType<typeof createParser>,
   file: string,
 ): boolean {
@@ -43,37 +48,39 @@ function sameAsSveast(
   );
 }
 
-test("sveast/core, sveast/module, sveast/typescript and sveast/entities export only their parts", async () => {
-  expect(Object.keys(await import("sveast/core")).sort(byCodeUnit)).toEqual([
-    "ParseError",
-    "createParser",
-  ]);
-  expect(Object.keys(await import("sveast/module")).sort(byCodeUnit)).toEqual([
-    "ParseError",
-    "createModuleParser",
-  ]);
-  expect(Object.keys(await import("sveast/typescript"))).toEqual([
+test("svelte-ast/core, svelte-ast/module, svelte-ast/typescript and svelte-ast/entities export only their parts", async () => {
+  expect(Object.keys(await import("svelte-ast/core")).sort(byCodeUnit)).toEqual(
+    ["ParseError", "createParser"],
+  );
+  expect(
+    Object.keys(await import("svelte-ast/module")).sort(byCodeUnit),
+  ).toEqual(["ParseError", "createModuleParser"]);
+  expect(Object.keys(await import("svelte-ast/typescript"))).toEqual([
     "typescript",
   ]);
-  expect(Object.keys(await import("sveast/entities"))).toEqual(["entities"]);
+  expect(Object.keys(await import("svelte-ast/entities"))).toEqual([
+    "entities",
+  ]);
   expect(CoreParseError).toBe(ParseError);
   expect(ModuleParseError).toBe(ParseError);
 });
 
-test("createParser with typescript and entities parses like sveast", () => {
+test("createParser with typescript and entities parses like svelte-ast", () => {
   const parser = createParser({ typescript, entities });
-  expect(files.filter((file) => !sameAsSveast(parser, file))).toEqual([]);
+  expect(files.filter((file) => !matchesFullParser(parser, file))).toEqual([]);
   expect(files.length).toBeGreaterThan(700);
 });
 
-test("createParser without either parses JavaScript components like sveast unless they use named references", () => {
+test("createParser without either parses JavaScript components like svelte-ast unless they use named references", () => {
   const parser = createParser();
   const compared = files.filter((file) => {
     if (!file.endsWith(".svelte")) return false;
     const source = readCorpus(file);
     return !LANG_TS.test(source) && !NAMED_REFERENCE.test(source);
   });
-  expect(compared.filter((file) => !sameAsSveast(parser, file))).toEqual([]);
+  expect(compared.filter((file) => !matchesFullParser(parser, file))).toEqual(
+    [],
+  );
   expect(compared.length).toBeGreaterThan(300);
 });
 
@@ -85,7 +92,9 @@ test("without typescript, TypeScript throws an Error, not a ParseError", () => {
     () => parseJs(source, { script: false }),
     () => parseModuleJs("let a: number;", { typescript: true }),
   ]) {
-    expect(run).toThrow('needs `typescript` from "sveast/typescript"');
+    expect(run).toThrow(
+      'svelte-ast: parsing TypeScript needs `typescript` from "svelte-ast/typescript"',
+    );
     expect(run).not.toThrow(ParseError);
   }
   expect(parseModuleJs("let a = 1;").body).toHaveLength(1);
@@ -94,7 +103,7 @@ test("without typescript, TypeScript throws an Error, not a ParseError", () => {
   );
 });
 
-test("createModuleParser with typescript parses modules like sveast", () => {
+test("createModuleParser with typescript parses modules like svelte-ast", () => {
   const { parseModule: parseModuleOnly, parseImportsExports: importsOnly } =
     createModuleParser({ typescript });
   const modules = files.filter((file) => !file.endsWith(".svelte"));

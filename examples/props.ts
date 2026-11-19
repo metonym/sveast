@@ -4,7 +4,7 @@ import {
   type Pattern,
   type PrivateIdentifier,
   parse,
-} from "sveast";
+} from "svelte-ast";
 
 export interface Prop {
   name: string;

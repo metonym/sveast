@@ -390,13 +390,13 @@ const NO_KEYS: readonly string[] = [];
  * Return it from `enter` or `leave` to end the walk: no further `enter` or
  * `leave` calls, including `leave` on the node's ancestors.
  */
-export const STOP: unique symbol = Symbol("sveast.walk.stop");
+export const STOP: unique symbol = Symbol("svelte-ast.walk.stop");
 
 /**
  * Return it from `enter` to skip the node's children; `leave` is still
  * called on the node.
  */
-export const SKIP: unique symbol = Symbol("sveast.walk.skip");
+export const SKIP: unique symbol = Symbol("svelte-ast.walk.skip");
 
 /** The callbacks {@link walk} calls for each node. */
 export interface Visitor {

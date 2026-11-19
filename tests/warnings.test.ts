@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { isRunesMode, parse } from "sveast";
-import { compilerWarnings } from "sveast/warnings";
+import { isRunesMode, parse } from "svelte-ast";
+import { compilerWarnings } from "svelte-ast/warnings";
 import { compile } from "svelte/compiler";
 import {
   attempt,
@@ -38,7 +38,7 @@ const svelteWarnings = (source: string, options: Options = {}) =>
       .sort((a, b) => a.localeCompare(b));
   });
 
-const sveastWarnings = (source: string, options: Options = {}) =>
+const ourWarnings = (source: string, options: Options = {}) =>
   compilerWarnings(parse(source), {
     source,
     runes: isRunesMode(source),
@@ -57,7 +57,7 @@ test("matches svelte's compile on the corpus", () => {
       continue;
     compared++;
     warned += expected.length;
-    expect([path, sveastWarnings(source)]).toEqual([path, expected]);
+    expect([path, ourWarnings(source)]).toEqual([path, expected]);
   }
   expect(compared).toBeGreaterThan(350);
   expect(warned).toBeGreaterThan(15);
@@ -128,7 +128,7 @@ for (const [name, source] of Object.entries(CASES)) {
   test(name, () => {
     const expected = svelteWarnings(source);
     expect(expected).toBeDefined();
-    expect(sveastWarnings(source)).toEqual(expected as string[]);
+    expect(ourWarnings(source)).toEqual(expected as string[]);
   });
 }
 
@@ -259,7 +259,7 @@ for (const [name, source] of Object.entries(JS_CASES)) {
     const expected = svelteWarnings(source);
     expect(expected).toBeDefined();
     jsWarned += expected?.length ?? 0;
-    expect(sveastWarnings(source)).toEqual(expected as string[]);
+    expect(ourWarnings(source)).toEqual(expected as string[]);
   });
 }
 
@@ -271,14 +271,14 @@ test("no warning for a code svelte can't place, before a script", () => {
   // svelte throws "An impossible situation occurred" here.
   const source = `<!-- svelte-ignore nope -->\n${RUNES}`;
   expect(svelteWarnings(source)).toBeUndefined();
-  expect(sveastWarnings(source)).toEqual([]);
+  expect(ourWarnings(source)).toEqual([]);
 });
 
 for (const [name, source] of Object.entries(COMPONENT_CASES)) {
   test(name, () => {
     const expected = svelteWarnings(source);
     expect(expected).toBeDefined();
-    expect(sveastWarnings(source)).toEqual(expected as string[]);
+    expect(ourWarnings(source)).toEqual(expected as string[]);
   });
 }
 
@@ -421,7 +421,7 @@ for (const [name, source] of Object.entries(SCOPE_CASES)) {
     const expected = svelteWarnings(source);
     expect(expected).toBeDefined();
     scopeWarned += expected?.length ?? 0;
-    expect(sveastWarnings(source)).toEqual(expected as string[]);
+    expect(ourWarnings(source)).toEqual(expected as string[]);
   });
 }
 
@@ -434,16 +434,16 @@ test("custom_element_props_identifier with the customElement option", () => {
   const options = { customElement: true };
   const expected = svelteWarnings(source, options);
   expect(expected).toHaveLength(1);
-  expect(sveastWarnings(source, options)).toEqual(expected as string[]);
+  expect(ourWarnings(source, options)).toEqual(expected as string[]);
 });
 
 test("options_missing_custom_element with the customElement option", () => {
   const source = '<svelte:options customElement="my-el" />';
   const options = { customElement: true };
-  expect(sveastWarnings(source, options)).toEqual(
+  expect(ourWarnings(source, options)).toEqual(
     svelteWarnings(source, options) as string[],
   );
-  expect(sveastWarnings(source, options)).toHaveLength(0);
+  expect(ourWarnings(source, options)).toHaveLength(0);
 });
 
 test("parse warnings stay with the AST parse returned", () => {
@@ -457,7 +457,7 @@ for (const [name, source] of Object.entries(TEMPLATE_CASES)) {
   test(name, () => {
     const expected = svelteWarnings(source);
     expect(expected).toBeDefined();
-    expect(sveastWarnings(source)).toEqual(expected as string[]);
+    expect(ourWarnings(source)).toEqual(expected as string[]);
   });
 }
 
@@ -492,17 +492,17 @@ for (const [name, source, options] of SELF_CASES) {
   test(`svelte_self_deprecated: ${name}`, () => {
     const expected = svelteWarnings(source, options);
     expect(expected).toBeDefined();
-    expect(sveastWarnings(source, options)).toEqual(expected as string[]);
+    expect(ourWarnings(source, options)).toEqual(expected as string[]);
   });
 }
 
 test("slot_element_deprecated with the customElement option", () => {
   const source = `${RUNES}<slot></slot>`;
   const options = { customElement: true };
-  expect(sveastWarnings(source, options)).toEqual(
+  expect(ourWarnings(source, options)).toEqual(
     svelteWarnings(source, options) as string[],
   );
-  expect(sveastWarnings(source)).toHaveLength(1);
+  expect(ourWarnings(source)).toHaveLength(1);
 });
 
 const ALL_MATCH = /: (\d+) of \1 compiled components match/;
@@ -536,6 +536,6 @@ test("svelte knows every svelte-ignore code and renaming", () => {
       ? `legacy_code: \`${from}\` is no longer valid — please use \`${to}\` instead`
       : `unknown_code: \`${from}\` is not a recognised code`;
     expect(warning).toContain(expected);
-    expect(sveastWarnings(ignore([from]))).toEqual([warning]);
+    expect(ourWarnings(ignore([from]))).toEqual([warning]);
   }
 });

@@ -37,7 +37,7 @@ for (const file of files) {
     matched++;
     if (expected) runes++;
   } else {
-    mismatches.push(`${file}: sveast ${actual}, svelte ${expected}`);
+    mismatches.push(`${file}: svelte-ast ${actual}, svelte ${expected}`);
   }
 }
 

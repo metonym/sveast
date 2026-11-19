@@ -4,7 +4,7 @@ import { entitySupport } from "./support";
 
 /**
  * HTML's named character references, such as `&nbsp;` and `&copy;`, for
- * `createParser` from `sveast/core`, so `Text.data` and attribute values
+ * `createParser` from `svelte-ast/core`, so `Text.data` and attribute values
  * decode them as svelte does.
  */
 export const entities: EntitySupport =

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseModule, parse as sveastParse } from "sveast";
+import { parseModule, parse as ourParse } from "svelte-ast";
 import { parse } from "svelte/compiler";
 
 export interface Component {
@@ -15,7 +15,7 @@ const CORPUS = join(ROOT, "tests/corpus");
 export const LANG_TS = /<script[^>]*\blang=["']?ts\b/;
 
 export function scriptTexts(source: string): string[] {
-  const { instance, module } = sveastParse(source);
+  const { instance, module } = ourParse(source);
   return [instance, module].flatMap((script) => {
     if (!script) return [];
     const { content } = script;

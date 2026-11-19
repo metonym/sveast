@@ -1,4 +1,4 @@
-import { parse } from "sveast";
+import { parse } from "svelte-ast";
 import { isRecord } from "../scripts/shared";
 
 function parenthesizedCount(root: object): number {

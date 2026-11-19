@@ -1,4 +1,4 @@
-import { isRunesMode } from "sveast";
+import { isRunesMode } from "svelte-ast";
 import { compile } from "svelte/compiler";
 import { attempt, SVELTE_FILES } from "../scripts/shared";
 import { corpusFiles, readCorpus } from "./shared";

@@ -1,5 +1,5 @@
 {
-  "name": "sveast",
+  "name": "svelte-ast",
   "version": "0.11.1",
   "license": "MIT",
   "description": "Fast, zero-dependency Svelte 5 parser with svelte/compiler's AST.",
@@ -14,8 +14,8 @@
     "test:changed": "bivium run --suite unit",
     "test:package": "bun scripts/test-package.ts",
     "bench": "ostia bench bench/parse.bench.ts",
-    "bench:ab": "ostia ab bench/sveast.bench.ts",
-    "bench:sveast": "ostia bench bench/sveast.bench.ts",
+    "bench:ab": "ostia ab bench/svelte-ast.bench.ts",
+    "bench:svelte-ast": "ostia bench bench/svelte-ast.bench.ts",
     "bench:mem": "bun bench/mem.ts",
     "bench:cold": "bun bench/cold.ts",
     "bench:size": "bun bench/size.ts",
@@ -40,10 +40,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/metonym/sveast.git"
+    "url": "git+https://github.com/metonym/svelte-ast.git"
   },
-  "homepage": "https://github.com/metonym/sveast",
-  "bugs": "https://github.com/metonym/sveast/issues",
+  "homepage": "https://github.com/metonym/svelte-ast",
+  "bugs": "https://github.com/metonym/svelte-ast/issues",
   "keywords": [
     "svelte",
     "parser",

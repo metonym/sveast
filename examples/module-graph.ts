@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { lexComponent, parseImportsExports } from "sveast";
+import { lexComponent, parseImportsExports } from "svelte-ast";
 
 const TYPESCRIPT_FILE = /\.[cm]?ts$/;
 const EXTENSIONS = ["", ".ts", ".js", ".svelte", "/index.ts", "/index.js"];

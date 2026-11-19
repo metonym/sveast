@@ -6,9 +6,9 @@ const dist = resolve(import.meta.dir, "../dist");
 
 const BUNDLES: [string, string][] = [
   ["svelte/compiler", 'export { parse } from "svelte/compiler";'],
-  ["sveast", `export { parse } from "${dist}/index.js";`],
+  ["svelte-ast", `export { parse } from "${dist}/index.js";`],
   [
-    "sveast/core, createParser()",
+    "svelte-ast/core, createParser()",
     `export { createParser } from "${dist}/core.js";`,
   ],
 ];

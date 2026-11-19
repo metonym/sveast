@@ -6,7 +6,7 @@ import {
   isValidType,
   type Pattern,
   parse,
-} from "sveast";
+} from "svelte-ast";
 
 const JSDOC_LINE_START = /^\s*\*\s?/;
 const TYPE_TAG = "\n@type {";

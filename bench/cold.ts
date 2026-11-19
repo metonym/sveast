@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const PARSERS = ["sveast", "svelte/compiler"];
+const PARSERS = ["svelte-ast", "svelte/compiler"];
 const PROCESSES = 7;
 const FIRST = ["template", "typescript"] as const;
 
@@ -14,7 +14,7 @@ if (name === undefined) {
   const ts = TYPESCRIPT.reduce((a, b) =>
     b.source.length > a.source.length ? b : a,
   );
-  const file = join(tmpdir(), "sveast-bench-cold.json");
+  const file = join(tmpdir(), "svelte-ast-bench-cold.json");
   writeFileSync(
     file,
     JSON.stringify({
@@ -54,8 +54,8 @@ if (name === undefined) {
   const inputs = JSON.parse(readFileSync(corpusFile, "utf8"));
   const t0 = Bun.nanoseconds();
   const parse: (source: string) => object =
-    name === "sveast"
-      ? (await import("sveast")).parse
+    name === "svelte-ast"
+      ? (await import("svelte-ast")).parse
       : await import("svelte/compiler").then(
           ({ parse: svelteParse }) =>
             (source: string) =>

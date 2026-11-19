@@ -11,7 +11,7 @@ export const SVELTE_FILES = /\.svelte$/;
 
 // svelte tests every string for bidirectional control characters with one
 // regular expression with the `g` flag, so after a match its next test
-// starts mid-string, even in the next component. sveast starts each
+// starts mid-string, even in the next component. svelte-ast starts each
 // component afresh. Compiling an empty string makes svelte do the same:
 // a test that fails sets the regex back to the start.
 export function resetSvelteBidi(): void {

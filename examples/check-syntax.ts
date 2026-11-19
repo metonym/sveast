@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { ParseError, parse, parseModule } from "sveast";
+import { ParseError, parse, parseModule } from "svelte-ast";
 
 /**
  * The syntax error in a component or module, formatted as

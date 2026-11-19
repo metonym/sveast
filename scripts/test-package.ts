@@ -8,7 +8,7 @@ const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
 const RELATIVE_IMPORT = /["']\.\/([^"']+\.js)["']/g;
 
 const root = resolve(import.meta.dir, "..");
-const dir = await mkdtemp(join(tmpdir(), "sveast-package-"));
+const dir = await mkdtemp(join(tmpdir(), "svelte-ast-package-"));
 
 try {
   await $`bun run build`.cwd(root).quiet();
@@ -131,7 +131,7 @@ try {
   await writeFile(
     join(dir, "smoke.js"),
     `import assert from "node:assert/strict";
-import { parse, parseImportsExports, parseModule, SKIP, STOP, walk } from "sveast";
+import { parse, parseImportsExports, parseModule, SKIP, STOP, walk } from "svelte-ast";
 import { parse as svelteParse } from "svelte/compiler";
 
 const source = \`<script lang="ts">
@@ -184,10 +184,10 @@ walk(parse(source).fragment, {
 });
 assert.deepEqual(entered, ["Fragment", "Text", "IfBlock"]);
 
-const core = await import("sveast/core");
-const { typescript } = await import("sveast/typescript");
-const { entities } = await import("sveast/entities");
-assert.equal(core.ParseError, (await import("sveast")).ParseError);
+const core = await import("svelte-ast/core");
+const { typescript } = await import("svelte-ast/typescript");
+const { entities } = await import("svelte-ast/entities");
+assert.equal(core.ParseError, (await import("svelte-ast")).ParseError);
 const full = core.createParser({ typescript, entities });
 assert.deepEqual(plain(full.parse(source)), plain(parse(source)));
 const js = core.createParser();
@@ -197,7 +197,7 @@ assert.equal(js.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
 assert.equal(js.parseImportsExports('import a from "a";')[0].type, "ImportDeclaration");
 assert.throws(() => js.parseImportsExports('import type A from "a";', { typescript: true }), (error) => !(error instanceof core.ParseError));
 
-const modules = await import("sveast/module");
+const modules = await import("svelte-ast/module");
 assert.equal(modules.ParseError, core.ParseError);
 const tsModules = modules.createModuleParser({ typescript });
 assert.deepEqual(plain(tsModules.parseModule("let a: number;", { typescript: true })), plain(parseModule("let a: number;", { typescript: true })));
@@ -206,20 +206,20 @@ const jsModules = modules.createModuleParser();
 assert.equal(jsModules.parseModule("let a = 1;").body[0].type, "VariableDeclaration");
 assert.throws(() => jsModules.parseModule("let a: number;", { typescript: true }), (error) => !(error instanceof core.ParseError));
 
-const lexer = await import("sveast/lexer");
-assert.equal(lexer.lexImportsExports, (await import("sveast")).lexImportsExports);
+const lexer = await import("svelte-ast/lexer");
+assert.equal(lexer.lexImportsExports, (await import("svelte-ast")).lexImportsExports);
 const [imported, reexported] = lexer.lexImportsExports('import a, { type B as C } from "d"; export * as e from "f";');
 assert.deepEqual(
   imported.specifiers.map((specifier) => [specifier.kind, specifier.imported, specifier.local, specifier.typeOnly]),
   [["default", "default", "a", false], ["named", "B", "C", true]],
 );
 assert.deepEqual([reexported.source.value, reexported.specifiers[0].exported], ["f", "e"]);
-assert.equal(lexer.lexStrings, (await import("sveast")).lexStrings);
+assert.equal(lexer.lexStrings, (await import("svelte-ast")).lexStrings);
 assert.deepEqual(
   lexer.lexStrings('a = "b\\\\n" + \`c\${d}e\`;').map((string) => [string.kind, string.value, string.start, string.end]),
   [["string", "b\\n", 4, 9], ["template", "c", 13, 14], ["template", "e", 18, 19]],
 );
-assert.equal(lexer.lexDynamicImports, (await import("sveast")).lexDynamicImports);
+assert.equal(lexer.lexDynamicImports, (await import("svelte-ast")).lexDynamicImports);
 assert.deepEqual(
   lexer.lexDynamicImports('import("a"); require(b);').map((call) => [call.kind, call.source?.value ?? null, call.start, call.end]),
   [["import", "a", 0, 11], ["require", null, 13, 23]],
@@ -229,7 +229,7 @@ assert.deepEqual(
   [["local", "a", "b"]],
 );
 
-const walker = await import("sveast/walk");
+const walker = await import("svelte-ast/walk");
 assert.equal(walker.walk, walk);
 assert.equal(walker.STOP, STOP);
 assert.equal(walker.SKIP, SKIP);
@@ -247,21 +247,21 @@ assert.deepEqual(walker.children(parse(source).fragment), parse(source).fragment
 assert.equal(walker.skipTypeWrappers(parseModule("(a as b)!;", { typescript: true }).body[0].expression).name, "a");
 assert.deepEqual(walker.locate(source, source.indexOf("$props")), { line: 2, column: 35 });
 
-const scope = await import("sveast/scope");
-assert.equal(scope.analyzeScopes, (await import("sveast")).analyzeScopes);
+const scope = await import("svelte-ast/scope");
+assert.equal(scope.analyzeScopes, (await import("svelte-ast")).analyzeScopes);
 const scopes = scope.analyzeScopes(parse(source));
 const name = scopes.instance.get("name");
 assert.equal(name.rune, "$props");
 assert.equal(name.prop, "name");
 assert.equal(name.references.length, 3);
 
-const { a11yWarnings } = await import("sveast/a11y");
+const { a11yWarnings } = await import("svelte-ast/a11y");
 assert.deepEqual(
   a11yWarnings(parse('<img src="a.png" />\\n<!-- svelte-ignore a11y-autofocus -->\\n<input autofocus />')).map((w) => [w.code, w.start, w.end]),
   [["a11y_missing_attribute", 0, 19]],
 );
 
-const { compilerWarnings } = await import("sveast/warnings");
+const { compilerWarnings } = await import("svelte-ast/warnings");
 const warned = "<p/>\\n<style>p {} .a {}</style>";
 assert.deepEqual(
   compilerWarnings(parse(warned), { source: warned }).map((w) => [w.code, w.start, w.end]),
@@ -294,21 +294,21 @@ assert.deepEqual(
   STOP,
   visitorKeys,
   walk,
-} from "sveast";
+} from "svelte-ast";
 import {
   type AST as CoreAST,
   createParser,
   type Parser,
   type Program as CoreProgram,
-} from "sveast/core";
-import { entities } from "sveast/entities";
+} from "svelte-ast/core";
+import { entities } from "svelte-ast/entities";
 import {
   createModuleParser,
   type ModuleParser,
   type Program as ModuleProgram,
-} from "sveast/module";
-import { type LexedDynamicImport, type LexedStatement, type LexedString, lexDynamicImports, lexImportsExports, lexStrings } from "sveast/lexer";
-import { typescript } from "sveast/typescript";
+} from "svelte-ast/module";
+import { type LexedDynamicImport, type LexedStatement, type LexedString, lexDynamicImports, lexImportsExports, lexStrings } from "svelte-ast/lexer";
+import { typescript } from "svelte-ast/typescript";
 import {
   type AST as WalkAST,
   extractIdentifiers,
@@ -318,10 +318,10 @@ import {
   type Visitor as WalkVisitor,
   visitorKeys as walkVisitorKeys,
   walk as walkOnly,
-} from "sveast/walk";
-import { analyzeScopes, type Binding, type Scopes } from "sveast/scope";
-import { type A11yWarning, a11yWarnings } from "sveast/a11y";
-import { type CompilerWarning, compilerWarnings } from "sveast/warnings";
+} from "svelte-ast/walk";
+import { analyzeScopes, type Binding, type Scopes } from "svelte-ast/scope";
+import { type A11yWarning, a11yWarnings } from "svelte-ast/a11y";
+import { type CompilerWarning, compilerWarnings } from "svelte-ast/warnings";
 
 type CoreRoot = CoreAST.Root;
 
@@ -402,10 +402,10 @@ if (declaration?.type === "ImportDeclaration") {
   void from;
 }
 void declarations;
-const fromSveast: AST.Root = coreAst;
+const rootFromCore: AST.Root = coreAst;
 void coreProgram;
-void fromSveast;
-// @ts-expect-error: typescript comes from sveast/typescript
+void rootFromCore;
+// @ts-expect-error: typescript comes from svelte-ast/typescript
 createParser({ typescript: true });
 
 const moduleParser: ModuleParser = createModuleParser({ typescript });

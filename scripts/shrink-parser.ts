@@ -104,7 +104,7 @@ function shortenTsMembers(source: string): string {
 }
 
 export const shrinkParser: BunPlugin = {
-  name: "sveast-shrink-parser",
+  name: "svelte-ast-shrink-parser",
   setup(build) {
     build.onLoad({ filter: ACORN_FILE }, async (args) => ({
       contents: replaceAcornIdentifierTables(

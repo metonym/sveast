@@ -1,17 +1,17 @@
-# sveast
+# svelte-ast
 
 > Zero-dependency Svelte 5 parser: svelte/compiler's AST, 2.4× faster.
 
-Parse `.svelte` components, including `<script lang="ts">`, into the same AST, and the same errors, as `svelte/compiler`'s `parse(source, { modern: true })`. sveast has no dependencies and uses no Node APIs, so it runs in the browser as well as in Node, Bun and Deno.
+Parse `.svelte` components, including `<script lang="ts">`, into the same AST, and the same errors, as `svelte/compiler`'s `parse(source, { modern: true })`. svelte-ast has no dependencies and uses no Node APIs, so it runs in the browser as well as in Node, Bun and Deno.
 
 It's for tools that analyze components statically, such as documentation and type generators that read a component's props, events and slots. They need only the AST, but parse every component in a library, often on every change. [sveld](https://github.com/carbon-design-system/sveld), which generates TypeScript definitions and documentation for Svelte components, uses it.
 
 ```sh
-bun i sveast
+bun i svelte-ast
 ```
 
 ```ts
-import { parse } from "sveast";
+import { parse } from "svelte-ast";
 
 const ast = parse(`<script>let name = "world";</script>\n<h1>Hello {name}!</h1>`);
 
@@ -21,38 +21,38 @@ ast.fragment.nodes; // [Text, RegularElement]
 
 | Function | For | Import from |
 |:---|:---|:---|
-| [`parse`](#parsesource-options--astroot) | A component's AST, the same as svelte's | `sveast` |
-| [`parseSections`](#parsesectionssource-options--astroot) | A component's AST without the markup: its `<script>`s, `<style>` and `<svelte:options>` | `sveast` |
-| [`parseModule`](#parsemodulesource-options--program) | A `.js` or `.ts` module's AST, the same as a component's `<script>` | `sveast` |
-| [`parseImportsExports`](#parseimportsexportssource-options--moduledeclaration) | A module's `import` and `export` statements, without parsing the rest | `sveast` |
-| [`lexImportsExports`](#leximportsexportssource-options--lexedstatement) | Their offsets, sources and names, without loading a parser | `sveast/lexer` |
-| [`lexDynamicImports`](#lexdynamicimportssource--lexeddynamicimport) | A module's `import(…)`, `require(…)` and `import.meta.glob(…)`, with their offsets and sources, without loading a parser | `sveast/lexer` |
-| [`lexComponent`](#lexcomponentsource--lexedcomponent) | A component's `<script>`s, `<style>` and `<svelte:options>`, with their attributes and offsets, without loading a parser | `sveast/lexer` |
-| [`lexStrings`](#lexstringssource--lexedstring) | A module's string and template literals, with their offsets and values, without loading a parser | `sveast/lexer` |
-| [`createParser`, `createModuleParser`](#smaller-bundles-sveastcore-and-sveastmodule) | The parsers without TypeScript, named HTML entities or the template parser, for a smaller bundle | `sveast/core`, `sveast/module` |
-| [`isValidType`](#isvalidtypetext-options--boolean) | Whether a JSDoc type is safe to copy into a `.d.ts` | `sveast` |
-| [`isRunesMode`](#isrunesmodesource--boolean) | Whether svelte compiles a component in runes mode, mostly without parsing it | `sveast` |
-| [`walk`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `skipTypeWrappers`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST, only the markup, or everything but TypeScript's types | `sveast`, `sveast/walk` |
-| [`children`, `forEachChild`](#childrennode-keys--node-and-foreachchildnode-callback-keys--void) | A node's children, cached or without allocating | `sveast`, `sveast/walk` |
-| [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `sveast`, `sveast/walk` |
-| [`analyzeScopes`](#analyzescopesast-options--scopes) | Which declaration each name refers to, and every read and write of it | `sveast`, `sveast/scope` |
-| [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `sveast/a11y` |
-| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: unused CSS selectors, empty blocks, attribute and naming mistakes, bidirectional text, nested classes, state read outside a closure, unused props, and runes-mode deprecations | `sveast/warnings` |
-| [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `sveast`, `sveast/walk` |
+| [`parse`](#parsesource-options--astroot) | A component's AST, the same as svelte's | `svelte-ast` |
+| [`parseSections`](#parsesectionssource-options--astroot) | A component's AST without the markup: its `<script>`s, `<style>` and `<svelte:options>` | `svelte-ast` |
+| [`parseModule`](#parsemodulesource-options--program) | A `.js` or `.ts` module's AST, the same as a component's `<script>` | `svelte-ast` |
+| [`parseImportsExports`](#parseimportsexportssource-options--moduledeclaration) | A module's `import` and `export` statements, without parsing the rest | `svelte-ast` |
+| [`lexImportsExports`](#leximportsexportssource-options--lexedstatement) | Their offsets, sources and names, without loading a parser | `svelte-ast/lexer` |
+| [`lexDynamicImports`](#lexdynamicimportssource--lexeddynamicimport) | A module's `import(…)`, `require(…)` and `import.meta.glob(…)`, with their offsets and sources, without loading a parser | `svelte-ast/lexer` |
+| [`lexComponent`](#lexcomponentsource--lexedcomponent) | A component's `<script>`s, `<style>` and `<svelte:options>`, with their attributes and offsets, without loading a parser | `svelte-ast/lexer` |
+| [`lexStrings`](#lexstringssource--lexedstring) | A module's string and template literals, with their offsets and values, without loading a parser | `svelte-ast/lexer` |
+| [`createParser`, `createModuleParser`](#smaller-bundles-svelte-astcore-and-svelte-astmodule) | The parsers without TypeScript, named HTML entities or the template parser, for a smaller bundle | `svelte-ast/core`, `svelte-ast/module` |
+| [`isValidType`](#isvalidtypetext-options--boolean) | Whether a JSDoc type is safe to copy into a `.d.ts` | `svelte-ast` |
+| [`isRunesMode`](#isrunesmodesource--boolean) | Whether svelte compiles a component in runes mode, mostly without parsing it | `svelte-ast` |
+| [`walk`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `skipTypeWrappers`](#walknode-visitor-keys--void) | Visit, skip, stop at or replace nodes, in the whole AST, only the markup, or everything but TypeScript's types | `svelte-ast`, `svelte-ast/walk` |
+| [`children`, `forEachChild`](#childrennode-keys--node-and-foreachchildnode-callback-keys--void) | A node's children, cached or without allocating | `svelte-ast`, `svelte-ast/walk` |
+| [`isReference`](#isreferencenode-parent--boolean), [`extractIdentifiers`](#extractidentifierspattern--identifier) | Which identifiers are references, and which ones a pattern declares | `svelte-ast`, `svelte-ast/walk` |
+| [`analyzeScopes`](#analyzescopesast-options--scopes) | Which declaration each name refers to, and every read and write of it | `svelte-ast`, `svelte-ast/scope` |
+| [`a11yWarnings`](#a11ywarningsast-options--a11ywarning) | svelte's accessibility warnings, without compiling | `svelte-ast/a11y` |
+| [`compilerWarnings`](#compilerwarningsast-options--compilerwarning) | svelte's other warnings, without compiling: unused CSS selectors, empty blocks, attribute and naming mistakes, bidirectional text, nested classes, state read outside a closure, unused props, and runes-mode deprecations | `svelte-ast/warnings` |
+| [`createLocator`, `locate`](#createlocatorsource--offset--position) | Lines and columns for the nodes you report, without parsing with `loc` | `svelte-ast`, `svelte-ast/walk` |
 
 ## Migrating from svelte/compiler
 
-sveast is a drop-in for `parse` in most tools: change the import, and pass `loc: true` if you read line and column numbers.
+svelte-ast is a drop-in for `parse` in most tools: change the import, and pass `loc: true` if you read line and column numbers.
 
 ```diff
 - import { type AST, parse } from "svelte/compiler";
-+ import { type AST, parse } from "sveast";
++ import { type AST, parse } from "svelte-ast";
 
 - const ast = parse(source, { modern: true });
 + const ast = parse(source, { loc: true });
 ```
 
-| | svelte/compiler | sveast |
+| | svelte/compiler | svelte-ast |
 |:---|:---|:---|
 | `loc`, `name_loc` | Always | With `loc: true`; otherwise only `start`/`end` offsets, for a faster parse and a smaller AST |
 | Errors | `CompileError` | `ParseError`: same `code`, `message`, `position`, `start`, `end` and `frame`; no `filename`; `reason`, the message without its link |
@@ -66,7 +66,7 @@ sveast is a drop-in for `parse` in most tools: change the import, and pass `loc:
 **List the components a file renders**, e.g. to build a dependency graph:
 
 ```ts
-import { parse, walk } from "sveast";
+import { parse, walk } from "svelte-ast";
 
 function componentsUsed(source: string): string[] {
   const names = new Set<string>();
@@ -82,7 +82,7 @@ function componentsUsed(source: string): string[] {
 **Report syntax errors**, e.g. in a pre-commit check, with svelte's own messages:
 
 ```ts
-import { ParseError, parse } from "sveast";
+import { ParseError, parse } from "svelte-ast";
 
 try {
   parse(source, { css: false });
@@ -103,7 +103,7 @@ try {
 
 Apple M2, medians of warm calls. The corpus is `tests/corpus`: all of carbon-components-svelte plus svelte's and sveld's test inputs.
 
-| Input | sveast | sveast, `loc: true` | svelte/compiler |
+| Input | svelte-ast | svelte-ast, `loc: true` | svelte/compiler |
 |:---|:---|:---|:---|
 | Corpus, 400 components, 1.5 MB | **64.7 ms** | 84.0 ms | 155 ms (2.4×) |
 | Carbon's 5 largest components, 318 kB | **13.8 ms** | | 31.3 ms (2.3×) |
@@ -112,10 +112,10 @@ Apple M2, medians of warm calls. The corpus is `tests/corpus`: all of carbon-com
 | `parse` alone, minified for the browser | Gzipped |
 |:---|:---|
 | svelte/compiler | 126.7 kB |
-| sveast | **58.5 kB** |
-| `sveast/core`'s `createParser()`, without TypeScript and named HTML entities | **41.0 kB** |
+| svelte-ast | **58.5 kB** |
+| `svelte-ast/core`'s `createParser()`, without TypeScript and named HTML entities | **41.0 kB** |
 
-In a fresh process, importing the parser takes 5.3 ms with sveast and 44.7 ms with `svelte/compiler`, and a first parse of the whole corpus takes 65 ms against 161 ms. Keeping ten parses of the corpus alive retains 147 MB with sveast, 260 MB with `loc: true`, and 294 MB with `svelte/compiler`.
+In a fresh process, importing the parser takes 5.3 ms with svelte-ast and 44.7 ms with `svelte/compiler`, and a first parse of the whole corpus takes 65 ms against 161 ms. Keeping ten parses of the corpus alive retains 147 MB with svelte-ast, 260 MB with `loc: true`, and 294 MB with `svelte/compiler`.
 
 ## API
 
@@ -137,7 +137,7 @@ A syntax error throws a `ParseError` with svelte's `code` (e.g. `"block_unclosed
 `parse` for a pass that only reads a component's scripts, such as its props or its module script's exports: the top-level `<script>`s, `<style>` and `<svelte:options>` are parsed as `parse` parses them, and the markup between them is skipped as [`lexComponent`](#lexcomponentsource--lexedcomponent) skips it. `fragment.nodes` is empty, `comments` has only the scripts' comments, and the markup's syntax errors aren't reported; the rest is `parse`'s, offsets and the HTML comment before a `<script>` included. It takes `parse`'s options, and on the benchmark corpus it's 1.5× faster, where most of what's left is the scripts. It's a function of its own so that a bundle with only `parse` doesn't carry the lexer; `createParser` doesn't return it.
 
 ```ts
-import { parseSections } from "sveast";
+import { parseSections } from "svelte-ast";
 
 const { instance, module } = parseSections(source, { css: false });
 module?.content.body; // the module script's statements, with parse's offsets
@@ -159,7 +159,7 @@ It stops after the last `import` or `export` that could start a statement, so th
 | `localExports` | `true` | Return the exports of the module's own bindings, such as `export let a`, `export function b() {}`, `export { c }` and `export default d`, parsed in full. With `false`, only imports and the exports that have a `from` (`export * from "e"`, `export { f } from "f"`, `export import`) are returned. |
 
 ```ts
-import { parseImportsExports } from "sveast";
+import { parseImportsExports } from "svelte-ast";
 
 function dependencies(source: string, typescript = false): string[] {
   return parseImportsExports(source, { typescript, localExports: false }).flatMap(
@@ -170,14 +170,14 @@ function dependencies(source: string, typescript = false): string[] {
 
 ### `lexImportsExports(source, options?) => LexedStatement[]`
 
-From `sveast/lexer`, and also `sveast`. A module's top-level `import` statements and `export … from` re-exports, read by hand instead of parsed, for a tool on a hot or eagerly loaded path, such as a preprocessor that rewrites a component's imports, that needs each statement's offsets, source and names, but not the AST. `sveast/lexer` loads no parser, so a fresh process imports it in 1.4 ms, and on Carbon's component scripts it takes 40% of the time `parseImportsExports` takes with `localExports: false`.
+From `svelte-ast/lexer`, and also `svelte-ast`. A module's top-level `import` statements and `export … from` re-exports, read by hand instead of parsed, for a tool on a hot or eagerly loaded path, such as a preprocessor that rewrites a component's imports, that needs each statement's offsets, source and names, but not the AST. `svelte-ast/lexer` loads no parser, so a fresh process imports it in 1.4 ms, and on Carbon's component scripts it takes 40% of the time `parseImportsExports` takes with `localExports: false`.
 
 It finds the statements `parseImportsExports` returns with `localExports: false`, with the same offsets, sources and names. It doesn't check syntax and never throws: a statement it can't read, such as `import { a from "a"` or `import a = require("a")`, has `source: null` and no specifiers, and ends where it stopped reading. `import type` and `type` before a name are always read.
 
 With `exportLists: true`, it also returns each top-level `export { a, b as c }` without `from`, e.g. to follow a binding through an `index.js` that imports it and exports it again: `source` is `null`, and each specifier has kind `local`, with `local` the binding in this module. Those are the `ExportNamedDeclaration`s without a declaration that `parseImportsExports` returns with `localExports: true`; `export const a`, `export function b` and `export default` still aren't returned. A module that ends with an export list is read to its end.
 
 ```ts
-import { lexImportsExports } from "sveast/lexer";
+import { lexImportsExports } from "svelte-ast/lexer";
 
 for (const statement of lexImportsExports(source)) {
   statement.kind; // "import" | "export"
@@ -203,10 +203,10 @@ Names are as the module sees them: escapes decoded, and a string name without it
 
 ### `lexDynamicImports(source) => LexedDynamicImport[]`
 
-From `sveast/lexer`, and also `sveast`. A module's `import(…)` and `require(…)` calls and Vite's `import.meta.glob(…)`, at any depth, in source order, read without parsing, e.g. to follow the lazily loaded part of a module graph. Unlike a regular expression, it never matches in a comment, a string, a template or a regular expression, and it tells a literal argument from a computed one. `lexImportsExports` finds the static imports; together they're a module's dependencies.
+From `svelte-ast/lexer`, and also `svelte-ast`. A module's `import(…)` and `require(…)` calls and Vite's `import.meta.glob(…)`, at any depth, in source order, read without parsing, e.g. to follow the lazily loaded part of a module graph. Unlike a regular expression, it never matches in a comment, a string, a template or a regular expression, and it tells a literal argument from a computed one. `lexImportsExports` finds the static imports; together they're a module's dependencies.
 
 ```ts
-import { lexDynamicImports } from "sveast/lexer";
+import { lexDynamicImports } from "svelte-ast/lexer";
 
 for (const call of lexDynamicImports(source)) {
   call.kind; // "import" | "require" | "glob"
@@ -222,12 +222,12 @@ Where `parseModule` accepts the module, the calls are its `ImportExpression`s, i
 
 ### `lexComponent(source) => LexedComponent`
 
-From `sveast/lexer`, and also `sveast`. A component's top-level `<script>`, `<script module>`, `<style>` and `<svelte:options>`, with their attributes and the offsets of their tags and content, found without parsing: e.g. to read a component's scripts and their imports, its language or its options, or to rewrite a script, on a path that can't afford a parser. On the benchmark corpus it's about 50× faster than `parse`.
+From `svelte-ast/lexer`, and also `svelte-ast`. A component's top-level `<script>`, `<script module>`, `<style>` and `<svelte:options>`, with their attributes and the offsets of their tags and content, found without parsing: e.g. to read a component's scripts and their imports, its language or its options, or to rewrite a script, on a path that can't afford a parser. On the benchmark corpus it's about 50× faster than `parse`.
 
 It skips the markup by tracking only tags, attribute values, blocks, and the brackets, strings, comments and templates of each `{…}` expression, so a `<script>` in `<svelte:head>`, a block, an attribute, an expression or an HTML comment isn't one, and it stops after the last `<script`, `<style` or `<svelte:options`. Where `parse` accepts the component, the sections are its `instance`, `module`, `css` and `options`, with the same offsets, into the source without a leading byte order mark. It doesn't check syntax and never throws.
 
 ```ts
-import { lexComponent } from "sveast/lexer";
+import { lexComponent } from "svelte-ast/lexer";
 
 const { typescript, instance, module, css, options } = lexComponent(source);
 typescript; // whether `parse` reads it as TypeScript, decided by the first <script> with a lang
@@ -242,15 +242,15 @@ An attribute's `value` is as written, without its quotes: character references a
 `typescript` is what `createParser` needs to know to load the TypeScript parser only for the components that use it:
 
 ```ts
-import { createParser } from "sveast/core";
-import { lexComponent } from "sveast/lexer";
+import { createParser } from "svelte-ast/core";
+import { lexComponent } from "svelte-ast/lexer";
 
 let parser = createParser();
 let loaded = false;
 
 async function parseComponent(source: string) {
   if (!loaded && lexComponent(source).typescript) {
-    const { typescript } = await import("sveast/typescript");
+    const { typescript } = await import("svelte-ast/typescript");
     parser = createParser({ typescript });
     loaded = true;
   }
@@ -260,12 +260,12 @@ async function parseComponent(source: string) {
 
 ### `lexStrings(source) => LexedString[]`
 
-From `sveast/lexer`, and also `sveast`. A module's string literals and the text of its template literals, in source order, read without parsing, for a tool that only needs a script's strings, such as one that collects the class names a component's script can produce. With `parse(source, { script: false })` for the markup, it reads a component's scripts in a fraction of the time: on Carbon's 258 components, `parse` with `comments: false` takes 19.5 ms, and `script: false` plus `lexStrings` on each script 9.6 ms, of which `lexStrings` is 1.55 ms, 15% of what `parseModule` takes on the same scripts.
+From `svelte-ast/lexer`, and also `svelte-ast`. A module's string literals and the text of its template literals, in source order, read without parsing, for a tool that only needs a script's strings, such as one that collects the class names a component's script can produce. With `parse(source, { script: false })` for the markup, it reads a component's scripts in a fraction of the time: on Carbon's 258 components, `parse` with `comments: false` takes 19.5 ms, and `script: false` plus `lexStrings` on each script 9.6 ms, of which `lexStrings` is 1.55 ms, 15% of what `parseModule` takes on the same scripts.
 
 Where `parseModule` accepts the module, the strings are its `Literal`s with a string value and its `TemplateElement`s, types, imports and directives included, with the same offsets and values. Comments and regular expressions are skipped, and it never throws. It tells a regular expression from a division by the token before it, as acorn's tokenizer does, but acorn's parser can overrule that guess and `lexStrings` can't: a statement that starts with a regular expression after a line break without a `;`, following `let a`, an `import`, a type alias ending in `}`, or a block after `case …:` or a label, reads as a division, as does `/` after a variable named `of`, and a quote in that regular expression starts a string. It matched `parseModule` on all 21,443 modules and component scripts it accepts from the projects under [Parity and performance](#parity-and-performance), and on all 9,647 of TypeScript's conformance tests that `parseModule` accepts.
 
 ```ts
-import { lexStrings } from "sveast/lexer";
+import { lexStrings } from "svelte-ast/lexer";
 
 for (const string of lexStrings(source)) {
   string.kind; // "string", a Literal: start and end include the quotes
@@ -276,23 +276,23 @@ for (const string of lexStrings(source)) {
 
 `value` is `null` for an escape acorn rejects in a module, such as `"\1"`, or one that leaves a tagged template's `cooked` `null`. A template's line breaks read as `\n` in `value`; its raw text is `source.slice(start, end)`, with `\r\n` and `\r` as `\n`.
 
-### Smaller bundles: `sveast/core` and `sveast/module`
+### Smaller bundles: `svelte-ast/core` and `svelte-ast/module`
 
-`createParser(support?)` from `sveast/core` returns `parse`, `parseModule` and `parseImportsExports` without the TypeScript parser and the table of HTML's named character references, which most tools can do without. `createModuleParser(support?)` from `sveast/module` returns `parseModule` and `parseImportsExports` without the template parser either, for tools that read `.js` and `.ts` files but never components, such as a bundler plugin following a module graph. Pass back the parts you need; with them, the parsers are the same as `sveast`'s.
+`createParser(support?)` from `svelte-ast/core` returns `parse`, `parseModule` and `parseImportsExports` without the TypeScript parser and the table of HTML's named character references, which most tools can do without. `createModuleParser(support?)` from `svelte-ast/module` returns `parseModule` and `parseImportsExports` without the template parser either, for tools that read `.js` and `.ts` files but never components, such as a bundler plugin following a module graph. Pass back the parts you need; with them, the parsers are the same as `svelte-ast`'s.
 
 ```ts
-import { createParser } from "sveast/core";
-import { typescript } from "sveast/typescript";
+import { createParser } from "svelte-ast/core";
+import { typescript } from "svelte-ast/typescript";
 
 const { parse, parseModule, parseImportsExports } = createParser({ typescript });
 ```
 
 | Support | Without it |
 |:---|:---|
-| `typescript` from `sveast/typescript` | A component with `<script lang="ts">`, or `typescript: true`, throws an `Error`, not a `ParseError`: a missing import, not a syntax error, and never a JavaScript AST of TypeScript |
-| `entities` from `sveast/entities` (`createParser` only) | Numeric references, such as `&#169;`, and `&amp;`, `&apos;`, `&gt;`, `&lt;` and `&quot;` are decoded, but other names, such as `&copy;`, are left as written, so `Text.data` differs from svelte's where the source uses them |
+| `typescript` from `svelte-ast/typescript` | A component with `<script lang="ts">`, or `typescript: true`, throws an `Error`, not a `ParseError`: a missing import, not a syntax error, and never a JavaScript AST of TypeScript |
+| `entities` from `svelte-ast/entities` (`createParser` only) | Numeric references, such as `&#169;`, and `&amp;`, `&apos;`, `&gt;`, `&lt;` and `&quot;` are decoded, but other names, such as `&copy;`, are left as written, so `Text.data` differs from svelte's where the source uses them |
 
-Both also export `ParseError`, the same class as `sveast`'s, and the node types.
+Both also export `ParseError`, the same class as `svelte-ast`'s, and the node types.
 
 ### `isValidType(text, options?) => boolean`
 
@@ -322,7 +322,7 @@ It works on any node the parsers return: a `Root`, a `Fragment`, an expression, 
 `visitorKeys` is the table `walk` reads: the fields of each node type that hold child nodes, in source order, e.g. `visitorKeys.IfBlock` is `["test", "consequent", "alternate"]`. Pass another table as `keys` to visit other fields; a node whose type it has no entry for throws. `markupVisitorKeys` visits only the markup: `Root`'s `fragment`, elements' attributes and fragments, attribute values and blocks' fragments, but no script, style or expression. For a query about the markup, such as the components a file renders or the classes it uses, it's 4.8× faster on the benchmark corpus than walking everything:
 
 ```ts
-import { markupVisitorKeys, walk } from "sveast";
+import { markupVisitorKeys, walk } from "svelte-ast";
 
 walk(
   ast,
@@ -339,14 +339,14 @@ walk(
 
 `skipTypeWrappers(node)` gives the value inside those wrappers: `a` for `a as T`, `a satisfies T`, `<T>a`, `a!`, `a<T>` and any nesting of them, and `node` itself for anything else, for code that reads values, such as an evaluator deciding whether `size as Size` is a constant.
 
-`sveast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `skipTypeWrappers`, `children`, `forEachChild`, `isReference`, `extractIdentifiers`, `createLocator`, `locate` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
+`svelte-ast/walk` exports `walk`, `SKIP`, `STOP`, `visitorKeys`, `markupVisitorKeys`, `valueVisitorKeys`, `skipTypeWrappers`, `children`, `forEachChild`, `isReference`, `extractIdentifiers`, `createLocator`, `locate` and the types without loading a parser, for code that walks ASTs from elsewhere, such as a cache.
 
 ### `children(node, keys?) => Node[]` and `forEachChild(node, callback, keys?) => void`
 
 The child nodes `walk` would visit next, in source order, for a traversal of your own, such as one that evaluates expressions and decides per node what to visit. `forEachChild(node, (child, key, index) => ...)` calls back with each child, the field that holds it, and its index when the field is an array, and allocates nothing. `children(node)` returns an array that it makes on the first call for each node and returns again after, so a tool that walks the same tree many times lists each node's children once. ASTs don't change after `parse`, so the cache stays right unless you change one, for instance by replacing a node with `walk`; don't change the array. Both take `keys` as `walk` does and throw on a node type it has no entry for.
 
 ```ts
-import { forEachChild, valueVisitorKeys } from "sveast/walk";
+import { forEachChild, valueVisitorKeys } from "svelte-ast/walk";
 
 function visit(node) {
   if (node.type === "ConditionalExpression") return evaluateBranches(node);
@@ -361,7 +361,7 @@ Whether `node` is an `Identifier` that names a variable, function, class, import
 In TypeScript, a name in a type isn't a reference (`B` in `let a: B`, interface and type alias names), but a value is: the expression of `as`, `satisfies`, `<T>a`, `a!`, `a<T>` and `export =`, an enum's name and member initializers, a parameter property (`a` in `constructor(private a)`), and both sides of `import a = b`. Names of namespaces and of functions without a body (overloads, `declare function`) aren't references.
 
 ```ts
-import { isReference, parseModule, walk } from "sveast";
+import { isReference, parseModule, walk } from "svelte-ast";
 
 const used = new Set<string>();
 walk(parseModule("const a = b.c({ d: e });"), {
@@ -377,7 +377,7 @@ used; // Set { "a", "b", "e" }
 The `Identifier` nodes a pattern binds, in source order, as svelte's `extract_identifiers` returns them: `a`, `c`, `d`, `e` and `f` in `let { a, b: [c, ...d], e = 1, ...f } = x`. Property keys, defaults and type annotations aren't included, and a member expression binds nothing, so `[a.b, c] = x` yields only `c`. It takes any binding or assignment target: a declarator's `id`, a function's params, including a parameter property, a catch clause's `param`, an each block's `context`, a snippet's `parameters`, or an assignment's `left`, where `a!`, `a as T`, `a satisfies T` and `<T>a` yield `a`.
 
 ```ts
-import { extractIdentifiers, parseModule } from "sveast";
+import { extractIdentifiers, parseModule } from "svelte-ast";
 
 const [declaration] = parseModule("let { a, b: [c] } = x;").body;
 if (declaration.type === "VariableDeclaration") {
@@ -387,11 +387,11 @@ if (declaration.type === "VariableDeclaration") {
 
 ### `analyzeScopes(ast, options?) => Scopes`
 
-Finds the scopes of a component, its scripts and markup together, or of a module: which declaration each name refers to, and where each binding is read, written or subscribed to. It resolves names as svelte's analyzer does, which `tests/scope.test.ts` checks on the corpus: on 12,548 components from the corpus, svelte's tests and the Svelte projects listed under parity, they agree on all 208,797 names they both resolve, but for a class expression's name inside its body, a snippet's own name and a `var` declared twice, where sveast follows JavaScript.
+Finds the scopes of a component, its scripts and markup together, or of a module: which declaration each name refers to, and where each binding is read, written or subscribed to. It resolves names as svelte's analyzer does, which `tests/scope.test.ts` checks on the corpus: on 12,548 components from the corpus, svelte's tests and the Svelte projects listed under parity, they agree on all 208,797 names they both resolve, but for a class expression's name inside its body, a snippet's own name and a `var` declared twice, where svelte-ast follows JavaScript.
 
 ```ts
-import { parse } from "sveast";
-import { analyzeScopes } from "sveast/scope";
+import { parse } from "svelte-ast";
+import { analyzeScopes } from "svelte-ast/scope";
 
 const ast = parse(`<script>
   let { size = "md" } = $props();
@@ -448,15 +448,15 @@ instance.get("DataTableHeader")?.references[0]?.type; // true
 
 ### `a11yWarnings(ast, options?) => A11yWarning[]`
 
-From `sveast/a11y`. The `a11y_…` warnings svelte's compiler gives for a component, with the same `code`, `message` and offsets, and without the ones a `<!-- svelte-ignore -->` comment before an element, or one of its ancestors, silences. For a linter that already has the AST: on Carbon's 2,202 components it takes 60 ms, against 735 ms for `compile(source, { generate: false })`. It loads neither acorn nor the parser.
+From `svelte-ast/a11y`. The `a11y_…` warnings svelte's compiler gives for a component, with the same `code`, `message` and offsets, and without the ones a `<!-- svelte-ignore -->` comment before an element, or one of its ancestors, silences. For a linter that already has the AST: on Carbon's 2,202 components it takes 60 ms, against 735 ms for `compile(source, { generate: false })`. It loads neither acorn nor the parser.
 
 | Option | Default | Description |
 |:---|:---|:---|
 | `runes` | `false` | Whether the component compiles in runes mode, as [`isRunesMode`](#isrunesmodesource--boolean) says. In runes mode, `svelte-ignore` takes only svelte 5's codes, separated by commas; in legacy mode, svelte 4's `a11y-…` codes too, as svelte does. |
 
 ```ts
-import { isRunesMode, parse } from "sveast";
-import { a11yWarnings } from "sveast/a11y";
+import { isRunesMode, parse } from "svelte-ast";
+import { a11yWarnings } from "svelte-ast/a11y";
 
 for (const warning of a11yWarnings(parse(source), { runes: isRunesMode(source) })) {
   warning.code; // "a11y_missing_attribute"
@@ -469,7 +469,7 @@ The ARIA tables come from svelte's, which read aria-query and axobject-query, ge
 
 ### `compilerWarnings(ast, options) => CompilerWarning[]`
 
-From `sveast/warnings`. The warnings svelte's compiler gives for a component besides the `a11y_…` ones, with the same `code`, `message` and offsets, and without the ones a `svelte-ignore` comment silences. It loads neither acorn nor the parser. It gives:
+From `svelte-ast/warnings`. The warnings svelte's compiler gives for a component besides the `a11y_…` ones, with the same `code`, `message` and offsets, and without the ones a `svelte-ignore` comment silences. It loads neither acorn nor the parser. It gives:
 
 | Code | When |
 | --- | --- |
@@ -509,8 +509,8 @@ Its options:
 - `runes`: as for [`a11yWarnings`](#a11ywarningsast-options--a11ywarning).
 
 ```ts
-import { isRunesMode, parse } from "sveast";
-import { compilerWarnings } from "sveast/warnings";
+import { isRunesMode, parse } from "svelte-ast";
+import { compilerWarnings } from "svelte-ast/warnings";
 
 const ast = parse(source);
 for (const warning of compilerWarnings(ast, { source, filename, runes: isRunesMode(source) })) {
@@ -522,7 +522,7 @@ for (const warning of compilerWarnings(ast, { source, filename, runes: isRunesMo
 
 svelte gives some warnings as it parses: `element_implicitly_closed` and `svelte_element_invalid_this`. `parse` records them with the AST it returns, so pass that AST: a copy, or an AST from svelte's `parse`, gets neither. svelte gives these and the `script_…`, `options_…` and `store_rune_conflict` warnings outside its walk of the markup, so a `svelte-ignore` comment silences none of them. For `non_reactive_update` and `export_let_unused`, only a comment before the declaration counts.
 
-svelte checks every string for `bidirectional_control_characters` with one regular expression with the `g` flag. After a match, its next check starts part way into the next string, so svelte can miss one, and the miss carries over to the next component it compiles. sveast follows this within a component, but starts each component afresh, as svelte does for the first one it compiles. svelte throws on an `unknown_code` or `legacy_code` in a comment before a `<script>`; sveast gives no warning for it.
+svelte checks every string for `bidirectional_control_characters` with one regular expression with the `g` flag. After a match, its next check starts part way into the next string, so svelte can miss one, and the miss carries over to the next component it compiles. svelte-ast follows this within a component, but starts each component afresh, as svelte does for the first one it compiles. svelte throws on an `unknown_code` or `legacy_code` in a comment before a `<script>`; svelte-ast gives no warning for it.
 
 It's a port of svelte 5's analysis, so it gives what svelte 5 gives. It builds scopes only for a component that needs them, and shares them between checks: a check of the scripts' syntax and the markup's text first rules out most components. On the 8,834 components of the projects below that have the AST, it takes 193 ms, against 60 ms without the scope warnings. `compile(source, { generate: false })` takes 2,693 ms on the 8,735 of them it accepts. For all the warnings, on the same projects, svelte's tests and the corpus, it gives the warnings `compile` gives for all 13,097 components both accept, 1,344 warnings. For the warnings besides `css_unused_selector`, on the same projects, svelte's tests, carbon-components-svelte and the corpus, it gives the warnings `compile` gives for all 15,090 components both accept with their `svelte-ignore` comments removed, 602 warnings, and for all 12,119 that compile with `<svelte:options runes>` added, 1,295 warnings. On svelte's tests, carbon-components-svelte, bits-ui, shadcn-svelte, skeleton, flowbite-svelte, svelte.dev, immich, SvelteKit, melt-ui, layerchart and paneforge, it gives the warnings `compile` gives for all 14,208 components both accept, 1,516 warnings with the static `class` and `id` attributes removed from the markup. A differential fuzzer (`scripts/fuzz-css.ts`) found no difference on 166,000 more components.
 
@@ -531,7 +531,7 @@ It's a port of svelte 5's analysis, so it gives what svelte 5 gives. It builds s
 A function from an offset to its `{ line, column }`, line from 1 and column from 0, as `loc: true` gives them: for a tool that parses without `loc`, which is faster, and needs lines only for what it reports. Lines are found on the first call, and each lookup starts its search at the line found last, so lookups in source order are fastest. Lines end at `\n`, as in the markup's `loc` and `ParseError`; acorn's `loc` in scripts and modules also ends them at a lone `\r`, U+2028 and U+2029. `parse` drops a leading byte order mark, so pass the source without one.
 
 ```ts
-import { createLocator, parse, walk } from "sveast";
+import { createLocator, parse, walk } from "svelte-ast";
 
 const locate = createLocator(source);
 walk(parse(source), {
@@ -544,7 +544,7 @@ walk(parse(source), {
 `locate(source, offset)` gives the same `{ line, column }` without keeping a locator: it keeps the lines of the last 64 sources it was called with, so a tool that reports nodes from many files, in any order, looks lines up once per file rather than scanning each from the start.
 
 ```ts
-import { locate } from "sveast";
+import { locate } from "svelte-ast";
 
 `${file}:${locate(source, node.start).line}`;
 ```

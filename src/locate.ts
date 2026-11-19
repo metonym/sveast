@@ -17,7 +17,7 @@ const linesByText = new Map<string, Lines>();
  * several files in any order cost a lookup each after the first.
  *
  * ```ts
- * import { locate } from "sveast";
+ * import { locate } from "svelte-ast";
  *
  * `${file}:${locate(source, node.start).line}`;
  * ```

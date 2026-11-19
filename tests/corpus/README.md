@@ -1,6 +1,6 @@
 # Test corpus
 
-`tests/parity.test.ts` parses every `.svelte` file here with sveast and with svelte/compiler, `tests/ts-plugin.test.ts` parses Carbon's modules with the TypeScript plugin and acorn-typescript, the fuzzer mutates the components, and `bench/` times them.
+`tests/parity.test.ts` parses every `.svelte` file here with svelte-ast and with svelte/compiler, `tests/ts-plugin.test.ts` parses Carbon's modules with the TypeScript plugin and acorn-typescript, the fuzzer mutates the components, and `bench/` times them.
 
 - `carbon/`: the reference real-world codebase. All components and modules from [carbon-components-svelte](https://github.com/carbon-design-system/carbon-components-svelte) `src/` at `27234d4` (v0.112.0), unchanged. Apache-2.0; see `carbon/LICENSE`.
 - `svelte/`: inputs from svelte 5.57.1's `parser-modern`, `parser-legacy`, `compiler-errors`, `css` and `validator` tests, plus two `parser-modern` samples from 5.58.0 (MIT; see `LICENSE`).

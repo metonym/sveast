@@ -7,7 +7,7 @@ import {
   parse,
   STOP,
   walk,
-} from "sveast";
+} from "svelte-ast";
 
 const RUNES = new Set([
   "$state",
